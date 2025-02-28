@@ -1,4 +1,4 @@
-# 2025年2月28日20:57:10
+# 2025年2月28日20:57:10 0000
 
 """
 1、加入各大评分项的分数以及内容传给ds进行分析
@@ -6,7 +6,6 @@
 3、针对每个图标相关的代码和数据，一个一个的丢给DS进行分析
 4、最后统筹加入优化代码  添加注释
 """
-
 
 # 导入必要的库
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -28,14 +27,14 @@ import traceback
 import numpy as np
 import pandas as pd
 
-IS_CREATE_REPORT = False  # 是否创建报告
+IS_CREATE_REPORT = True  # 是否创建报告
 
 # 定义常量和全局变量
 ACCOUNT = 'wuchong@addcn.com'  # 账号
 PASSWORD = 'WUchong_1008'  # 密码
 PROJECT_ID = "63835346"  # 项目ID
-REQUIREMENT_ID = "1163835346001078047"  # 需求ID
-# REQUIREMENT_ID = "1163835346001071668"  # 需求ID
+# REQUIREMENT_ID = "1163835346001078047"  # 需求ID
+REQUIREMENT_ID = "1163835346001071668"  # 需求ID
 # REQUIREMENT_ID = "1163835346001120791"  # 需求ID
 REQUIREMENT_LIST_ID = '1000000000000000417'  # 需求列表ID, 用于查询或者编辑列表展示字段的配置
 
@@ -517,6 +516,9 @@ def fetch_data(url, params=None, data=None, json=None, files=None, method='GET')
 
 
 def deepseek_chat(content: str):
+    result = ''
+    print(content)
+
     key = 'sk-a5ae4633515d448e9bbbe03770712d4e'
     client = OpenAI(
         # 若没有配置环境变量，请用百炼API Key将下行替换为：api_key="sk-xxx",
@@ -529,25 +531,31 @@ def deepseek_chat(content: str):
         messages=[
             {'role': 'user', 'content': content}
         ],
-        # stream=True,  # 流式响应开关，True=流式响应，False=普通响应
+        stream=True,  # 流式响应开关，True=流式响应，False=普通响应
     )
 
-    # for chunk in completion:  # 流式响应用这个
-    #     content = chunk.choices[0].delta.content
-    #     finish_reason = chunk.choices[0].finish_reason
-    #     if content is not None:
-    #         print(content, end='')
-    #     if finish_reason == 'stop':
-    #         break
+    for chunk in completion:  # 流式响应用这个
+        content: str = chunk.choices[0].delta.content
+        finish_reason = chunk.choices[0].finish_reason
 
-    print(content)
-    # 通过reasoning_content字段打印思考过程
-    print("思考过程：")
-    print(completion.choices[0].message.reasoning_content)
+        if content is not None:
+            print(content, end='')
+            content = content.replace('#', '&nbsp;')
+            content = content.replace('\n', '<br />')
+            result += content
+        if finish_reason == 'stop':
+            break
 
-    # 通过content字段打印最终答案
-    print("最终答案：")
-    print(completion.choices[0].message.content)
+    #
+    # # 通过reasoning_content字段打印思考过程
+    # print("思考过程：")
+    # print(completion.choices[0].message.reasoning_content)
+    #
+    # # 通过content字段打印最终答案
+    # print("最终答案：")
+    # print(completion.choices[0].message.content)
+
+    return result
 
 
 def extract_matching(pattern, owner):
@@ -1004,12 +1012,18 @@ class SoftwareQualityRating:
             "bugRepairScore": 0,
             "bugReopenScore": 0,
         }
+        # 初始化评分结果内容
+        self.scoreContents = []
         # 图表html
         self.chartHtml = ''
+        # 缺陷数量分数描述
+        self.bugCountScoreMsg = ''
         # 缺陷修复分数描述
-        self.bug_repair_score_msg = ''
+        self.bugRepairScoreMsg = ''
         # 缺陷重新打开分数描述
-        self.bug_reopen_score_msg = ''
+        self.bugReopenScoreMsg = ''
+        # 初始化报告总结内容为空字符串
+        self.reportSummary = ''
 
     def get_requirement_detail(self):
         """
@@ -1238,7 +1252,7 @@ class SoftwareQualityRating:
                         created_date = date_time_to_date(bug.get('created'))
                         if bug_status == 'closed':  # 如果bug的状态是"已关闭"
                             resolved_date = date_time_to_date(bug.get('resolved'))  # 获取bug的解决日期
-                            is_deploy_prod_day_unrepaired_bug = resolved_date >= self.lastTaskDate  #如果解决日期大于等于最晚任务日期，则为上线当天存在的BUG
+                            is_deploy_prod_day_unrepaired_bug = resolved_date >= self.lastTaskDate  # 如果解决日期大于等于最晚任务日期，则为上线当天存在的BUG
                             is_on_that_day_unrepaired_bug = created_date != resolved_date  # 如果创建日期不等于解决日期，则为当天未修复的bug
                         else:  # 如果bug的状态不是"已关闭", 则将该BUG算为上线当天存在的BUG和当天未修复的bug
                             is_on_that_day_unrepaired_bug = True
@@ -1402,7 +1416,10 @@ class SoftwareQualityRating:
                     </span>
                 </div>
                 <div>
-                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">总结：</span>
+                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">总结：
+                        <br  />
+                        {self.reportSummary}
+                    </span>
                 </div>
                 <div>
                     <span style="font-size: medium; background-color: rgb(255, 255, 255);">
@@ -1908,6 +1925,11 @@ class SoftwareQualityRating:
 """
         # 调用_input函数来获取用户输入的分数，并将分数存储在实例的score字典中
         self.score['positiveIntegrityScore'] = _input(score_text + '请输入分数：', **SCORE_INPUT_DATA)
+        self.scoreContents.append({
+            'title': '配合积极性/文档完成性',
+            'scoreRule': score_text,
+            'score': self.score['positiveIntegrityScore']
+        })
 
     def _smoke_testing_score(self):
         """
@@ -1930,6 +1952,12 @@ class SoftwareQualityRating:
         # 调用_input函数来获取用户输入的分数，并将分数存储在实例的score字典中
         self.score['smokeTestingScore'] = _input(score_text + '请输入分数：', **SCORE_INPUT_DATA)
 
+        self.scoreContents.append({
+            'title': '冒烟测试',
+            'scoreRule': score_text,
+            'score': self.score['smokeTestingScore']
+        })
+
     def _bug_count_score(self):
         """
         计算BUG数得分的方法。
@@ -1950,12 +1978,14 @@ class SoftwareQualityRating:
         else:
             bug_total = _input("请输入BUG总数为：", int)
             self.bugInputTotal = bug_total
+        self.bugCountScoreMsg += f'BUG总数为：{bug_total}\n'
 
         # 获取开发周期，如果已知则直接打印，否则请求用户输入
         if self.developmentCycle:
             print(f"获取的开发周期总天数为：{_print_text_font(round(self.developmentCycle, 1), color='green')}")
         else:
             self.developmentCycle = _input("请输入开发周期总天数：", float)
+        self.bugCountScoreMsg += f'开发周期总天数为：{self.developmentCycle}\n'
 
         # 打印开发人员总数
         print(f"获取的开发人员总数为：{_print_text_font(self.developerCount, color='green')}")
@@ -1974,8 +2004,20 @@ class SoftwareQualityRating:
         print(f"开发人员总数乘以平均工时为 {_print_text_font(f'{uu_result:.2f}', color='green')}")
         print(f"该项目平均一天工作量的Bug数为 {_print_text_font(X, color='green')}")
 
+        self.bugCountScoreMsg += f'开发人员总数乘以平均工时为 {uu_result:.2f}\n'
+        self.bugCountScoreMsg += f'该项目平均一天工作量的Bug数为 {X}\n'
+
         # 调用calculate_bug_count_rating函数计算得分，并进行输出
         self.score['bugCountScore'] = calculate_bug_count_rating(X)
+
+        if self.bugLevelsCount:
+            if self.bugLevelsCount['致命']:
+                if self.score['bugCountScore'] > 10:
+                    self.score['bugCountScore'] = 10
+            elif self.bugLevelsCount['严重']:
+                if self.score['bugCountScore'] > 15:
+                    self.score['bugCountScore'] = 15
+
         print('-' * LINE_LENGTH)
 
         # 如果得分不为None，则输出得分
@@ -1983,6 +2025,17 @@ class SoftwareQualityRating:
             bug_count_score = f'{self.score["bugCountScore"]} 分'
             print(
                 f'当平均一天工作量的Bug数={_print_text_font(X, color="green")}时，当前该项目软件质量评分中“BUG数”一项得分为：{_print_text_font(bug_count_score)}')
+
+        self.scoreContents.append({
+            'title': 'BUG数',
+            'scoreRule': self.bugCountScoreMsg + """20分：0<=平均一天工作的Bug数<=1且无严重，致命BUG
+15分：1<平均一天工作量的Bug数<=1.5且无致命Bug
+10分：1.5<平均一天工作量的Bug数<=2.0
+5分：2.0<平均一天工作量的Bug数<=3.0
+1分：3.0<平均一天工作量的Bug数
+""",
+            'score': self.score['bugCountScore']
+        })
 
     def _bug_repair_score(self):
         """
@@ -1992,20 +2045,28 @@ class SoftwareQualityRating:
         如果存在，则打印出未修复BUG的数量，并根据这些数据计算BUG修复评分。
         如果不存在未修复的BUG，则提供一个评分标准文本，供用户输入评分。
         """
+        score_text = r"""20分：名下BUG当天修复，当天通过回归验证且无重开 
+15分：名下BUG（P0\P1）当天修复，P2\其他隔天修复，所以BUG均不能重开
+10分：名下BUG（P0）当天修复，（P1\P2）当天未修复，隔天修复
+5分：名下BUG（P2）上线当天存在未修复
+1分：名下BUG（P0\P1）上线当天存在未修复
+"""
         # 打印BUG修复标题
         print('BUG修复'.center(LINE_LENGTH, '-'))
         # 检查是否存在未修复的BUG
         if self.bugTotal:
             # 打印各优先级未修复BUG的数量
-            self.bug_repair_score_msg += \
+            self.bugRepairScoreMsg += \
                 f'''P0=致命缺陷, P1=严重缺陷, P2=一般缺陷、提示、建议
 在项目上线当天存在P0或者P1未修复BUG数为：{_print_text_font(len(self.unrepairedBugs["deployProdDayUnrepaired"]["P0P1"]), color="green")}
 在项目上线当天存在P2未修复BUG数为：{_print_text_font(len(self.unrepairedBugs["deployProdDayUnrepaired"]["P2"]), color="green")}
 P0未当天修复BUG数为：{_print_text_font(len(self.unrepairedBugs["onThatDayUnrepaired"]["P0"]), color="green")}
 P1未当天修复BUG数为：{_print_text_font(len(self.unrepairedBugs["onThatDayUnrepaired"]["P1"]), color="green")}
 P2未当天修复BUG数为：{_print_text_font(len(self.unrepairedBugs["onThatDayUnrepaired"]["P2"]), color="green")}'''
-            print(self.bug_repair_score_msg)
+            print(self.bugRepairScoreMsg)
             print('-' * LINE_LENGTH)
+
+            score_text = self.bugRepairScoreMsg + '\n' + score_text
 
             # 计算BUG修复评分
             self.score['bugRepairScore'] = calculate_bug_repair_rating(self.unrepairedBugs)
@@ -2018,16 +2079,16 @@ P2未当天修复BUG数为：{_print_text_font(len(self.unrepairedBugs["onThatDa
         else:
             if self.bugInputTotal > 0:
                 # 提供评分标准文本，供用户输入评分
-                score_text = r"""20分：名下BUG当天修复，当天通过回归验证且无重开 
-15分：名下BUG（P0\P1）当天修复，P2\其他隔天修复，所以BUG均不能重开
-10分：名下BUG（P0）当天修复，（P1\P2）当天未修复，隔天修复
-5分：名下BUG（P2）上线当天存在未修复
-1分：名下BUG（P0\P1）上线当天存在未修复
-"""
                 self.score['bugRepairScore'] = _input(score_text + '请输入分数：', **SCORE_INPUT_DATA)
             else:
                 print(f'BUG修复评分为：{_print_text_font(20)}')
                 self.score['bugRepairScore'] = 20
+
+        self.scoreContents.append({
+            'title': 'BUG修复',
+            'scoreRule': score_text,
+            'score': self.score['bugRepairScore']
+        })
 
     def _bug_reopen_score(self):
         """
@@ -2037,82 +2098,92 @@ P2未当天修复BUG数为：{_print_text_font(len(self.unrepairedBugs["onThatDa
         如果存在BUG总数，则获取重启BUG的详细信息，并计算重启和未修复的BUG数量，
         随后输出这些数量，并计算得分。如果BUG总数为0，则显示预设的得分标准，并要求输入得分。
         """
+        score_text = """20分：当前版本名下所有BUG一次性回归验证通过无重启
+15分：名下BUG重启输=1
+10分：名下BUG重启输=2
+5分：名下BUG重启输=3
+1分：名下BUG重启输>=4
+"""
         print('BUG重启'.center(LINE_LENGTH, '-'))
         if self.bugTotal:
             self.get_reopen_bug_detail()  # 获取重启BUG数据
             reopen_bug_count = sum(self.reopenBugsData.values())  # 计算重启BUG数量
             unrepaired_bug_count = sum(self.unrepairedBugsData.values())  # 计算未修复BUG数量
-            self.bug_reopen_score_msg += \
+            self.bugReopenScoreMsg += \
                 f'''BUG重启数为：{_print_text_font(reopen_bug_count, color="green")}
 BUG未修复数为：{_print_text_font(unrepaired_bug_count, color="green")}'''
-            print(self.bug_reopen_score_msg)
+            print(self.bugReopenScoreMsg)
             self.score["bugReopenScore"] = calculate_bug_reopen_rating(reopen_bug_count + unrepaired_bug_count)
             print('-' * LINE_LENGTH)
             # 调用calculate_bug_reopen_rating函数计算重启BUG得分，并进行输出
             bug_reopen_score = f"{self.score['bugReopenScore']} 分"
             print(
                 f'当名下BUG重启数和未修复数总计={_print_text_font(reopen_bug_count + unrepaired_bug_count, color="green")}时，当前该项目软件质量评分中“BUG重启”一项得分为： {_print_text_font(bug_reopen_score)}')
+            score_text = self.bugReopenScoreMsg + '\n' + score_text
         else:
             if self.bugInputTotal > 0:
                 # 当BUG总数为0时，显示预设的得分标准，并要求输入得分
-                score_text = """20分：当前版本名下所有BUG一次性回归验证通过无重启
-15分：名下BUG重启输=1
-10分：名下BUG重启输=2
-5分：名下BUG重启输=3
-1分：名下BUG重启输>=4
-"""
                 self.score['bugReopenScore'] = _input(score_text + '请输入分数：', **SCORE_INPUT_DATA)
             else:
                 print(f'BUG重启评分为：{_print_text_font(20)}')
                 self.score['bugReopenScore'] = 20
+        self.scoreContents.append({
+            'title': 'BUG重启',
+            'scoreRule': score_text,
+            'score': self.score['bugReopenScore']
+        })
 
     def _ai_generate_summary(self):
         text = f"""
-        需求名称: {self.requirementName}
-        开发周期总天数为：{round(self.developmentCycle, 1)}
-        BUG总数为: {self.bugTotal}
-        开发人员数量为: {self.developerCount}"""
+需求名称: {self.requirementName}
+开发周期总天数为：{round(self.developmentCycle, 1)}
+BUG总数为: {self.bugTotal}
+开发人员数量为: {self.developerCount}
+"""
 
         if self.bugLevelsCount:
             text += f"""
-            BUG等级分布情况为: 
-                {self.bugLevelsCount}"""
+BUG等级分布情况为: 
+{self.bugLevelsCount}
+"""
 
-        if self.bug_repair_score_msg:
-            text += f"""
-            BUG修复情况: 
-                {self.bug_repair_score_msg}"""
-
-        if self.bug_reopen_score_msg:
-            text += f"""
-            BUG重启情况: 
-                {self.bug_reopen_score_msg}"""
+        if self.scoreContents:
+            text += '项目研发评分情况:'
+            for scoreData in self.scoreContents:
+                text += f"""
+{scoreData['title']}评分:
+{scoreData['scoreRule']}
+得分为: {scoreData['score']}
+"""
 
         if self.workHours:
             text += f"""
-            开发人员工时情况: 
-                {self.workHours}"""
+开发人员工时情况: 
+{self.workHours}
+"""
 
         if self.fixers:
             text += f"""
-            开发人员修复BUG情况: 
-                {self.fixers}"""
+开发人员修复BUG情况: 
+{self.fixers}
+"""
 
         if self.bugLevelsMultiClientCount:
             text += f"""
-            各端缺陷级别分布为: 
-                {self.bugLevelsMultiClientCount}"""
+各端缺陷级别分布为: 
+{self.bugLevelsMultiClientCount}
+"""
 
         if self.bugSourceMultiClientCount:
             text += f"""
-            各端缺陷来源分布为: 
-                {self.bugSourceMultiClientCount}"""
+各端缺陷来源分布为: 
+{self.bugSourceMultiClientCount}
+"""
 
-        text += '''
-        我是一个测试经理，我现在需要做提测质量报告分析，根据以上信息给我一个对开发情况和测试结果的一个详细总结、点评和建议, 在总结中可以看到一些不足之处的描述、改进办法和建议之类的
+        text += '''我是一个测试经理，我现在需要做提测质量报告分析，根据以上信息给我一个对开发情况和测试结果的一个详细总结、点评和建议, 在总结中可以看到一些不足之处的描述、改进办法和建议之类的
         '''
 
-        deepseek_chat(text)
+        self.reportSummary = deepseek_chat(text)
 
     def run(self):
         """
@@ -2188,7 +2259,7 @@ BUG未修复数为：{_print_text_font(unrepaired_bug_count, color="green")}'''
             # 创建图表
             self.create_chart()
 
-            # self._ai_generate_summary()
+            self._ai_generate_summary()
 
             if IS_CREATE_REPORT:
                 # 添加测试报告
