@@ -28,18 +28,20 @@ import numpy as np
 import pandas as pd
 
 IS_CREATE_REPORT = True  # 是否创建报告
+IS_CREATE_AI_SUMMARY = True  # 是否创建AI总结
 
 # 定义常量和全局变量
 ACCOUNT = 'wuchong@addcn.com'  # 账号
 PASSWORD = 'WUchong_1008'  # 密码
 PROJECT_ID = "63835346"  # 项目ID
 # REQUIREMENT_ID = "1163835346001078047"  # 需求ID
-REQUIREMENT_ID = "1163835346001071668"  # 需求ID
-# REQUIREMENT_ID = "1163835346001120791"  # 需求ID
+# REQUIREMENT_ID = "1163835346001071668"  # 需求ID
+REQUIREMENT_ID = "1163835346001118124"  # 需求ID
 REQUIREMENT_LIST_ID = '1000000000000000417'  # 需求列表ID, 用于查询或者编辑列表展示字段的配置
 
+DEPARTMENT = 'T5'  # 部门名称
 TESTERS = ["吴崇", "许万乐", "梁锦松", "刘倩", "周国豪", "段雪花", "喻文涛", "毛有有"]  # 测试人员列表
-TESTER_LEADER = 'T5' + TESTERS[0]  # 测试负责人, 选取第一个测试人员作为测试负责人带上部门名称
+TESTER_LEADER = DEPARTMENT + TESTERS[0]  # 测试负责人, 选取第一个测试人员作为测试负责人带上部门名称
 BUG_LEVELS = ["致命", "严重", "一般", "提示", "建议"]  # BUG级别列表
 
 TEST_REPORT_CC_RECIPIENTS = ['T5黄帝佳', 'T5董静']  # 测试报告抄送人列表
@@ -49,8 +51,8 @@ HOST = 'https://www.tapd.cn'  # Tapd的域名
 LINE_LENGTH = 100  # 横线的长度
 
 # 设置图表中文字体
-plt.rcParams['font.sans-serif'] = ['STHeiti']  # 使用黑体(macOS系统使用)
-# plt.rcParams['font.sans-serif'] = ['SimHei']  # 使用黑体(windows系统使用)
+# plt.rcParams['font.sans-serif'] = ['STHeiti']  # 使用黑体(macOS系统使用)
+plt.rcParams['font.sans-serif'] = ['SimHei']  # 使用黑体(windows系统使用)
 plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
 
 # 创建一个CloudScraper实例，用于模拟浏览器请求
@@ -531,48 +533,52 @@ def deepseek_chat(content: str):
         messages=[
             {'role': 'user', 'content': content}
         ],
-        stream=True,  # 流式响应开关，True=流式响应，False=普通响应
+        stream=False,  # 流式响应开关，True=流式响应，False=普通响应
+        # temperature=0.1,  # 模型采样温度，取值范围[0,1]，越小越 deterministic，越大越 stochastic。
+        # top_p=0.5,  # 模型采样 nucleus probability，取值范围[0,1]，越大越 stochastic。
+        # max_tokens=1024,  # 最大输出长度，取值范围[1, 4096]。
     )
 
-    for chunk in completion:  # 流式响应用这个
-        content: str = chunk.choices[0].delta.content
-        finish_reason = chunk.choices[0].finish_reason
-
-        if content is not None:
-            print(content, end='')
-            content = content.replace('#', '&nbsp;')
-            content = content.replace('\n', '<br />')
-            result += content
-        if finish_reason == 'stop':
-            break
+    # for chunk in completion:  # 流式响应用这个
+    #     content: str = chunk.choices[0].delta.content
+    #     finish_reason = chunk.choices[0].finish_reason
+    #
+    #     if content is not None:
+    #         print(content, end='')
+    #         result += content
+    #     if finish_reason == 'stop':
+    #         break
 
     #
     # # 通过reasoning_content字段打印思考过程
     # print("思考过程：")
     # print(completion.choices[0].message.reasoning_content)
-    #
-    # # 通过content字段打印最终答案
-    # print("最终答案：")
-    # print(completion.choices[0].message.content)
+
+    # 通过content字段打印最终答案
+    print("最终答案：")
+    result += completion.choices[0].message.content
+    print(result)
+
+    result = result.replace('#', '')
+    result = result.replace('\n', '<br/>')
+    result = result.replace('---', '<hr>')
+    result = result.replace(' ', '&nbsp;')
+    result = result.replace('\t', '&nbsp;' * 3)
+    b_label_texts: list[str] = extract_matching(r'\*\*.*?\*\*', result)
+
+    for bLabelText in b_label_texts:
+        b_label_text = bLabelText.replace('**', '')
+        result = result.replace(bLabelText, '<b>' + b_label_text + '</b>')
 
     return result
 
 
 def extract_matching(pattern, owner):
-    """
-    使用正则表达式从给定的字符串中提取信息。
-
-    参数:
-    pattern (str): 正则表达式模式，用于定义要匹配的字符串格式。
-    owner (str): 要从中提取信息的字符串。
-
-    返回:
-    str: 如果找到匹配的子字符串，则返回匹配到的内容；否则返回None。
-    """
     # 使用正则表达式匹配
-    match = re.search(pattern, owner)
+    regex = re.compile(pattern)
+    match = regex.findall(owner)
     # 如果匹配成功，返回匹配到的内容
-    return match.group(1) if match else None
+    return match
 
 
 def get_days(start_date, end_date, is_workday=True):
@@ -638,7 +644,7 @@ def encrypt_password_zero_padding(password):
 
 
 @create_plot
-def create_bar_plot(title, data: dict):
+def create_bar_plot(title, data: dict, bar_width=0.2, bar_max_width=0.5):
     """
     创建一个柱状图。
 
@@ -648,6 +654,7 @@ def create_bar_plot(title, data: dict):
     参数:
     - title: 图表的标题。
     - data: 包含柱状图数据的字典，键为标签，值为高度。如果值是一个字典，则绘制堆叠柱状图。
+    - bar_width: 柱子的宽度
 
     返回:
     - 一个包含图表宽度的字典。
@@ -665,6 +672,10 @@ def create_bar_plot(title, data: dict):
     min_width = 6.4  # 最小宽度
     max_width = 20  # 最大宽度
     desired_width = min(max(base_width + key_length_factor + bar_count_factor, min_width), max_width)  # 计算最终的宽度
+
+    desired_bar_width = bar_width * num_bars
+    if desired_bar_width > bar_max_width:
+        desired_bar_width = bar_max_width
 
     fig, ax = plt.subplots()  # 创建一个图形对象和轴对象
 
@@ -686,7 +697,14 @@ def create_bar_plot(title, data: dict):
 
         # 绘制每一层，并更新底部值
         for i in range(data.shape[1]):
-            bars = ax.bar(keys, data[:, i], bottom=bottoms, color=PLOT_COLORS[i], label=list(new_values.keys())[i])
+            bars = ax.bar(
+                keys,
+                data[:, i],
+                width=desired_bar_width,
+                bottom=bottoms,
+                color=PLOT_COLORS[i],
+                label=list(new_values.keys())[i],
+            )
             bottoms += data[:, i]  # 更新底部值以反映已添加的高度
             for bar in bars:
                 yval = bar.get_height()  # 获取柱子的高度
@@ -709,7 +727,7 @@ def create_bar_plot(title, data: dict):
         ax.set_ylim(0, max_height * 1.1)
 
     else:
-        bars = ax.bar(keys, values)  # 绘制柱状图
+        bars = ax.bar(keys, values, width=desired_bar_width)  # 绘制柱状图
         # 在每个柱子上添加数值标签
         for bar in bars:
             yval = bar.get_height()  # 获取柱子的高度
@@ -717,6 +735,7 @@ def create_bar_plot(title, data: dict):
                 # 添加数值标签，位置为柱子顶部中央，标签值为四舍五入到小数点后两位的高度值
                 ax.text(bar.get_x() + bar.get_width() / 2, yval, round(yval, 2), ha='center', va='bottom')
     plt.title(title)  # 设置图表标题
+    plt.xlim(-1, num_bars)
 
     return {'width': desired_width}
 
@@ -849,7 +868,7 @@ def upload_file(file):
     upload_file_res = fetch_data(url=url, params=params, data=data, files=files, method='POST')
 
     # 从响应文本中提取匹配的文件路径或信息，并返回
-    return extract_matching(r"\);</script>(.*?)$", upload_file_res.text)
+    return extract_matching(r"\);</script>(.*?)$", upload_file_res.text)[0]
 
 
 def date_time_to_date(date_time_str: str):
@@ -946,8 +965,10 @@ class SoftwareQualityRating:
         self.requirementName = ''
         # 初始化产品经理为空字符串
         self.PM = ''
-        # 初始化测试人员列表为空列表
-        self.testers = []
+        # 初始化测试收件人员列表为空列表(用于在测试报告中填写的测试收件人员)
+        self.testRecipient = []
+        # 初始化测试人员列表为空字符串(用于在测试报告概要中填写的测试人员)
+        self.testersStr = ''
         # 初始化开发人员列表为空列表
         self.developers = []
         # 初始化最早任务时间为None
@@ -1014,6 +1035,8 @@ class SoftwareQualityRating:
         }
         # 初始化评分结果内容
         self.scoreContents = []
+        # 测试报告html
+        self.testReportHtml = ''
         # 图表html
         self.chartHtml = ''
         # 缺陷数量分数描述
@@ -1096,7 +1119,7 @@ class SoftwareQualityRating:
                 # 获取开发人员名称(带有部门名称)
                 owner = child['owner'].replace(";", "")
                 # 获取开发人员名称和工时
-                developer_name = extract_matching(r"\d(.*?)$", owner)
+                developer_name = extract_matching(r"\d(.*?)$", owner)[0]
                 # 获取完成的工时
                 worked_hours = float(child.get('effort_completed', 0))
 
@@ -1120,8 +1143,8 @@ class SoftwareQualityRating:
                         self.earliestTaskDate = begin  # 更新最早任务日期
                     if not self.lastTaskDate or due > self.lastTaskDate:  # 如果当前任务的结束日期大于最晚任务日期，则更新最晚任务日期
                         self.lastTaskDate = due  # 更新最晚任务日期
-                    if owner not in self.testers:
-                        self.testers.append(owner)
+                    if owner not in self.testRecipient:
+                        self.testRecipient.append(owner)
             # 如果子任务列表的长度小于每页大小，则说明已经获取到了所有子任务，退出循环
             if len(data['data']['children_list']) < page_size:
                 break
@@ -1353,24 +1376,8 @@ class SoftwareQualityRating:
         # 测试人员列表中移除当前用户
         self._remove_current_user()
 
-        # 构造测试报告数据
-        url = HOST + f"/{PROJECT_ID}/report/workspace_reports/submit/0/0/security"
-        params = {
-            "report_type": "test",
-            "save_draft": "1",
-        }
-        data = {
-            "data[Template][id]": "1163835346001000040",
-            "data[WorkspaceReport][title]": f"{(self.requirementName + '_') if self.requirementName else 'T5'}测试报告",
-            "data[WorkspaceReport][receiver]": f"{';'.join([self.PM] + self.developers + self.testers)}",
-            "data[WorkspaceReport][receiver_organization_ids]": "",
-            "data[WorkspaceReport][cc]": f"{';'.join(TEST_REPORT_CC_RECIPIENTS)}",
-            "data[WorkspaceReport][cc_organization_ids]": "",
-            "workspace_name": "T5;T5 Engineering;",
-            "data[WorkspaceReport][workspace_list]": f"{PROJECT_ID}|51931447",
-            "data[detail][1][type]": "richeditor",
-            "data[detail][1][default_value]": f'''
-            <span style="color: rgb(34, 34, 34); font-size: medium; background-color: rgb(255, 255, 255);">XXXX年XX月XX日，{self.requirementName + '&nbsp; &nbsp;' if self.requirementName else ''}項目已完成測試，達到上綫要求</span>
+        self.testReportHtml += f'''
+            <span style="color: rgb(34, 34, 34); font-size: medium; background-color: rgb(255, 255, 255);">{datetime.datetime.now().strftime("%Y年%m月%d日")}，{self.requirementName + '&nbsp; &nbsp;' if self.requirementName else ''}項目已完成測試，達到上綫要求</span>
             <div style="color: rgb(34, 34, 34);">
                 <span style="background-color: rgb(255, 255, 255);">
                     <br  />
@@ -1396,13 +1403,13 @@ class SoftwareQualityRating:
                     <span style="font-size: medium; background-color: rgb(255, 255, 255);">测试时间：</span>
                 </div>
                 <div>
-                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">测试人员：</span>
+                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">测试人员：{self.testersStr}</span>
                 </div>
                 <div>
-                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">开发人员：{'、'.join(developer.replace(developer[:2], '') for developer in self.developers)}</span>
+                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">开发人员：{'、'.join(developer.replace(DEPARTMENT, '') for developer in self.developers)}</span>
                 </div>
                 <div>
-                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">产品经理：</span>
+                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">产品经理：{self.PM.replace(DEPARTMENT, '')}</span>
                 </div>
                 <div>
                     <span style="font-size: medium; background-color: rgb(255, 255, 255);">测试范围：</span>
@@ -1417,8 +1424,7 @@ class SoftwareQualityRating:
                 </div>
                 <div>
                     <span style="font-size: medium; background-color: rgb(255, 255, 255);">总结：
-                        <br  />
-                        {self.reportSummary}
+                        <br  /><br  /> %(reportSummary)s
                     </span>
                 </div>
                 <div>
@@ -1426,7 +1432,28 @@ class SoftwareQualityRating:
                         <br  />
                     </span>
                 </div>
-            </div>''',
+            </div>'''
+
+        if IS_CREATE_AI_SUMMARY:
+            self._ai_generate_summary()
+
+        # 构造测试报告数据
+        url = HOST + f"/{PROJECT_ID}/report/workspace_reports/submit/0/0/security"
+        params = {
+            "report_type": "test",
+            "save_draft": "1",
+        }
+        data = {
+            "data[Template][id]": "1163835346001000040",
+            "data[WorkspaceReport][title]": f"{(self.requirementName + '_') if self.requirementName else DEPARTMENT}测试报告",
+            "data[WorkspaceReport][receiver]": f"{';'.join([self.PM] + self.developers + self.testRecipient)}",
+            "data[WorkspaceReport][receiver_organization_ids]": "",
+            "data[WorkspaceReport][cc]": f"{';'.join(TEST_REPORT_CC_RECIPIENTS)}",
+            "data[WorkspaceReport][cc_organization_ids]": "",
+            "workspace_name": "T5;T5 Engineering;",
+            "data[WorkspaceReport][workspace_list]": f"{PROJECT_ID}|51931447",
+            "data[detail][1][type]": "richeditor",
+            "data[detail][1][default_value]": self.testReportHtml % {"reportSummary": self.reportSummary},
             "data[detail][1][title]": "一、概述",
             "data[detail][1][id]": 0,
             "data[detail][2][type]": "story_list",
@@ -1469,7 +1496,11 @@ class SoftwareQualityRating:
                 "data[detail][4][id]": 0,
                 "data[detail][4][default_value]": f"<div>{self.chartHtml}</div>",
             })
-        fetch_data(url=url, params=params, data=data, method='POST')  # 提交测试报告请求
+        if IS_CREATE_REPORT:
+            fetch_data(url=url, params=params, data=data, method='POST')  # 提交测试报告请求
+        else:
+            print('请求测试报告data:')
+            print(data)
 
     def create_chart(self):
         """
@@ -1860,23 +1891,19 @@ class SoftwareQualityRating:
                     break
 
     def _remove_current_user(self):
-        """
-        从 testers 列表中移除当前用户。
+        if self.testRecipient:
+            is_last = False
+            for tester in self.testRecipient:
+                if tester == self.testRecipient[-1]:
+                    is_last = True
+                tester = tester.replace(DEPARTMENT, '')
+                self.testersStr += f'{tester}' if is_last else f'{tester}、'
 
-        本函数首先检查 testers 列表是否为空，如果不为空，则获取当前用户的名字。
-        如果当前用户在 testers 列表中，则将其移除。
-        此外，如果当前用户不是测试负责人且测试负责人不在 testers 列表中，则将测试负责人添加到 testers 列表中。
-        """
-        # 检查 testers 列表是否为空
-        if self.testers:
-            # 获取当前用户的名字(带部门名称)
             current_user_name = get_user_detail()['data']['get_current_user_ret']['data']['user_nick']
-            # 如果当前用户在 testers 列表中，则将其移除
-            if current_user_name in self.testers:
-                self.testers.remove(current_user_name)
-            # 如果当前用户不是测试负责人且测试负责人不在 testers 列表中，则将其添加到 testers 列表中
-            if current_user_name != TESTER_LEADER and TESTER_LEADER not in self.testers:
-                self.testers.append(TESTER_LEADER)
+            if current_user_name in self.testRecipient:
+                self.testRecipient.remove(current_user_name)
+            if current_user_name != TESTER_LEADER and TESTER_LEADER not in self.testRecipient:
+                self.testRecipient.append(TESTER_LEADER)
 
     def get_reopen_bug_detail(self):
         """
@@ -2158,30 +2185,37 @@ BUG等级分布情况为:
 
         if self.workHours:
             text += f"""
-开发人员工时情况: 
+开发人员工时情况(单位为小时): 
 {self.workHours}
 """
 
         if self.fixers:
             text += f"""
-开发人员修复BUG情况: 
+开发人员修复BUG情况(数值为BUG修复数): 
 {self.fixers}
 """
 
         if self.bugLevelsMultiClientCount:
             text += f"""
-各端缺陷级别分布为: 
+各端缺陷级别分布为(数值为BUG数量): 
 {self.bugLevelsMultiClientCount}
 """
 
         if self.bugSourceMultiClientCount:
             text += f"""
-各端缺陷来源分布为: 
+各端缺陷来源分布为(数值为BUG数量): 
 {self.bugSourceMultiClientCount}
 """
 
-        text += '''我是一个测试经理，我现在需要做提测质量报告分析，根据以上信息给我一个对开发情况和测试结果的一个详细总结、点评和建议, 在总结中可以看到一些不足之处的描述、改进办法和建议之类的
-        '''
+        text += ('我是一个测试经理，我现在需要做提测质量报告分析，根据以上信息给我一个对开发情况和测试结果的一个详细总结、点评和建议, '
+                 '在总结中可以看到一些不足之处的描述、改进办法和建议之类的, 并且需要美观的格式、描述清晰、直观、言简意赅、简明扼要,'
+                 '不要有尾部的签名和日期, 内容不要带表格, 层级需要有缩进, 需要加点分隔横线(用三个-来表示)\n')
+
+        text += '我需要将总结写进%(reportSummary)s中, 请给我合理的格式, 我只需要用来代替reportSummary的内容, 不要把%(reportSummary)s也写在内容中\n'
+        text += '行尾最后内容中不要出现备注, 比如: "注: *********"\n'
+        text += '内容正常返回就行, 不需要有html的标签, 我自己会处理\n'
+
+        text += self.testReportHtml
 
         self.reportSummary = deepseek_chat(text)
 
@@ -2259,11 +2293,8 @@ BUG等级分布情况为:
             # 创建图表
             self.create_chart()
 
-            self._ai_generate_summary()
-
-            if IS_CREATE_REPORT:
-                # 添加测试报告
-                self.add_test_report()
+            # 添加测试报告
+            self.add_test_report()
 
         except ValueError as e:
             # 捕获ValueError异常并打印堆栈信息
