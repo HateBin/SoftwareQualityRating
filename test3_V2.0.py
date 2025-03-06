@@ -29,9 +29,10 @@ import pandas as pd
 import platform
 import json
 
-IS_CREATE_REPORT = False  # 是否创建报告
-IS_CREATE_AI_SUMMARY = False  # 是否创建AI总结
-IS_SUPPORT_RETRY_CREATE_AI_SUMMARY = False  # 是否支持重试创建AI总结, 生成完成后可input进行重新生成
+IS_CREATE_REPORT = True  # 是否创建报告
+IS_CREATE_AI_SUMMARY = True  # 是否创建AI总结
+IS_SUPPORT_RETRY_CREATE_AI_SUMMARY = True  # 是否支持重试创建AI总结, 生成完成后可input进行重新生成
+DEEPSEEK_MODEL = 'r1'  # deepseek模型名称，目前支持：v3、r1
 
 # 定义常量和全局变量
 ACCOUNT = 'wuchong@addcn.com'  # 账号
@@ -49,8 +50,13 @@ BUG_LEVELS = ["致命", "严重", "一般", "提示", "建议"]  # BUG级别列�
 
 TEST_REPORT_CC_RECIPIENTS = ['T5黄帝佳', 'T5董静']  # 测试报告抄送人列表
 
+# 测试报告总结的组成部分，如不配置则由AI自己生成
 TEST_REPORT_SUMMARY_COMPOSITION = [
-
+    # "总体评价",
+    # "核心亮点",
+    # "主要不足与改进建议",
+    # "后续优化重点",
+    # "风险预警",
 ]
 
 HOST = 'https://www.tapd.cn'  # Tapd的域名
@@ -525,37 +531,88 @@ def fetch_data(url, params=None, data=None, json=None, files=None, method='GET')
     sys.exit()
 
 
+def _ai_result_label_switch_html_label(
+        result: str,
+        old_text: str = None,
+        re_exp: str = None,
+        new_text: str or list[str] or tuple[str] = None
+) -> str:
+    if re_exp and new_text is not None and isinstance(new_text, (list, tuple)):
+        old_texts: list[str] = re_exp.split('.*?')
+        re_results: list[str] = extract_matching(re_exp, result)
+        for reResult in re_results:
+            re_result: str = reResult.replace(old_texts[0], '').replace(old_texts[1], '')
+            result = result.replace(reResult, new_text[0] + re_result + new_text[1])
+    elif old_text and new_text is not None and isinstance(new_text, str):
+        result = result.replace(old_text, new_text)
+    return result
+
+
+def ai_result_switch_html(result: str):
+    result = _ai_result_label_switch_html_label(result=result, old_text='#', new_text='')
+    result = _ai_result_label_switch_html_label(result=result, old_text='\n', new_text='<br/>')
+    result = _ai_result_label_switch_html_label(result=result, old_text='---', new_text='<hr>')
+    result = _ai_result_label_switch_html_label(result=result, old_text=' ', new_text='&nbsp;')
+    result = _ai_result_label_switch_html_label(result=result, old_text='\t', new_text='&nbsp;' * 3)
+
+    key_contents: list[str] = extract_matching(r'<red>.*?</red>', result)
+    for keyContent in key_contents:
+        key_content = keyContent.replace('<red>', '').replace('</red>', '')
+        result = result.replace(keyContent, '<span style="color:#ff3b30;">' + key_content + '</span>')
+
+    h_label_texts: list[str] = extract_matching(r'\*\*\*.*?\*\*\*', result)
+    for hLabelText in h_label_texts:
+        h_label_text = hLabelText.replace('***', '')
+        result = result.replace(hLabelText, '<h3>' + h_label_text + '</h3>')
+
+    b_label_texts: list[str] = extract_matching(r'\*\*.*?\*\*', result)
+    for bLabelText in b_label_texts:
+        b_label_text = bLabelText.replace('**', '')
+        result = result.replace(bLabelText, '<b>' + b_label_text + '</b>')
+
+    return result
+
+
 def deepseek_chat(content: str):
     result = ''
+    model = ''
     print(content)
 
-    key = 'sk-a5ae4633515d448e9bbbe03770712d4e'
+    if DEEPSEEK_MODEL.lower() == 'v3':
+        model = 'deepseek-chat'
+    if DEEPSEEK_MODEL.lower() == 'r1':
+        model = 'deepseek-reasoner'
+
+    if not model:
+        print('DEEPSEEK_MODEL配置错误')
+        return result
+    key = 'sk-00987978d24e445a88f1f5a57944818b'
     client = OpenAI(
-        # 若没有配置环境变量，请用百炼API Key将下行替换为：api_key="sk-xxx",
-        api_key=key,  # 如何获取API Key：https://help.aliyun.com/zh/model-studio/developer-reference/get-api-key
-        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
+        api_key=key,
+        base_url="https://api.deepseek.com/v1"
     )
-    print('deepseek-R1生成中, 请稍等...')
+
+    print(f'{model}生成中, 请稍等...')
     completion = client.chat.completions.create(
-        model="deepseek-r1",  # 此处以 deepseek-r1 为例，可按需更换模型名称。
+        model=model,
         messages=[
             {'role': 'user', 'content': content}
         ],
-        stream=False,  # 流式响应开关，True=流式响应，False=普通响应
+        stream=True,  # 流式响应开关，True=流式响应，False=普通响应
         # temperature=0.1,  # 模型采样温度，取值范围[0,1]，越小越 deterministic，越大越 stochastic。
         # top_p=0.5,  # 模型采样 nucleus probability，取值范围[0,1]，越大越 stochastic。
         # max_tokens=1024,  # 最大输出长度，取值范围[1, 4096]。
     )
 
-    # for chunk in completion:  # 流式响应用这个
-    #     content: str = chunk.choices[0].delta.content
-    #     finish_reason = chunk.choices[0].finish_reason
-    #
-    #     if content is not None:
-    #         print(content, end='')
-    #         result += content
-    #     if finish_reason == 'stop':
-    #         break
+    for chunk in completion:  # 流式响应用这个
+        content: str = chunk.choices[0].delta.content
+        finish_reason = chunk.choices[0].finish_reason
+
+        if content is not None:
+            print(content, end='')
+            result += content
+        if finish_reason == 'stop':
+            break
 
     #
     # # 通过reasoning_content字段打印思考过程
@@ -563,22 +620,11 @@ def deepseek_chat(content: str):
     # print(completion.choices[0].message.reasoning_content)
 
     # 通过content字段打印最终答案
-    print("最终答案：")
-    result += completion.choices[0].message.content
-    print(result)
+    # print("最终答案：")
+    # result += completion.choices[0].message.content
+    # print(result)
 
-    result = result.replace('#', '')
-    result = result.replace('\n', '<br/>')
-    result = result.replace('---', '<hr>')
-    result = result.replace(' ', '&nbsp;')
-    result = result.replace('\t', '&nbsp;' * 3)
-    b_label_texts: list[str] = extract_matching(r'\*\*.*?\*\*', result)
-
-    for bLabelText in b_label_texts:
-        b_label_text = bLabelText.replace('**', '')
-        result = result.replace(bLabelText, '<b>' + b_label_text + '</b>')
-
-    return result
+    return ai_result_switch_html(result)
 
 
 def extract_matching(pattern, owner):
@@ -961,6 +1007,7 @@ def dict_add_total(data: dict):
     new_data['总数'] = sum(data.values())
     return new_data
 
+
 def get_system_name():
     """
     获取当前系统的名称。
@@ -978,7 +1025,6 @@ def get_system_name():
         return 'macOS'
     elif system_name == 'Windows':
         return 'windows'
-
 
 
 class SoftwareQualityRating:
@@ -2241,8 +2287,12 @@ BUG等级分布情况为:
 """
 
         text += ('我是一个测试经理，我现在需要做提测质量报告分析，根据以上信息给我一个对开发情况和测试结果的一个详细总结、点评和建议, '
-                 '在总结中可以看到一些不足之处的描述、改进办法和建议之类的, 并且需要美观的格式、描述清晰、直观、言简意赅、简明扼要,'
-                 '不要有尾部的签名和日期, 内容不要带表格, 层级需要有缩进, 需要加点分隔横线(用三个-来表示)\n'
+                 '在总结中可以看到一些不足之处的描述、改进办法和建议之类的, 并且需要美观的格式、描述清晰、直观、言简意赅、简明扼要\n'
+                 '\n'
+                 '下面是格式要求：\n'
+                 '不要有尾部的签名和日期, 内容不要带表格，1级标题直接从分析的各个类型开始，又重复写质量总结或者报告分析之类的标题了\n'
+                 '1级主题文字前后各加"***"，1级主题下面的内容每一行开头统一使用"▶ "作为开头（不要给1级主题加），并且把2级主题字体加粗(需要加粗的字体前后各加**), 1级标题之间需要加分隔横线(用三个-来表示)\n'
+                 '将内容中的关键点使用<red>内容</red>标识\n'
                  '我需要将总结写进%(reportSummary)s中, 请给我合理的格式, 我只需要用来代替reportSummary的内容, 不要把%(reportSummary)s也写在内容中\n'
                  '行尾最后内容中不要出现备注, 比如: "注: *********"\n'
                  '内容正常返回就行, 不需要有html的标签, 我自己会处理\n')
@@ -2256,6 +2306,8 @@ BUG等级分布情况为:
             self.reportSummary = deepseek_chat(text)
 
             if IS_SUPPORT_RETRY_CREATE_AI_SUMMARY:
+                print('')
+                print('')
                 while True:
                     confirm = input('是否重新生成AI总结?(y/n): ').lower()
                     if confirm in ('y', 'n'):
