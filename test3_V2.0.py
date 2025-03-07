@@ -30,9 +30,9 @@ import platform
 import json
 import math
 
-IS_CREATE_REPORT = False  # 是否创建报告
-IS_CREATE_AI_SUMMARY = False  # 是否创建AI总结
-IS_SUPPORT_RETRY_CREATE_AI_SUMMARY = False  # 是否支持重试创建AI总结, 生成完成后可input进行重新生成
+IS_CREATE_REPORT = True  # 是否创建报告
+IS_CREATE_AI_SUMMARY = True  # 是否创建AI总结
+IS_SUPPORT_RETRY_CREATE_AI_SUMMARY = True  # 是否支持重试创建AI总结, 生成完成后可input进行重新生成
 OPEN_AI_MODEL = '百炼r1'  # deepseek模型名称，目前支持：v3、r1、百炼r1
 # OPEN_AI_KEY = 'sk-00987978d24e445a88f1f5a57944818b'  # OpenAI密钥  deepseek官方
 # OPEN_AI_URL = 'https://api.deepseek.com/v1'  # OpenAI的URL  deepseek官方
