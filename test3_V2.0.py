@@ -28,19 +28,25 @@ import numpy as np
 import pandas as pd
 import platform
 import json
+import math
 
-IS_CREATE_REPORT = True  # 是否创建报告
-IS_CREATE_AI_SUMMARY = True  # 是否创建AI总结
-IS_SUPPORT_RETRY_CREATE_AI_SUMMARY = True  # 是否支持重试创建AI总结, 生成完成后可input进行重新生成
-DEEPSEEK_MODEL = 'r1'  # deepseek模型名称，目前支持：v3、r1
+IS_CREATE_REPORT = False  # 是否创建报告
+IS_CREATE_AI_SUMMARY = False  # 是否创建AI总结
+IS_SUPPORT_RETRY_CREATE_AI_SUMMARY = False  # 是否支持重试创建AI总结, 生成完成后可input进行重新生成
+OPEN_AI_MODEL = '百炼r1'  # deepseek模型名称，目前支持：v3、r1、百炼r1
+# OPEN_AI_KEY = 'sk-00987978d24e445a88f1f5a57944818b'  # OpenAI密钥  deepseek官方
+# OPEN_AI_URL = 'https://api.deepseek.com/v1'  # OpenAI的URL  deepseek官方
+OPEN_AI_KEY = 'sk-a5ae4633515d448e9bbbe03770712d4e'  # OpenAI密钥  百炼
+OPEN_AI_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'  # OpenAI的URL  百炼r1
+OPEN_AI_IS_STREAM_RESPONSE = True  # 是否支持流式响应
 
 # 定义常量和全局变量
 ACCOUNT = 'wuchong@addcn.com'  # 账号
 PASSWORD = 'WUchong_1008'  # 密码
 PROJECT_ID = "63835346"  # 项目ID
 # REQUIREMENT_ID = "1163835346001078047"  # 需求ID
-# REQUIREMENT_ID = "1163835346001071668"  # 需求ID
-REQUIREMENT_ID = "1163835346001118124"  # 需求ID
+REQUIREMENT_ID = "1163835346001071668"  # 需求ID
+# REQUIREMENT_ID = "1163835346001118124"  # 需求ID
 REQUIREMENT_LIST_ID = '1000000000000000417'  # 需求列表ID, 用于查询或者编辑列表展示字段的配置
 
 DEPARTMENT = 'T5'  # 部门名称
@@ -52,11 +58,11 @@ TEST_REPORT_CC_RECIPIENTS = ['T5黄帝佳', 'T5董静']  # 测试报告抄送人
 
 # 测试报告总结的组成部分，如不配置则由AI自己生成
 TEST_REPORT_SUMMARY_COMPOSITION = [
-    # "总体评价",
-    # "核心亮点",
-    # "主要不足与改进建议",
-    # "后续优化重点",
-    # "风险预警",
+    "总体评价",
+    "核心亮点",
+    "主要不足与改进建议",
+    "后续优化重点",
+    "风险预警",
 ]
 
 HOST = 'https://www.tapd.cn'  # Tapd的域名
@@ -537,94 +543,141 @@ def _ai_result_label_switch_html_label(
         re_exp: str = None,
         new_text: str or list[str] or tuple[str] = None
 ) -> str:
+    """
+    根据给定的条件替换字符串中的特定文本。
+
+    :param result: 原始结果字符串。
+    :param old_text: 需要被替换的旧文本。
+    :param re_exp: 正则表达式，用于匹配需要替换的文本。
+    :param new_text: 替换后的文本，可以是字符串，也可以是包含两个字符串的列表或元组。
+    :return: 替换后的结果字符串。
+    """
+    # 当提供了正则表达式和新的文本，并且新的文本是列表或元组时
     if re_exp and new_text is not None and isinstance(new_text, (list, tuple)):
-        old_texts: list[str] = re_exp.split('.*?')
+        # 从正则表达式中提取需要替换的旧文本
+        old_texts: list[str] = re_exp.replace('\\', '').split('.*?')
+        # 使用正则表达式提取匹配的文本
         re_results: list[str] = extract_matching(re_exp, result)
+        # 遍历匹配的文本，进行替换
         for reResult in re_results:
             re_result: str = reResult.replace(old_texts[0], '').replace(old_texts[1], '')
             result = result.replace(reResult, new_text[0] + re_result + new_text[1])
+    # 当提供了旧文本和新的文本，并且新的文本是字符串时
     elif old_text and new_text is not None and isinstance(new_text, str):
+        # 直接替换旧文本为新文本
         result = result.replace(old_text, new_text)
+    # 返回替换后的结果
     return result
 
 
-def ai_result_switch_html(result: str):
+def ai_result_switch_html(result: str) -> str:
     result = _ai_result_label_switch_html_label(result=result, old_text='#', new_text='')
     result = _ai_result_label_switch_html_label(result=result, old_text='\n', new_text='<br/>')
     result = _ai_result_label_switch_html_label(result=result, old_text='---', new_text='<hr>')
     result = _ai_result_label_switch_html_label(result=result, old_text=' ', new_text='&nbsp;')
     result = _ai_result_label_switch_html_label(result=result, old_text='\t', new_text='&nbsp;' * 3)
-
-    key_contents: list[str] = extract_matching(r'<red>.*?</red>', result)
-    for keyContent in key_contents:
-        key_content = keyContent.replace('<red>', '').replace('</red>', '')
-        result = result.replace(keyContent, '<span style="color:#ff3b30;">' + key_content + '</span>')
-
-    h_label_texts: list[str] = extract_matching(r'\*\*\*.*?\*\*\*', result)
-    for hLabelText in h_label_texts:
-        h_label_text = hLabelText.replace('***', '')
-        result = result.replace(hLabelText, '<h3>' + h_label_text + '</h3>')
-
-    b_label_texts: list[str] = extract_matching(r'\*\*.*?\*\*', result)
-    for bLabelText in b_label_texts:
-        b_label_text = bLabelText.replace('**', '')
-        result = result.replace(bLabelText, '<b>' + b_label_text + '</b>')
-
+    result = _ai_result_label_switch_html_label(
+        result=result,
+        re_exp=r'<red>.*?</red>',
+        new_text=('<span style="color:#ff3b30;">', '</span>')
+    )
+    result = _ai_result_label_switch_html_label(
+        result=result,
+        re_exp=r'\*\*\*.*?\*\*\*',
+        new_text=('<h3>', '</h3>')
+    )
+    result = _ai_result_label_switch_html_label(
+        result=result,
+        re_exp=r'\*\*.*?\*\*',
+        new_text=('<b>', '</b>')
+    )
     return result
 
 
 def deepseek_chat(content: str):
+    """
+    根据用户输入的内容，使用DeepSeek模型生成回复。
+
+    参数:
+    content (str): 用户输入的内容。
+
+    返回:
+    str: 由DeepSeek模型生成的回复内容，经过HTML转义。
+    """
+    # 初始化结果变量和模型变量
     result = ''
     model = ''
+    # 打印用户输入的内容
     print(content)
-
-    if DEEPSEEK_MODEL.lower() == 'v3':
+    open_ai_model = OPEN_AI_MODEL.lower()
+    # 根据环境变量OPEN_AI_MODEL的值选择合适的模型
+    if open_ai_model == 'v3':
         model = 'deepseek-chat'
-    if DEEPSEEK_MODEL.lower() == 'r1':
+    elif open_ai_model == 'r1':
         model = 'deepseek-reasoner'
+    elif open_ai_model == '百炼r1':
+        model = 'deepseek-r1'
 
+    # 如果模型变量为空，说明OPEN_AI_MODEL配置错误
     if not model:
-        print('DEEPSEEK_MODEL配置错误')
+        print('OPEN_AI_MODEL配置错误')
         return result
-    key = 'sk-00987978d24e445a88f1f5a57944818b'
+
+    # 初始化OpenAI客户端
     client = OpenAI(
-        api_key=key,
-        base_url="https://api.deepseek.com/v1"
+        api_key=OPEN_AI_KEY,
+        base_url=OPEN_AI_URL
     )
 
+    # 打印模型生成开始的提示信息
     print(f'{model}生成中, 请稍等...')
+    # 创建chat completion
     completion = client.chat.completions.create(
         model=model,
         messages=[
             {'role': 'user', 'content': content}
         ],
-        stream=True,  # 流式响应开关，True=流式响应，False=普通响应
+        stream=OPEN_AI_IS_STREAM_RESPONSE,  # 流式响应开关，True=流式响应，False=普通响应
         # temperature=0.1,  # 模型采样温度，取值范围[0,1]，越小越 deterministic，越大越 stochastic。
         # top_p=0.5,  # 模型采样 nucleus probability，取值范围[0,1]，越大越 stochastic。
         # max_tokens=1024,  # 最大输出长度，取值范围[1, 4096]。
     )
 
-    for chunk in completion:  # 流式响应用这个
-        content: str = chunk.choices[0].delta.content
-        finish_reason = chunk.choices[0].finish_reason
+    # 根据是否是流式响应，选择不同的处理方式
+    if OPEN_AI_IS_STREAM_RESPONSE:
+        # 初始化标志变量
+        is_reasoning_content: bool = False
+        is_content: bool = False
+        # 处理流式响应
+        for chunk in completion:  # 流式响应用这个
+            reasoning_content: str = chunk.choices[0].delta.reasoning_content
+            content: str = chunk.choices[0].delta.content
+            # 处理思考过程内容
+            if reasoning_content is not None:
+                if not is_reasoning_content:
+                    is_reasoning_content = True
+                    print('\n\n思考过程：')
+                print(reasoning_content, end='')
+            # 处理最终答案内容
+            if content is not None:
+                if not is_content:
+                    is_content = True
+                    print('\n\n最终答案：')
+                print(content, end='')
+                result += content
+    else:
+        # 处理非流式响应
+        # 打印思考过程
+        print("\n思考过程：")
+        print(completion.choices[0].message.reasoning_content)
+        # 打印最终答案
+        print("\n最终答案：")
+        result += completion.choices[0].message.content
+        print(result)
 
-        if content is not None:
-            print(content, end='')
-            result += content
-        if finish_reason == 'stop':
-            break
-
-    #
-    # # 通过reasoning_content字段打印思考过程
-    # print("思考过程：")
-    # print(completion.choices[0].message.reasoning_content)
-
-    # 通过content字段打印最终答案
-    # print("最终答案：")
-    # result += completion.choices[0].message.content
-    # print(result)
-
+    # 返回经过HTML转义的结果
     return ai_result_switch_html(result)
+
 
 
 def extract_matching(pattern, owner):
@@ -696,6 +749,24 @@ def encrypt_password_zero_padding(password):
         'data[Login][encrypt_key]': base64.b64encode(key).decode('utf-8')
     }
 
+def switch_numpy_data(data: dict) -> tuple:
+    labels: list[str] = []
+    new_data: dict[str, list[int or float]] = {}
+    for value in data.values():
+        if isinstance(value, dict):
+            for subKey, subValue in value.items():
+                if subKey not in labels:
+                    labels.append(subKey)
+                if not new_data.get(subKey):
+                    new_data[subKey] = []
+                new_data[subKey].append(subValue)
+        elif isinstance(value, int) or isinstance(value, float):
+            if not new_data.get('_'):
+                new_data['_'] = []
+            new_data['_'].append(value)
+    np_data = np.array(list(new_data.values()))
+    return labels, np_data
+
 
 @create_plot
 def create_bar_plot(title, data: dict, bar_width=0.2, bar_max_width=0.5):
@@ -714,7 +785,6 @@ def create_bar_plot(title, data: dict, bar_width=0.2, bar_max_width=0.5):
     - 一个包含图表宽度的字典。
     """
     keys = list(data.keys())  # 获取柱状图数据的键（标签）
-    values = list(data.values())  # 获取柱状图数据的值转换为列表
     max_key_length = max(len(key) for key in keys)  # 计算最长的名称长度
     num_bars = len(keys)  # 获取柱状图数据的数量
 
@@ -732,63 +802,112 @@ def create_bar_plot(title, data: dict, bar_width=0.2, bar_max_width=0.5):
         desired_bar_width = bar_max_width
 
     fig, ax = plt.subplots()  # 创建一个图形对象和轴对象
+    fig: plt.Figure
+    ax: plt.Axes
 
     fig.set_size_inches(desired_width, 4.8)  # 设置图形的尺寸
 
-    if num_bars > 0 and isinstance(values[0], dict):  # 如果值是一个字典，则绘制堆叠柱状图
-        new_values = {}  # 创建一个空的字典
-        for dictValue in values:  # 遍历字典列表
-            for key, value in dictValue.items():  # 遍历字典中的键值对
-                if not new_values.get(key):  # 如果字典中没有该键，则创建一个空列表
-                    new_values[key] = []  # 创建一个空列表
-                new_values[key].append(value)  # 将值添加到对应的列表中
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    ax.spines['bottom'].set_color('#c0d0e0')
 
-        # 转换为二维数组
-        data = np.array(list(new_values.values())).T
+    ax.tick_params(
+        axis='x',
+        length=10,
+        color='#c0d0e0',
+        labelcolor='black',
+    )
 
-        # 初始化累积底部值
-        bottoms = np.zeros(len(keys))
+    ax.tick_params(
+        axis='y',
+        length=10,
+        color='white',
+        labelcolor='black',
+    )
 
-        # 绘制每一层，并更新底部值
-        for i in range(data.shape[1]):
-            bars = ax.bar(
-                keys,
-                data[:, i],
-                width=desired_bar_width,
-                bottom=bottoms,
-                color=PLOT_COLORS[i],
-                label=list(new_values.keys())[i],
-            )
-            bottoms += data[:, i]  # 更新底部值以反映已添加的高度
+    # 将网格线放在柱子底部
+    ax.set_axisbelow(True)
+    ax.grid(axis='y', linestyle='-', alpha=0.7, color='#e6ecf2')
+
+    # 转换为二维数组
+    labels, np_data = switch_numpy_data(data)
+    labels: list[str]
+    np_data: np.ndarray
+    t_data = np_data.T
+
+    # 初始化累积底部值
+    bottoms = np.zeros(len(keys))
+
+    # 绘制每一层，并更新底部值
+    for i in range(t_data.shape[1]):
+        bars = ax.bar(
+            keys,
+            t_data[:, i],
+            width=desired_bar_width,
+            bottom=bottoms,
+            color=PLOT_COLORS[i],
+            label=labels[i] if labels else None,
+        )
+        bottoms += t_data[:, i]  # 更新底部值以反映已添加的高度
+        if len(np_data) > 1:
             for bar in bars:
-                yval = bar.get_height()  # 获取柱子的高度
+                yval = int(bar.get_height())  # 获取柱子的高度
                 if yval:  # 如果柱子的高度不为0，则添加数值标签
                     # 添加数值标签，位置为柱子顶部中央，标签值为四舍五入到小数点后两位的高度值
-                    ax.text(bar.get_x() + bar.get_width() / 2, bar.get_y() + yval / 2, round(yval, 2),
-                            ha='center', va='center', color='black')
+                    ax.text(bar.get_x() + bar.get_width() / 2, bar.get_y() + yval / 2, str(yval),
+                            ha='center', va='center', color='white')
 
-        # 添加图例
-        ax.legend()
-        # 计算每个柱子的总高度
-        total_heights = np.sum(data.T, axis=0)
-        # 在每个柱子顶部添加总高度标签
-        for i, total_height in enumerate(total_heights):
-            if total_height:  # 如果总高度不为0，则添加总高度标签
-                ax.text(keys[i], total_height, round(total_height, 2), ha='center', va='bottom')
+    if labels:
+        # 绘制图例
+        legend = ax.legend(
+            loc='upper center',
+            bbox_to_anchor=(0.5, -0.13),
+            ncol=8,
+            fontsize=10,
+            frameon=False,
+            handlelength=1.0,
+            handletextpad=0.3,
+            columnspacing=1.3,
+        )
 
-        # 设置Y轴范围，使其稍微超出柱子的最大高度
-        max_height = max(total_heights)
-        ax.set_ylim(0, max_height * 1.1)
+        for handle in legend.legend_handles:
+            handle.set_height(10)
 
+    # 计算每个柱子的总高度
+    total_heights = np.sum(np_data, axis=0)
+    # 在每个柱子顶部添加总高度标签
+    for i, total_height in enumerate(total_heights):
+        if total_height:  # 如果总高度不为0，则添加总高度标签
+            ax.text(keys[i], total_height, round(total_height, 2), ha='center', va='bottom')
+
+    y_max = int(max(total_heights))
+    if y_max == 0:
+        y_max = 1
+        y_interval = 1
+    elif y_max < 5:
+        y_interval = 1
+    elif y_max < 9:
+        y_interval = 2
+    elif y_max < 15:
+        y_interval = 3
     else:
-        bars = ax.bar(keys, values, width=desired_bar_width)  # 绘制柱状图
-        # 在每个柱子上添加数值标签
-        for bar in bars:
-            yval = bar.get_height()  # 获取柱子的高度
-            if yval:  # 如果柱子的高度不为0，则添加数值标签
-                # 添加数值标签，位置为柱子顶部中央，标签值为四舍五入到小数点后两位的高度值
-                ax.text(bar.get_x() + bar.get_width() / 2, yval, round(yval, 2), ha='center', va='bottom')
-    plt.title(title)  # 设置图表标题
+        y_interval = 5
+    while True:
+        range_max = math.ceil(y_max / y_interval) * y_interval
+        if range_max == y_max:
+            range_max += y_interval
+        if range_max // y_interval > 7:
+            y_interval *= 2
+        else:
+            break
+    plt.yticks(range(0, range_max + 1, y_interval))  # 设置刻度为整数
+
+    # 设置Y轴范围，使其稍微超出柱子的最大高度
+    max_height = range_max
+    ax.set_ylim(0, max_height * 1.1)
+
+    plt.title(title, fontsize=17)  # 设置图表标题
     plt.xlim(-1, num_bars)
 
     return {'width': desired_width}
@@ -1308,70 +1427,70 @@ class SoftwareQualityRating:
         if not bugs:  # 如果没有bug，则打印未获取BUG数量
             print('未获取BUG数量')
             return
-        else:  # 如果有bug，则统计BUG数量
-            self.bugLevelsCount = {level: 0 for level in BUG_LEVELS}  # 初始化一个字典，用于存储每个严重等级下的BUG数量
-            for bug in bugs:  # 遍历每个BUG
-                bug_status = bug.get('status')
-                if bug_status != 'rejected':  # 如果BUG的状态不是"已拒绝"
-                    bug_id = bug.get('id')  # 获取BUG的ID
-                    severity_name = bug.get('custom_field_严重等级')  # 获取BUG的严重等级名称
-                    bug_source = bug.get('source')  # 获取BUG的缺陷根源信息
-                    bug_field_level = bug.get('custom_field_Bug等级')  # 获取BUG的BUG等级
-                    bug_platform = bug['platform'] if bug.get('platform') else '空'  # 获取BUG的软件平台, 如果为空，则设置为'空'
-                    fixer = bug['fixer'] if bug.get('fixer') else '空'
-                    if severity_name:  # 如果严重等级名称不为空，则累加该严重等级下的BUG数量
-                        severity_name = severity_name[:2]
-                        self.bugLevelsCount[severity_name] += 1
-                    else:  # 如果严重等级名称为空，则累加空严重等级下的BUG数量
-                        self.bugLevelsCount['空'] = self.bugLevelsCount.get('空', 0) + 1
-                    if bug_source:  # 如果缺陷根源不为空，则累加该缺陷根源下的BUG数量
-                        self.bugSourceCount[bug_source] = self.bugSourceCount.get(bug_source, 0) + 1
-                    else:  # 如果缺陷根源为空，则累加空缺陷根源下的BUG数量
-                        self.bugSourceCount['空'] = self.bugSourceCount.get('空', 0) + 1
-                    self._daily_trend_of_bug_changes_count(bug)
-                    # 累加多客户端下各严重等级下的BUG数量
-                    multi_client_data_processing(
-                        result=self.bugLevelsMultiClientCount,
-                        sub_key=severity_name,
-                        all_sub_key=BUG_LEVELS,
-                        key=bug_platform,
-                    )
-                    # 累加多客户端下各缺陷根源下的BUG数量
-                    multi_client_data_processing(
-                        result=self.bugSourceMultiClientCount,
-                        sub_key=bug_source,
-                        all_sub_key=sources,
-                        key=bug_platform,
-                    )
-                    if bug_id:  # 如果bug的id不为空，则将该bug的id添加到bugIds列表中
-                        self.bugIds.append(bug_id)  # 将bug的id添加到bugIds列表中
-                        created_date = date_time_to_date(bug.get('created'))
-                        if bug_status == 'closed':  # 如果bug的状态是"已关闭"
-                            resolved_date = date_time_to_date(bug.get('resolved'))  # 获取bug的解决日期
-                            is_deploy_prod_day_unrepaired_bug = resolved_date >= self.lastTaskDate  # 如果解决日期大于等于最晚任务日期，则为上线当天存在的BUG
-                            is_on_that_day_unrepaired_bug = created_date != resolved_date  # 如果创建日期不等于解决日期，则为当天未修复的bug
-                        else:  # 如果bug的状态不是"已关闭", 则将该BUG算为上线当天存在的BUG和当天未修复的bug
-                            is_on_that_day_unrepaired_bug = True
-                            is_deploy_prod_day_unrepaired_bug = True
-                        # 如果bug的Bug等级为"顽固（180 天）"，则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
-                        if bug_field_level and bug_field_level == '顽固（180 天）':
-                            self.unrepairedBugsData[bug_id] = self.unrepairedBugsData.get(bug_id, 0) + 1
-                        # 如果上线当天未修复的BUG并且严重等级为("P1"或者"P2"), 则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
-                        if is_deploy_prod_day_unrepaired_bug and severity_name in BUG_LEVELS[0: 2]:
-                            self.unrepairedBugs['deployProdDayUnrepaired']['P0P1'].append(bug_id)
-                        # 如果上线当天未修复得BUG并且严重等级为"P2", 则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
-                        elif is_deploy_prod_day_unrepaired_bug and severity_name not in BUG_LEVELS[0: 2]:
-                            self.unrepairedBugs['deployProdDayUnrepaired']['P2'].append(bug_id)
-                        # 如果bug不是当天修复并且严重等级为"P0"，则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
-                        if is_on_that_day_unrepaired_bug and severity_name == BUG_LEVELS[0]:
-                            self.unrepairedBugs['onThatDayUnrepaired']['P0'].append(bug_id)
-                        # 如果bug不是当天修复并且严重等级为"P1"，则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
-                        elif is_on_that_day_unrepaired_bug and severity_name == BUG_LEVELS[1]:
-                            self.unrepairedBugs['onThatDayUnrepaired']['P1'].append(bug_id)
-                        # 如果bug不是当天修复并且严重等级不为"P0"或"P1"，则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
-                        elif is_on_that_day_unrepaired_bug and severity_name not in BUG_LEVELS[0: 2]:
-                            self.unrepairedBugs['onThatDayUnrepaired']['P2'].append(bug_id)
-                    self.fixers[fixer] = self.fixers.get(fixer, 0) + 1  # 将fixer添加到fixers字典中，并累加其数量
+
+        self.bugLevelsCount = {level: 0 for level in BUG_LEVELS}  # 初始化一个字典，用于存储每个严重等级下的BUG数量
+        for bug in bugs:  # 遍历每个BUG
+            bug_status = bug.get('status')
+            if bug_status != 'rejected':  # 如果BUG的状态不是"已拒绝"
+                bug_id = bug.get('id')  # 获取BUG的ID
+                severity_name = bug.get('custom_field_严重等级')  # 获取BUG的严重等级名称
+                bug_source = bug.get('source')  # 获取BUG的缺陷根源信息
+                bug_field_level = bug.get('custom_field_Bug等级')  # 获取BUG的BUG等级
+                bug_platform = bug['platform'] if bug.get('platform') else '空'  # 获取BUG的软件平台, 如果为空，则设置为'空'
+                fixer = bug['fixer'] if bug.get('fixer') else '空'
+                if severity_name:  # 如果严重等级名称不为空，则累加该严重等级下的BUG数量
+                    severity_name = severity_name[:2]
+                    self.bugLevelsCount[severity_name] += 1
+                else:  # 如果严重等级名称为空，则累加空严重等级下的BUG数量
+                    self.bugLevelsCount['空'] = self.bugLevelsCount.get('空', 0) + 1
+                if bug_source:  # 如果缺陷根源不为空，则累加该缺陷根源下的BUG数量
+                    self.bugSourceCount[bug_source] = self.bugSourceCount.get(bug_source, 0) + 1
+                else:  # 如果缺陷根源为空，则累加空缺陷根源下的BUG数量
+                    self.bugSourceCount['空'] = self.bugSourceCount.get('空', 0) + 1
+                self._daily_trend_of_bug_changes_count(bug)
+                # 累加多客户端下各严重等级下的BUG数量
+                multi_client_data_processing(
+                    result=self.bugLevelsMultiClientCount,
+                    sub_key=severity_name,
+                    all_sub_key=BUG_LEVELS,
+                    key=bug_platform,
+                )
+                # 累加多客户端下各缺陷根源下的BUG数量
+                multi_client_data_processing(
+                    result=self.bugSourceMultiClientCount,
+                    sub_key=bug_source,
+                    all_sub_key=sources,
+                    key=bug_platform,
+                )
+                if bug_id:  # 如果bug的id不为空，则将该bug的id添加到bugIds列表中
+                    self.bugIds.append(bug_id)  # 将bug的id添加到bugIds列表中
+                    created_date = date_time_to_date(bug.get('created'))
+                    if bug_status == 'closed':  # 如果bug的状态是"已关闭"
+                        resolved_date = date_time_to_date(bug.get('resolved'))  # 获取bug的解决日期
+                        is_deploy_prod_day_unrepaired_bug = resolved_date >= self.lastTaskDate  # 如果解决日期大于等于最晚任务日期，则为上线当天存在的BUG
+                        is_on_that_day_unrepaired_bug = created_date != resolved_date  # 如果创建日期不等于解决日期，则为当天未修复的bug
+                    else:  # 如果bug的状态不是"已关闭", 则将该BUG算为上线当天存在的BUG和当天未修复的bug
+                        is_on_that_day_unrepaired_bug = True
+                        is_deploy_prod_day_unrepaired_bug = True
+                    # 如果bug的Bug等级为"顽固（180 天）"，则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
+                    if bug_field_level and bug_field_level == '顽固（180 天）':
+                        self.unrepairedBugsData[bug_id] = self.unrepairedBugsData.get(bug_id, 0) + 1
+                    # 如果上线当天未修复的BUG并且严重等级为("P1"或者"P2"), 则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
+                    if is_deploy_prod_day_unrepaired_bug and severity_name in BUG_LEVELS[0: 2]:
+                        self.unrepairedBugs['deployProdDayUnrepaired']['P0P1'].append(bug_id)
+                    # 如果上线当天未修复得BUG并且严重等级为"P2", 则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
+                    elif is_deploy_prod_day_unrepaired_bug and severity_name not in BUG_LEVELS[0: 2]:
+                        self.unrepairedBugs['deployProdDayUnrepaired']['P2'].append(bug_id)
+                    # 如果bug不是当天修复并且严重等级为"P0"，则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
+                    if is_on_that_day_unrepaired_bug and severity_name == BUG_LEVELS[0]:
+                        self.unrepairedBugs['onThatDayUnrepaired']['P0'].append(bug_id)
+                    # 如果bug不是当天修复并且严重等级为"P1"，则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
+                    elif is_on_that_day_unrepaired_bug and severity_name == BUG_LEVELS[1]:
+                        self.unrepairedBugs['onThatDayUnrepaired']['P1'].append(bug_id)
+                    # 如果bug不是当天修复并且严重等级不为"P0"或"P1"，则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
+                    elif is_on_that_day_unrepaired_bug and severity_name not in BUG_LEVELS[0: 2]:
+                        self.unrepairedBugs['onThatDayUnrepaired']['P2'].append(bug_id)
+                self.fixers[fixer] = self.fixers.get(fixer, 0) + 1  # 将fixer添加到fixers字典中，并累加其数量
 
         # 输出各严重等级的BUG数量
         for severityName, count in self.bugLevelsCount.items():
@@ -1449,6 +1568,7 @@ class SoftwareQualityRating:
         # 测试人员列表中移除当前用户
         self._remove_current_user()
 
+        # 测试报告-概要的html内容
         self.testReportHtml += f'''
             <span style="color: rgb(34, 34, 34); font-size: medium; background-color: rgb(255, 255, 255);">{datetime.datetime.now().strftime("%Y年%m月%d日")}，{self.requirementName + '&nbsp; &nbsp;' if self.requirementName else ''}項目已完成測試，達到上綫要求</span>
             <div style="color: rgb(34, 34, 34);">
@@ -1507,8 +1627,9 @@ class SoftwareQualityRating:
                 </div>
             </div>'''
 
+        # 如果打开了AI生成总结内容开关, 则调用AI生成总结方法
         if IS_CREATE_AI_SUMMARY:
-            self._ai_generate_summary()
+            self._ai_generate_summary()  # 调用AI生成总结方法
 
         # 构造测试报告数据
         url = HOST + f"/{PROJECT_ID}/report/workspace_reports/submit/0/0/security"
@@ -1516,6 +1637,7 @@ class SoftwareQualityRating:
             "report_type": "test",
             "save_draft": "1",
         }
+        # 构建测试报告请求体
         data = {
             "data[Template][id]": "1163835346001000040",
             "data[WorkspaceReport][title]": f"{(self.requirementName + '_') if self.requirementName else DEPARTMENT}测试报告",
@@ -1569,9 +1691,9 @@ class SoftwareQualityRating:
                 "data[detail][4][id]": 0,
                 "data[detail][4][default_value]": f"<div>{self.chartHtml}</div>",
             })
-        if IS_CREATE_REPORT:
+        if IS_CREATE_REPORT:  # 如果打开了创建测试报告开关, 则提交测试报告请求
             fetch_data(url=url, params=params, data=data, method='POST')  # 提交测试报告请求
-        else:
+        else:  # 如果关闭了创建测试报告开关, 则打印测试报告data
             print('\n请求测试报告data:')
             print(json.dumps(data, indent=4, ensure_ascii=False))
 
@@ -1970,17 +2092,30 @@ class SoftwareQualityRating:
                     break
 
     def _remove_current_user(self):
+        """
+        从测试收件人列表中移除当前用户，并添加特定的测试负责人（如果当前用户不是测试负责人）。
+
+        1. 遍历testRecipient列表，移除每个元素中的部门信息，并构建一个新的字符串testersStr。
+        2. 获取当前用户的昵称，并检查是否在testRecipient列表中，如果在则移除。
+        3. 如果当前用户不是测试负责人，且测试负责人不在testRecipient列表中，则添加测试负责人到列表末尾。
+        """
+        # 如果testRecipient列表存在，开始处理列表中的元素
         if self.testRecipient:
             is_last = False
             for tester in self.testRecipient:
+                # 检查当前遍历的测试收件人是否为列表中的最后一个
                 if tester == self.testRecipient[-1]:
                     is_last = True
+                # 移除测试收件人中的部门信息，并根据是否为最后一个元素决定是否添加分隔符
                 tester = tester.replace(DEPARTMENT, '')
                 self.testersStr += f'{tester}' if is_last else f'{tester}、'
 
+            # 获取当前用户的昵称
             current_user_name = get_user_detail()['data']['get_current_user_ret']['data']['user_nick']
+            # 如果当前用户在测试收件人列表中，则移除
             if current_user_name in self.testRecipient:
                 self.testRecipient.remove(current_user_name)
+            # 如果当前用户不是测试负责人，且测试负责人不在测试收件人列表中，则添加测试负责人
             if current_user_name != TESTER_LEADER and TESTER_LEADER not in self.testRecipient:
                 self.testRecipient.append(TESTER_LEADER)
 
@@ -2240,6 +2375,20 @@ BUG未修复数为：{_print_text_font(unrepaired_bug_count, color="green")}'''
         })
 
     def _ai_generate_summary(self):
+        """
+        生成测试质量报告的摘要。
+
+        本函数根据项目开发和测试数据，生成一个详细的测试质量报告摘要。
+        它会根据BUG统计、开发人员信息、工作小时、BUG修复情况等数据进行分析，
+        并提出改进建议和总结。
+
+        参数:
+        无
+
+        返回值:
+        无
+        """
+        # 构建摘要的基本信息
         text = f"""
 需求名称: {self.requirementName}
 开发周期总天数为：{round(self.developmentCycle, 1)}
@@ -2247,12 +2396,14 @@ BUG总数为: {self.bugTotal}
 开发人员数量为: {self.developerCount}
 """
 
+        # 如果有BUG等级分布数据，则添加到摘要中
         if self.bugLevelsCount:
             text += f"""
 BUG等级分布情况为: 
 {self.bugLevelsCount}
 """
 
+        # 如果有评分内容，则添加到摘要中
         if self.scoreContents:
             text += '项目研发评分情况:'
             for scoreData in self.scoreContents:
@@ -2262,49 +2413,59 @@ BUG等级分布情况为:
 得分为: {scoreData['score']}
 """
 
+        # 如果有开发人员工作小时数据，则添加到摘要中
         if self.workHours:
             text += f"""
 开发人员工时情况(单位为小时): 
 {self.workHours}
 """
 
+        # 如果有BUG修复者数据，则添加到摘要中
         if self.fixers:
             text += f"""
 开发人员修复BUG情况(数值为BUG修复数): 
 {self.fixers}
 """
 
+        # 如果有各端缺陷级别分布数据，则添加到摘要中
         if self.bugLevelsMultiClientCount:
             text += f"""
 各端缺陷级别分布为(数值为BUG数量): 
 {self.bugLevelsMultiClientCount}
 """
 
+        # 如果有各端缺陷来源分布数据，则添加到摘要中
         if self.bugSourceMultiClientCount:
             text += f"""
 各端缺陷来源分布为(数值为BUG数量): 
 {self.bugSourceMultiClientCount}
 """
 
+        # 添加测试经理的需求说明和格式要求
         text += ('我是一个测试经理，我现在需要做提测质量报告分析，根据以上信息给我一个对开发情况和测试结果的一个详细总结、点评和建议, '
                  '在总结中可以看到一些不足之处的描述、改进办法和建议之类的, 并且需要美观的格式、描述清晰、直观、言简意赅、简明扼要\n'
                  '\n'
                  '下面是格式要求：\n'
                  '不要有尾部的签名和日期, 内容不要带表格，1级标题直接从分析的各个类型开始，又重复写质量总结或者报告分析之类的标题了\n'
-                 '1级主题文字前后各加"***"，1级主题下面的内容每一行开头统一使用"▶ "作为开头（不要给1级主题加），并且把2级主题字体加粗(需要加粗的字体前后各加**), 1级标题之间需要加分隔横线(用三个-来表示)\n'
+                 '1级主题文字前后各加"***"并且加上序号(一、二、三、)，并且把2级主题字体加粗(需要加粗的字体前后各加**), 1级标题于下一个1级标题之间需要加分隔横线(用"---"来表示, 不要给我多三个以上的"-"), 不要在1级标题和1级标题的内容之间分隔横线\n'
+                 '1级主题下面的内容每一行开头统一使用"▶ "作为开头（不要给1级主题加）, 然后2级主题下面的内容每一行最前面用"    "四个空格来制造缩进效果并且统一使用"▷"开头, 如果还有下层内容使用"        "八个空格并且使用"-"开头\n'
                  '将内容中的关键点使用<red>内容</red>标识\n'
                  '我需要将总结写进%(reportSummary)s中, 请给我合理的格式, 我只需要用来代替reportSummary的内容, 不要把%(reportSummary)s也写在内容中\n'
                  '行尾最后内容中不要出现备注, 比如: "注: *********"\n'
                  '内容正常返回就行, 不需要有html的标签, 我自己会处理\n')
 
+        # 如果定义了报告摘要的组成部分，则添加到摘要中
         if TEST_REPORT_SUMMARY_COMPOSITION:
             text += '组成部分为: ' + '、'.join(TEST_REPORT_SUMMARY_COMPOSITION)
 
+        # 添加测试报告的HTML内容
         text += self.testReportHtml
 
+        # 循环生成报告摘要，直到满足条件
         while True:
             self.reportSummary = deepseek_chat(text)
 
+            # 如果支持重新生成AI摘要，则询问用户是否重新生成
             if IS_SUPPORT_RETRY_CREATE_AI_SUMMARY:
                 print('')
                 print('')
@@ -2320,6 +2481,7 @@ BUG等级分布情况为:
                     break
             else:
                 break
+
 
     def run(self):
         """
