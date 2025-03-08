@@ -1,4 +1,4 @@
-# 2025年3月6日21:49:39
+# 2025年3月9日00:35:14
 
 """
 1、加入各大评分项的分数以及内容传给ds进行分析
@@ -14,7 +14,6 @@ from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from openai import OpenAI
 import matplotlib.pyplot as plt
-import matplotlib
 import cloudscraper
 import os
 import base64
@@ -26,14 +25,13 @@ import re
 import functools
 import traceback
 import numpy as np
-import pandas as pd
 import platform
 import json
 import math
 
-IS_CREATE_REPORT = False  # 是否创建报告
-IS_CREATE_AI_SUMMARY = False  # 是否创建AI总结
-IS_SUPPORT_RETRY_CREATE_AI_SUMMARY = False  # 是否支持重试创建AI总结, 生成完成后可input进行重新生成
+IS_CREATE_REPORT = True  # 是否创建报告
+IS_CREATE_AI_SUMMARY = True  # 是否创建AI总结
+IS_SUPPORT_RETRY_CREATE_AI_SUMMARY = True  # 是否支持重试创建AI总结, 生成完成后可input进行重新生成
 OPEN_AI_MODEL = '百炼r1'  # deepseek模型名称，目前支持：v3、r1、百炼r1
 # OPEN_AI_KEY = 'sk-00987978d24e445a88f1f5a57944818b'  # OpenAI密钥  deepseek官方
 # OPEN_AI_URL = 'https://api.deepseek.com/v1'  # OpenAI的URL  deepseek官方
@@ -45,9 +43,13 @@ OPEN_AI_IS_STREAM_RESPONSE = True  # 是否支持流式响应
 ACCOUNT = 'wuchong@addcn.com'  # 账号
 PASSWORD = 'WUchong_1008'  # 密码
 PROJECT_ID = "63835346"  # 项目ID
-# REQUIREMENT_ID = "1163835346001078047"  # 需求ID
-REQUIREMENT_ID = "1163835346001071668"  # 需求ID
-# REQUIREMENT_ID = "1163835346001118124"  # 需求ID
+# REQUIREMENT_ID = "1163835346001078047"  # 需求ID 无BUG
+# REQUIREMENT_ID = "1163835346001071668"  # 需求ID
+# REQUIREMENT_ID = "1163835346001033609"  # 需求ID 中规中矩  TypeError: '<=' not supported between instances of 'str' and 'NoneType'
+# REQUIREMENT_ID = "1163835346001051222"  # 需求ID 较差的质量
+# REQUIREMENT_ID = "1163835346001049795"  # 需求ID 较差的质量  开发周期也是很多小数点尾数
+# REQUIREMENT_ID = "1163835346001055792"  # 需求ID 较差的质量
+REQUIREMENT_ID = "1163835346001118124"  # 需求ID
 REQUIREMENT_LIST_ID = '1000000000000000417'  # 需求列表ID, 用于查询或者编辑列表展示字段的配置
 
 DEPARTMENT = 'T5'  # 部门名称
@@ -133,108 +135,110 @@ PLOT_COLORS = [
 
 def create_plot(func):
     """
-    装饰器，用于创建图表并处理其保存和上传逻辑。
+    装饰器函数，用于创建和自定义图表的绘制。
+
+    此装饰器应用于一个应返回绘图所需数据和配置的函数。它负责设置图表的样式，
+    包括标题、轴配置、网格、图例等，并处理绘图的保存和资源清理。
 
     参数:
-    - func: 被装饰的函数，负责生成图表数据。
+    - func: 被装饰的函数，应返回绘图数据和配置参数的元组。
 
     返回:
-    - wrapper: 包装函数，处理图表的保存和上传。
+    - wrapper: 包装函数，处理绘图的创建和样式设置。
     """
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        """
-        包装原始函数，处理图表生成、保存和上传。
-
-        参数:
-        - *args, **kwargs: 传递给原始函数的参数。
-
-        返回:
-        - dict: 包含上传后的图表路径和图表数据。
-        """
+    def wrapper(*args, **kwargs) -> dict:
         try:
-            # 执行原始函数，获取返回值
-            plot_data, labels, title, max_bar_height, ax = func(*args, **kwargs)
-            plot_data: dict
-            labels: list[str]
-            title: str
-            ax: plt.Axes
+            # 调用被装饰的函数，获取绘图所需的参数
+            func_data:dict = func(*args, **kwargs)
+            # 获取绘图数据、标签列表和标题
+            plot_data: dict = func_data['desiredWidthData']  # 绘图数据
+            labels: list[str] = func_data['labels']  # 标签列表
+            title: str = func_data['title']  # 标题
+            max_bar_height: int = func_data['maxBarHeight']  # 最大柱状图高度
+            ax: plt.Axes = func_data['ax']  # 轴对象
 
-            plt.title(title, fontsize=17)  # 设置图表标题
+            # 设置图表标题
+            plt.title(title, fontsize=17)
 
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            ax.spines['left'].set_visible(False)
-            ax.spines['bottom'].set_color('#c0d0e0')
+            # 配置图表的四个边框，减少顶部和右侧的边框以简化视觉效果
+            ax.spines['top'].set_visible(False)  # 隐藏顶部边框
+            ax.spines['right'].set_visible(False)  # 隐藏右侧边框
+            ax.spines['left'].set_visible(False)  # 隐藏左侧边框
+            ax.spines['bottom'].set_color('#c0d0e0')  # 设置底部边框颜色
 
+            # 设置x轴刻度的样式
             ax.tick_params(
-                axis='x',
-                length=10,
-                labelsize=9,
-                color='#c0d0e0',
-                labelcolor='black',
+                axis='x',  # 设置x轴
+                length=10,  # 设置刻度线的长度
+                labelsize=9,  # 设置刻度字体的大小
+                color='#c0d0e0',  # 设置刻度的颜色
+                labelcolor='black',  # 设置刻度字体的颜色
             )
 
+            # 设置y轴刻度的样式
             ax.tick_params(
-                axis='y',
-                length=10,
-                color='white',
-                labelcolor='black',
+                axis='y',  # 设置y轴
+                length=10,  # 设置刻度线的长度
+                color='white',  # 设置刻度的颜色
+                labelcolor='black',  # 设置刻度字体的颜色
             )
 
-            # 将网格线放在柱子底部
+            # 设置轴标签在网格之下, 必填y轴的刻度线在图形之上
             ax.set_axisbelow(True)
+            # 配置y轴的网格
             ax.grid(axis='y', linestyle='-', alpha=0.7, color='#e6ecf2')
 
+            # 如果有标签，则添加图例
             if labels:
-                # 绘制图例
-                legend = ax.legend(
-                    loc='upper center',
-                    bbox_to_anchor=(0.5, -0.13),
-                    ncol=8,
-                    fontsize=10,
-                    frameon=False,
-                    handlelength=1.0,
-                    handletextpad=0.3,
-                    columnspacing=1.3,
+                # 添加图例
+                ax.legend(
+                    loc='upper center',  # 图例位置
+                    bbox_to_anchor=(0.5, -0.13),  # 图例位置
+                    ncol=8,  # 图例列数
+                    fontsize=10,  # 图例字体大小
+                    frameon=False,  # 是否设置边框
+                    handlelength=1.0,  # 图例句柄长度
+                    handletextpad=0.3,  # 图例句柄和文本之间的距离
+                    columnspacing=1.3,  # 图例列间距
                 )
 
-                # for handle in legend.legend_handles:
-                #     handle.set_height(10)
-
+            # 计算y轴的最大值和刻度间隔
             range_max, y_interval = calculation_plot_y_max_height(max_bar_height)
 
+            # 设置y轴的刻度
             plt.yticks(range(0, range_max + 1, y_interval))  # 设置刻度为整数
 
-            # 设置Y轴范围，使其稍微超出柱子的最大高度
+            # 设置y轴的最大值
             max_height = range_max
             ax.set_ylim(0, max_height * 1.1)
 
-            # 调整布局，防止图形内容被裁剪
+            # 调整布局，确保所有元素都可见
             plt.tight_layout()
-            # 创建一个内存缓冲区，用于保存生成的图表
+
+            # 保存图表到内存中的BytesIO对象
             buf = BytesIO()
-            # 将生成的图表保存到内存缓冲区中
             plt.savefig(buf, format='png')
-            # 如果有图表数据，计算并添加宽度的像素值
-            if plot_data:  # 如果有图表数据，计算并添加宽度的像素值
-                current_dpi = plt.rcParams['figure.dpi']  # 获取当前dpi设置
-                if plot_data.get('width'):  # 如果有图表数据，计算并添加
-                    # 添加宽度的像素值
+
+            # 如果有额外的绘图数据，计算其像素宽度
+            if plot_data:
+                current_dpi = plt.rcParams['figure.dpi']
+                if plot_data.get('width'):
                     plot_data['widthPx'] = plot_data['width'] * current_dpi
-            # 将内存缓冲区移动到起始位置
+
+            # 将BytesIO对象的指针移到开始位置，以便读取数据
             buf.seek(0)
-            # 上传内存缓冲区的内容并返回上传后的URL
+
+            # 返回包含图表路径和绘图数据的字典
             return {'plotPath': upload_file(buf.getvalue()), 'plotData': plot_data}
         except Exception as e:
-            # 捕获异常并重新抛出，让调用者可以捕获
+            # 如果发生异常，重新抛出以通知调用者
             raise e
         finally:
-            # 清除当前图形，释放内存
+            # 关闭所有图表以释放资源
             plt.close('all')
 
-    # 返回包装后的函数
     return wrapper
 
 
@@ -629,27 +633,49 @@ def _ai_result_label_switch_html_label(
 
 
 def ai_result_switch_html(result: str) -> str:
+    """
+    将AI结果中的特定文本格式转换为HTML格式。
+
+    该函数通过一系列的文本替换操作，将AI输出结果中的特定文本标记转换为相应的HTML标签，
+    以便在网页等环境中更好地显示和格式化这些结果。
+
+    参数:
+    result (str): AI输出的原始文本结果，包含特定的文本格式。
+
+    返回:
+    str: 转换为HTML格式后的文本结果。
+    """
+    # 移除井号，不进行文本替换，仅作为标记移除
     result = _ai_result_label_switch_html_label(result=result, old_text='#', new_text='')
+    # 将换行符替换为HTML的换行标签，以在网页中正确显示换行
     result = _ai_result_label_switch_html_label(result=result, old_text='\n', new_text='<br/>')
+    # 将三个短横线替换为HTML的水平线标签，用于分隔内容
     result = _ai_result_label_switch_html_label(result=result, old_text='---', new_text='<hr>')
+    # 将空格替换为HTML的非断行空格实体，以在网页中正确显示空格
     result = _ai_result_label_switch_html_label(result=result, old_text=' ', new_text='&nbsp;')
-    result = _ai_result_label_switch_html_label(result=result, old_text='\t', new_text='&nbsp;' * 3)
+    # 将制表符替换为四个非断行空格实体，以近似表示制表符的缩进效果
+    result = _ai_result_label_switch_html_label(result=result, old_text='\t', new_text='&nbsp;' * 4)
+    # 将<red>...</red>标记内的文本转换为红色显示，增加视觉强调效果
     result = _ai_result_label_switch_html_label(
         result=result,
         re_exp=r'<red>.*?</red>',
         new_text=('<span style="color:#ff3b30;">', '</span>')
     )
+    # 将三个星号包围的文本转换为HTML的三级标题，提高文本的层次感
     result = _ai_result_label_switch_html_label(
         result=result,
         re_exp=r'\*\*\*.*?\*\*\*',
         new_text=('<h3>', '</h3>')
     )
+    # 将两个星号包围的文本转换为HTML的粗体文本，增强文本的强调效果
     result = _ai_result_label_switch_html_label(
         result=result,
         re_exp=r'\*\*.*?\*\*',
         new_text=('<b>', '</b>')
     )
+    # 返回转换完成的HTML格式文本
     return result
+
 
 
 def deepseek_chat(content: str):
@@ -738,11 +764,23 @@ def deepseek_chat(content: str):
 
 
 def extract_matching(pattern, owner):
-    # 使用正则表达式匹配
+    """
+    使用正则表达式提取文本中匹配的模式。
+
+    参数:
+    pattern (str): 正则表达式模式，用于定义需要提取的字符串格式。
+    owner (str): 要从中提取匹配模式的文本内容。
+
+    返回:
+    list: 包含所有匹配模式的字符串列表。
+    """
+    # 编译正则表达式模式以提高效率
     regex = re.compile(pattern)
+    # 使用编译后的正则表达式查找所有匹配项
     match = regex.findall(owner)
-    # 如果匹配成功，返回匹配到的内容
+    # 返回所有匹配项的列表
     return match
+
 
 
 def get_days(start_date, end_date, is_workday=True):
@@ -808,28 +846,64 @@ def encrypt_password_zero_padding(password):
 
 
 def switch_numpy_data(data: dict) -> tuple:
+    """
+    将给定的字典数据转换为NumPy数组，同时提取并生成对应的标签。
+
+    参数:
+    data: dict - 包含数据的字典，其中值可以是字典或数字。
+
+    返回:
+    tuple - 包含标签列表和转换后的NumPy数组的元组。
+    """
+    # 初始化标签列表
     labels: list[str] = []
+    # 初始化新的数据字典，用于存储转换后的数据
     new_data: dict[str, list[int or float]] = {}
+
+    # 遍历原始数据字典的值
     for value in data.values():
+        # 如果值是一个字典，则进一步处理
         if isinstance(value, dict):
+            # 遍历子字典的键值对
             for subKey, subValue in value.items():
+                # 如果子键不在标签列表中，则添加到列表中
                 if subKey not in labels:
                     labels.append(subKey)
+                # 如果当前子键对应的列表不存在，则初始化
                 if not new_data.get(subKey):
                     new_data[subKey] = []
+                # 将子值添加到对应子键的列表中
                 new_data[subKey].append(subValue)
+        # 如果值是一个整数或浮点数，则将其添加到特殊键'_'对应的列表中
         elif isinstance(value, int) or isinstance(value, float):
+            # 如果特殊键'_'对应的列表不存在，则初始化
             if not new_data.get('_'):
                 new_data['_'] = []
+            # 将值添加到特殊键'_'对应的列表中
             new_data['_'].append(value)
+    # 将新数据字典的值转换为NumPy数组
     np_data = np.array(list(new_data.values()))
+    # 返回标签列表和转换后的NumPy数组
     return labels, np_data
 
 
 def calculation_plot_y_max_height(max_number: int):
+    """
+    根据提供的最大数字计算图表的Y轴最大高度和Y轴间隔。
+
+    该函数的目的是为了合理设置图表的Y轴刻度间隔和最大高度，使得图表既不过于拥挤也不过于稀疏。
+    参数:
+    - max_number (int): 图表中最大的数字。
+
+    返回:
+    - range_max (float): 计算出的Y轴最大高度。
+    - y_interval (int): 计算出的Y轴刻度间隔。
+    """
+    # 处理max_number为None或0的情况，设置默认值和初始Y轴间隔
     if not max_number:
         max_number = 1
         y_interval = 1
+    # 根据max_number的值选择合适的Y轴间隔
     elif max_number < 5:
         y_interval = 1
     elif max_number < 9:
@@ -838,102 +912,150 @@ def calculation_plot_y_max_height(max_number: int):
         y_interval = 3
     else:
         y_interval = 5
+
+    # 循环计算合适的Y轴最大高度和间隔
     while True:
+        # 计算初步的Y轴最大高度
         range_max = math.ceil(max_number / y_interval) * y_interval
+        # 如果初步计算的高度等于max_number，增加一个间隔以避免最大值重合
         if range_max == max_number:
             range_max += y_interval
+        # 检查Y轴刻度数是否超过7，如果超过则加大间隔
         if range_max // y_interval > 7:
             y_interval *= 2
         else:
             break
+    # 返回计算出的Y轴最大高度和间隔
     return range_max, y_interval
 
 
-def calculate_plot_width(keys: list, fig: plt.Figure, bar_width: float = 0.2, bar_max_width: float = 0.5):
-    max_key_length = max(len(key) for key in keys)  # 计算最长的名称长度
-    num_bars = len(keys)  # 获取柱状图数据的数量
+def calculate_plot_width(keys: list, fig: plt.Figure, bar_width: float = 0.073):
+    """
+    根据名称列表和图形对象来计算和设置柱状图的宽度。
+
+    :param keys: 名称列表，用于确定柱状图的名称长度和数量。
+    :param fig: matplotlib 图形对象，用于设置图形的宽度。
+    :param bar_width: 单个柱子的基础宽度。
+    :return: 返回调整后的柱子宽度和图形宽度的字典。
+    """
+    # 计算最长的名称长度
+    max_key_length = max(len(key) for key in keys)
+    # 获取柱状图数据的数量
+    num_bars = len(keys)
 
     # 根据最长名称长度和柱子数量调整图形宽度
-    base_width = 5  # 基础宽度
-    key_length_factor = max_key_length * 1.0  # 名称长度影响因子
-    bar_count_factor = num_bars * 0.1  # 柱子数量影响因子
+    base_width = 0  # 基础宽度
+    # 名称长度影响因子
+    key_length_factor = max_key_length * 1.0
+    # 柱子数量影响因子
+    bar_count_factor = num_bars * 0.3
 
-    min_width = 6.4  # 最小宽度
-    max_width = 20  # 最大宽度
-    desired_width = min(max(base_width + key_length_factor + bar_count_factor, min_width), max_width)  # 计算最终的宽度
+    # 设置图片最小宽度和最大宽度
+    min_width = 9
+    max_width = 20
+    # 计算最终的宽度
+    desired_width = min(max(base_width + key_length_factor + bar_count_factor, min_width), max_width)
 
-    desired_bar_width = bar_width * num_bars
-    if desired_bar_width > bar_max_width:
-        desired_bar_width = bar_max_width
+    # # 设置柱子最小宽度和最大宽度
+    # bar_max_width: float = 0.13
 
-    fig.set_size_inches(desired_width, 4.8)  # 设置图形的尺寸
+    # 计算最终的柱子宽度
+    # if num_bars == 1:
+    #     desired_bar_width = bar_width
+    # else:
+    #     # desired_bar_width = bar_width + (bar_width * (1 / num_bars))
+    #     # desired_bar_width = 0.24
+    #     desired_bar_width = 0.36
+    desired_bar_width = bar_width + num_bars * 0.057
 
+    # 设置图形的尺寸
+    fig.set_size_inches(desired_width, 4.8)
+
+    # 设置 x 轴的限制
     plt.xlim(-1, num_bars)
 
+    # 返回调整后的柱子宽度和图形宽度的字典
     return desired_bar_width, {'width': desired_width}
+
 
 @create_plot
 def create_bar_plot(title, data: dict):
     """
-    创建一个柱状图。
-
-    本函数接受一个标题和一个字典类型的数据，字典的键作为柱状图的标签，值为柱子的高度。
-    如果值本身也是一个字典，那么将绘制堆叠柱状图。
+    创建一个条形图。
 
     参数:
     - title: 图表的标题。
-    - data: 包含柱状图数据的字典，键为标签，值为高度。如果值是一个字典，则绘制堆叠柱状图。
-    - bar_width: 柱子的宽度
+    - data: 包含图表数据的字典，其中键是类别名称，值是每个类别的数值列表。
 
     返回:
-    - 一个包含图表宽度的字典。
+    - desired_width_data: 计算出的图表宽度数据。
+    - labels: 图表的标签列表。
+    - title: 图表的标题。
+    - max_total_height: 最大条形的总高度。
+    - ax: matplotlib Axes对象，用于绘制图表。
     """
-    keys = list(data.keys())  # 获取柱状图数据的键（标签）
+    # 获取数据的键，即类别名称
+    keys = list(data.keys())
 
-    fig, ax = plt.subplots()  # 创建一个图形对象和轴对象
+    # 创建图表对象
+    fig, ax = plt.subplots()
+    # 类型注释，帮助IDE和代码阅读者理解变量类型
     fig: plt.Figure
     ax: plt.Axes
 
+    # 计算理想的条形宽度和图表宽度数据
     desired_bar_width, desired_width_data = calculate_plot_width(keys, fig)
+    # 类型注释
     desired_bar_width: float
     desired_width_data: dict
 
-    # 转换为二维数组
+    # 将数据转换为numpy数组，便于处理，并获取标签
     labels, np_data = switch_numpy_data(data)
+    # 类型注释
     labels: list[str]
     np_data: np.ndarray
-    t_data = np_data.T
+    # 计算每个类别条形的总高度
+    np_data_heights = np_data.sum(axis=0)
 
-    # 初始化累积底部值
+    # 初始化底部位置，用于堆叠条形图
     bottoms = np.zeros(len(keys))
 
-    # 绘制每一层，并更新底部值
-    for i in range(t_data.shape[1]):
+    # 遍历每个数据序列，绘制堆叠条形图
+    for i in range(len(np_data)):
         bars = ax.bar(
-            keys,
-            t_data[:, i],
-            width=desired_bar_width,
-            bottom=bottoms,
-            color=PLOT_COLORS[i],
-            label=labels[i] if labels else None,
+            keys,  # x轴名称
+            np_data[i],  # 数据值
+            width=desired_bar_width,  # 柱子宽度
+            bottom=bottoms,  # 底部位置
+            color=PLOT_COLORS[i],  # 柱子颜色
+            label=labels[i] if labels else None,  # 条形标签, 如果labels为空，则不显示标签
         )
-        bottoms += t_data[:, i]  # 更新底部值以反映已添加的高度
+        # 更新底部位置
+        bottoms += np_data[i]
+        # 如果有多个数据序列，为每个条形添加数值标签
         if len(np_data) > 1:
-            for bar in bars:
-                yval = int(bar.get_height())  # 获取柱子的高度
-                if yval:  # 如果柱子的高度不为0，则添加数值标签
-                    # 添加数值标签，位置为柱子顶部中央，标签值为四舍五入到小数点后两位的高度值
+            for index, bar in enumerate(bars):  # 遍历每个条形
+                yval = int(bar.get_height())  # 获取条形的高度
+                if yval and yval != np_data_heights[index]:  # 如果高度不为0且不等于总高度，则添加数值标签
+                    # 添加数值标签, 设置位置和颜色等属性
                     ax.text(bar.get_x() + bar.get_width() / 2, bar.get_y() + yval / 2, str(yval),
-                            ha='center', va='center', color='white')
+                            ha='center', va='center', color='white', fontsize=9)
 
-    # 计算每个柱子的总高度
+    # 计算每个类别的总高度
     total_heights = np.sum(np_data, axis=0)
-    # 在每个柱子顶部添加总高度标签
+    # 为每个类别添加总高度的标签
     for i, total_height in enumerate(total_heights):
-        if total_height:  # 如果总高度不为0，则添加总高度标签
+        if total_height:
             ax.text(keys[i], total_height, round(total_height, 2), ha='center', va='bottom')
+    # 返回相关数据和图表对象
+    return {
+        'desiredWidthData': desired_width_data,
+        'labels': labels,
+        'title': title,
+        'maxBarHeight': int(max(total_heights)),
+        'ax': ax,
+    }
 
-    return desired_width_data, labels, title, int(max(total_heights)), ax
 
 
 @create_plot
@@ -941,47 +1063,70 @@ def create_broken_line_plot(title, data: dict):
     """
     创建折线图。
 
+    对给定的数据进行排序，并将其转换为适合numpy的数据格式。然后在创建的图表上绘制折线图，并对其进行注释。
+
     参数:
-    title (str): 图表的标题。
-    data (dict): 包含日期和数据的字典，用于绘制折线图。
+    - title: 图表的标题。
+    - data: 包含折线图数据的字典，键为时间点，值为各个标签的数据。
 
     返回:
-    dict: 包含计算出的图表宽度。
+    - desired_width_data: 计算出的图表宽度数据。
+    - labels: 图表折线的标签列表。
+    - title: 图表的标题。
+    - max_value: 数据中的最大值。
+    - ax: matplotlib的Axes对象，用于绘制图表。
     """
-    # 对数据按日期进行排序，确保图表上的数据是按时间顺序展示的
+    # 对数据进行排序，以确保时间线上的数据是有序的
     data = dict(sorted(data.items()))
     keys = list(data.keys())
 
+    # 将数据转换为适合numpy的数据格式
     labels, np_data = switch_numpy_data(data)
     labels: list[str]
     np_data: np.ndarray
 
+    # 创建图表
     fig, ax = plt.subplots()
     fig: plt.Figure
     ax: plt.Axes
 
+    # 计算图表的宽度
     desired_bar_width, desired_width_data = calculate_plot_width(keys, fig)
 
-    # 用于存储已经标注过的坐标
+    # 初始化已注释点的集合，避免重复注释
     annotated_points = set()
 
-    # 绘制每条线并添加标注
+    # 遍历每一条折线，进行绘制和注释
     for index in range(len(labels)):
-        # 绘制折线图
         ax.plot(
-            keys,
-            np_data[index],
-            marker='o',
-            label=labels[index],
+            keys,  # x轴数据
+            np_data[index],  # y轴数据
+            marker='o',  # 点的形状
+            label=labels[index],  # 折线标签
         )
-        for i, (date, value) in enumerate(zip(keys, np_data[index])):  # 遍历日期和值
-            point = (date, value)  # 创建坐标点
-            if point not in annotated_points:  # 如果坐标点没有被标注过，则添加标注
-                # 添加数值标签，位置为当前坐标点的上方，标签值为当前值
-                ax.annotate(f'{value}', (date, value), textcoords="offset points", xytext=(0, 10), ha='center')
-                annotated_points.add(point)  # 将坐标点添加到已标注的集合中
+        # 对每一个点进行检查和注释
+        for i, (date, value) in enumerate(zip(keys, np_data[index])):
+            point = (date, value)  # 点坐标
+            if point not in annotated_points:  # 如果点没有被注释过，则进行注释
+                ax.annotate(
+                    f'{value}',  # 注释文本
+                    (date, value - 0.5),  # 注释位置
+                    textcoords="offset points",  # 坐标系
+                    xytext=(0, 10),  # 注释偏移
+                    ha='center',  # 水平居中
+                    fontsize=9,  # 注释字体大小
+                )
+                annotated_points.add(point)  # 将点添加到已注释的点集合中
 
-    return desired_width_data, labels, title, np.max(np_data), ax
+    # 返回相关数据和图表对象
+    return {
+        'desiredWidthData': desired_width_data,
+        'labels': labels,
+        'title': title,
+        'maxBarHeight': np.max(np_data),
+        'ax': ax,
+    }
+
 
 
 def upload_file(file):
@@ -1145,10 +1290,14 @@ class SoftwareQualityRating:
         self.testersStr = ''
         # 初始化开发人员列表为空列表
         self.developers = []
+        # 初始化是否存在测试任务标志为False
+        self.isExistTestTask = False
         # 初始化最早任务时间为None
         self.earliestTaskDate = None
         # 初始化最晚任务时间为None
         self.lastTaskDate = None
+        # 初始化上线时间为None
+        self.onlineDate = None
         # 初始化工作小时数的字典，用于记录各个开发者工作小时数
         self.workHours = {}
         # 初始化开发总小时数为0
@@ -1293,7 +1442,7 @@ class SoftwareQualityRating:
                 # 获取开发人员名称(带有部门名称)
                 owner = child['owner'].replace(";", "")
                 # 获取开发人员名称和工时
-                developer_name = extract_matching(r"\d(.*?)$", owner)[0]
+                processing_personnel = extract_matching(r"\d(.*?)$", owner)[0]
                 # 获取完成的工时
                 worked_hours = float(child.get('effort_completed', 0))
 
@@ -1301,24 +1450,31 @@ class SoftwareQualityRating:
                 begin = child.get('begin')
                 due = child.get('due')
 
-                # 如果开发人员不在测试人员名单中，累加工时
-                if developer_name and developer_name not in TESTERS:
+                # 如果处理人不在测试人员名单中，累加工时
+                if processing_personnel and processing_personnel not in TESTERS:
                     # 将开发人员名称和工时保存到字典中
-                    child['developerName'] = developer_name
+                    child['developerName'] = processing_personnel
                     # 将工时累加到字典中
-                    self.workHours[developer_name] = self.workHours.get(developer_name, 0) + worked_hours
-                    # 如果任务有开始日期、结束日期和完成工时，则保存到字典中
-                    if begin and due and child.get('effort_completed'):
-                        # 调用_save_task_hours方法保存任务工时信息
-                        self._save_task_hours(child)
+                    self.workHours[processing_personnel] = self.workHours.get(processing_personnel, 0) + worked_hours
+                    # 如果任务有开始日期、结束日期, 记录项目任务的最早日期和最晚日期
+                    if begin and due:
+                        if not self.earliestTaskDate or begin < self.earliestTaskDate:  # 如果当前任务的开始日期小于最早任务日期，则更新最早任务日期
+                            self.earliestTaskDate = begin  # 更新最早任务日期
+                        # 如果任务有开始日期、结束日期和完成工时，则保存到字典中
+                        if child.get('effort_completed'):
+                            # 调用_save_task_hours方法保存任务工时信息
+                            self._save_task_hours(child)
 
-                if developer_name in TESTERS:  # 如果开发人员是测试人员，则更新开发周期
-                    if not self.earliestTaskDate or begin < self.earliestTaskDate:  # 如果当前任务的开始日期小于最早任务日期，则更新最早任务日期
-                        self.earliestTaskDate = begin  # 更新最早任务日期
+                if processing_personnel in TESTERS:  # 如果处理人是测试人员，则更新开发周期
+                    # 如果是第一次遇到测试任务，更新为存在测试任务标志
+                    if not self.isExistTestTask:
+                        self.isExistTestTask = True
                     if not self.lastTaskDate or due > self.lastTaskDate:  # 如果当前任务的结束日期大于最晚任务日期，则更新最晚任务日期
                         self.lastTaskDate = due  # 更新最晚任务日期
-                    if owner not in self.testRecipient:
-                        self.testRecipient.append(owner)
+                    if not self.onlineDate or begin > self.onlineDate:  # 如果当前任务的开始日期大于上线日期，则更新上线日期
+                        self.onlineDate = begin  # 更新上线日期
+                    if owner not in self.testRecipient:  # 如果测试人员不在测试人员名单中，则添加到测试人员名单中
+                        self.testRecipient.append(owner)  # 添加到测试人员名单中
             # 如果子任务列表的长度小于每页大小，则说明已经获取到了所有子任务，退出循环
             if len(data['data']['children_list']) < page_size:
                 break
@@ -1449,7 +1605,8 @@ class SoftwareQualityRating:
                     created_date = date_time_to_date(bug.get('created'))
                     if bug_status == 'closed':  # 如果bug的状态是"已关闭"
                         resolved_date = date_time_to_date(bug.get('resolved'))  # 获取bug的解决日期
-                        is_deploy_prod_day_unrepaired_bug = resolved_date >= self.lastTaskDate  # 如果解决日期大于等于最晚任务日期，则为上线当天存在的BUG
+                        # 如果解决日期大于等于最晚任务日期，则为上线当天存在的BUG, 如果没有记录上线时间, 则为False
+                        is_deploy_prod_day_unrepaired_bug = resolved_date >= self.onlineDate if self.onlineDate else False
                         is_on_that_day_unrepaired_bug = created_date != resolved_date  # 如果创建日期不等于解决日期，则为当天未修复的bug
                     else:  # 如果bug的状态不是"已关闭", 则将该BUG算为上线当天存在的BUG和当天未修复的bug
                         is_on_that_day_unrepaired_bug = True
@@ -1539,13 +1696,12 @@ class SoftwareQualityRating:
                 for devHours in development_days.values():
                     self.developmentCycle += devHours
 
-    def add_test_report(self):  # 未完成
+    def add_test_report(self):
         """
-        生成并提交测试报告。
+        添加测试报告。
 
-        该方法构造了一个测试报告的请求，包含报告的标题、接收人、抄送人等信息，
-        并附带了关于测试结论、执行进度、发现的BUG数等详细信息。最后，通过POST请求
-        将报告数据提交到指定的URL。
+        该方法负责生成和提交测试报告。它首先移除当前用户，然后构造测试报告的HTML内容，
+        并根据条件调用AI生成总结或添加缺陷列表和图表。最后，根据配置决定是否提交测试报告。
         """
         # 测试人员列表中移除当前用户
         self._remove_current_user()
@@ -1651,7 +1807,8 @@ class SoftwareQualityRating:
             "data[model_name]": "",
             "data[submit]": "保存草稿",
         }
-        if self.bugIds:  # 如果存在BUG ID，则添加BUG列表
+        # 如果存在BUG ID，则添加BUG列表
+        if self.bugIds:
             data.update({
                 "data[detail][3][type]": "bug_list",
                 "data[detail][3][workitem_type]": "bug",
@@ -1666,18 +1823,20 @@ class SoftwareQualityRating:
                 f"data[detail][3][workitem_list_display_count][{PROJECT_ID}]": 10,
                 "data[detail][3][comment]": "",
             })
-        if self.chartHtml:  # 如果存在图表数据，则添加图表
+        # 如果存在图表数据，则添加图表
+        if self.chartHtml:
             data.update({
                 "data[detail][4][type]": "richeditor",
                 "data[detail][4][title]": "图表",
                 "data[detail][4][id]": 0,
                 "data[detail][4][default_value]": f"<div>{self.chartHtml}</div>",
             })
-        if IS_CREATE_REPORT:  # 如果打开了创建测试报告开关, 则提交测试报告请求
+        # 如果打开了创建测试报告开关, 则提交测试报告请求
+        if IS_CREATE_REPORT:
             fetch_data(url=url, params=params, data=data, method='POST')  # 提交测试报告请求
         else:  # 如果关闭了创建测试报告开关, 则打印测试报告data
             print('\n请求测试报告data:')
-            # print(json.dumps(data, indent=4, ensure_ascii=False))
+            print(json.dumps(data, indent=4, ensure_ascii=False))
 
     def create_chart(self):
         """
@@ -1718,6 +1877,7 @@ class SoftwareQualityRating:
                     'tableWidth': bug_level_multi_client_count_plot_data['plotData']['widthPx'],  # 表格宽度
                     'data': self.bugLevelsMultiClientCount,  # 表格中展示的数据
                     'isMultiDimensionalTable': True,  # 表示数据是多维的，需要使用多维度表格显示
+                    'isRowTotal': True,  # 表示数据中包含行总计，需要计算并显示
                 }
             })
 
@@ -1730,6 +1890,7 @@ class SoftwareQualityRating:
                     'tableWidth': bug_source_count_plot_data['plotData']['widthPx'],  # 表格宽度
                     'data': self.bugSourceMultiClientCount,  # 表格中展示的数据
                     'isMultiDimensionalTable': True,  # 表示数据是多维的，需要使用多维度表格显示
+                    'isRowTotal': True,  # 表示数据中包含行总计，需要计算并显示
                 }
             })
 
@@ -1738,6 +1899,13 @@ class SoftwareQualityRating:
                 title='缺陷每日变化趋势', data=self.dailyTrendOfBugChanges)
             charts.append({
                 'plotPath': daily_trend_of_bug_changes_count_broken_line_data['plotPath'],
+                'tableData': {
+                    'firstColumnHeader': '日期',  # 表格第一列的标题
+                    'tableWidth': daily_trend_of_bug_changes_count_broken_line_data['plotData']['widthPx'],  # 表格宽度
+                    'data': self.dailyTrendOfBugChanges,  # 表格中展示的数据
+                    'isMultiDimensionalTable': True,  # 表示数据是多维的，需要使用多维度表格显示
+                    'isRowTotal': False,  # 表示数据中包含行总计，需要计算并显示
+                }
             })
 
         # 调用私有方法将图表路径信息转换并生成HTML
@@ -1818,9 +1986,9 @@ class SoftwareQualityRating:
                                 <td align="left" style="{row_style}">
                                     {tableKey}
                                 </td>
-                                <td align="left" style="{row_style}">
+                                {f'''<td align="left" style="{row_style}">
                                     {sum(tableData.values())}
-                                </td>
+                                </td>''' if table_data.get('isRowTotal') else ''}
                                 {''.join(f'''
                                 <td align="left" style="{row_style}">
                                     {dataValue}
@@ -1840,9 +2008,9 @@ class SoftwareQualityRating:
                                         <th align="left" style="{header_row_style}">
                                             {table_data['firstColumnHeader']}
                                         </th>
-                                        <th align="left" style="{header_row_style}">
+                                        {f"""<th align="left" style="{header_row_style}">
                                             小计
-                                        </th>
+                                        </th>""" if table_data.get('isRowTotal') else ''}
                                         {''.join(f"""
                                         <th align="left" style="{header_row_style}">
                                             {dataHeader}
@@ -1853,9 +2021,9 @@ class SoftwareQualityRating:
                                         <td align="left" style="{total_row_style}">
                                             总计
                                         </td>
-                                        <td align="left" style="{total_row_style}">
+                                        {f"""<td align="left" style="{total_row_style}">
                                             {total_row_values[0]}
-                                        </td>
+                                        </td>""" if table_data.get('isRowTotal') else ''}
                                         {''.join(f"""
                                         <td align="left" style="{total_row_style}">
                                             {value}
@@ -2466,43 +2634,70 @@ BUG等级分布情况为:
 
     def run(self):
         """
-        执行整个软件质量评分流程。
-
-        本函数按照以下详细步骤执行：
+        执行软件质量评估的主要流程。该方法依次调用多个辅助方法来处理需求、工时、BUG等数据，
+        并在必要时进行错误检查和异常抛出。以下是详细的流程说明：
 
         1. **编辑列表展示字段**:
-            - 调用 `self.edit_list_config()` 方法，用于配置和编辑列表展示的字段。这一步确保了后续操作中所需的字段配置正确无误。
+            - 调用 `self.edit_list_config()` 方法，配置必要的列字段以便后续获取所需数据。
+            - 如果获取不到列展示字段的配置信息，则先调用 `_get_list_config()` 获取当前的列展示字段配置。
+            - 确保缺陷列表和子任务列表中包含必要的字段（如状态、严重等级、修复人等），否则补充这些字段。
 
         2. **获取需求名称**:
-            - 调用 `self.get_requirement_detail()` 方法以获取当前需求的名称。
-            - 检查需求名称是否成功获取。如果 `self.requirementName` 为空，则抛出 `ValueError` 异常，提示需求名称获取失败，并建议检查需求ID是否正确。
+            - 调用 `self.get_requirement_detail()` 方法，从服务器获取当前需求的详细信息，包括需求名称、开发人员等。
+            - 检查需求名称是否成功获取。如果未能成功获取需求名称，则抛出 `ValueError` 异常提示用户检查需求ID。
 
         3. **汇总开发人员工时**:
-            - 调用 `self.ger_requirement_task()` 方法以汇总所有开发人员的工时数据。
-            - 检查工时数据是否成功获取。如果 `self.workHours` 为空，则抛出 `ValueError` 异常，提示工时数据获取失败，并建议检查需求是否有子任务。
-            - 如果开发人员工时数据不为空 (`self.dailyWorkingHoursOfEachDeveloper` 不为空)，则调用 `self.development_cycle()` 方法计算开发周期。
+            - 调用 `self.ger_requirement_task()` 方法，递归获取所有子任务并计算每个开发者的总工时。
+            - 检查是否存在测试任务。如果没有测试任务，则抛出 `ValueError` 异常提示用户检查需求是否有测试任务。
+            - 检查工时数据是否成功获取。如果没有获取到工时数据，则抛出 `ValueError` 异常提示用户检查需求是否有子任务。
 
-        4. **打印工时汇总**:
-            - 调用 `self.print_summary()` 方法以打印汇总后的开发人员工时信息。
+        4. **计算开发周期**:
+            - 如果有每日工作小时数的数据 (`self.dailyWorkingHoursOfEachDeveloper`)，则调用 `self.development_cycle()` 方法计算开发周期。
+            - 遍历每个开发者的工作小时数，对于每个开发者在每个日期的工作小时数：
+                - 如果工作小时数大于或等于8小时，则将该日期标记为1个完整工作日。
+                - 如果工作小时数小于8小时，则计算该日期的工作小时数占一个完整工作日的比例，并与该日期已有的工作小时数比较，取较大值。
+            - 最后，将所有日期的工作小时数相加，得到总的开发周期。
 
-        5. **统计BUG数量**:
-            - 调用 `self.bug_list_detail()` 方法以统计与当前需求相关的BUG数量。
+        5. **打印工时汇总**:
+            - 调用 `self.print_summary()` 方法，计算并打印特定需求的所有开发人员的工时合计及每个开发人员的工时。
+            - 计算所有开发人员的总工时和开发人员数量，并打印每个开发人员的工时及总工时。
 
-        6. **计算并输出相关统计数据**:
-            - 调用 `self.score_result()` 方法以计算并输出与当前需求相关的统计数据。
+        6. **统计BUG数量**:
+            - 调用 `self.bug_list_detail()` 方法，通过调用API分页获取BUG数据，并按严重等级统计BUG数量。
+            - 统计各端缺陷级别分布和缺陷根源分布，记录未修复的BUG以及上线当天未修复的BUG。
+            - 输出各严重等级的BUG数量，并存储总的BUG数量。
 
-        **异常处理**:
-        - 在整个流程中，如果发生 `ValueError` 异常（例如需求名称或工时数据获取失败），会捕获该异常并打印堆栈信息，然后重新抛出异常以便上层处理。
+        7. **计算并输出相关统计数据**:
+            - 调用 `self.score_result()` 方法，根据BUG总数、开发周期、开发人员数量等信息计算项目平均一天工作量的Bug数及相应的软件质量评分。
+            - 分别计算BUG数评分、BUG修复评分、BUG重启评分、配合积极性/文档完成性评分、冒烟测试评分。
+            - 打印总分。
 
-        **清理工作**:
-        - 无论是否发生异常，`finally` 块中的代码都会执行，确保在脚本结束前还原列字段展示的配置信息。
-            - 调用 `edit_query_filtering_list_config(self.oldBugListConfigs)` 方法以还原BUG列字段展示的配置信息。
-            - 调用 `edit_requirement_list_config(self.oldSubTaskListConfigs)` 方法以还原子任务列字段展示的配置信息。
-            - 如果在还原配置信息时发生任何异常，会捕获该异常并打印堆栈信息，然后重新抛出异常。
+        8. **创建图表**:
+            - 调用 `self.create_chart()` 方法，生成多个条形图和折线图，涵盖开发工时、BUG修复人、各端缺陷级别分布及缺陷根源分布统计。
+            - 将图表路径信息转换为HTML格式，并存储在 `self.chartHtml` 中。
+            - 如果不需要创建报告，则打印图表链接。
 
-        Raises:
-            ValueError: 如果需求名称或工时数据获取失败，则抛出此异常。
-            Exception: 如果在还原配置信息时发生错误，则抛出此异常。
+        9. **添加测试报告**:
+            - 调用 `self.add_test_report()` 方法，构造测试报告的请求，包含报告的标题、接收人、抄送人等信息。
+            - 附带关于测试结论、执行进度、发现的BUG数等详细信息，并通过POST请求将报告数据提交到指定的URL。
+            - 如果打开了AI生成总结内容开关 (`IS_CREATE_AI_SUMMARY`)，则调用AI生成总结方法。
+
+        10. **异常处理**:
+            - 使用 `try-except` 结构捕获 `ValueError` 异常，打印堆栈信息并重新抛出异常。
+            - 在 `finally` 块中，无论是否发生异常，都还原列字段展示的配置信息：
+                - 调用 `edit_query_filtering_list_config(self.oldBugListConfigs)` 和 `edit_requirement_list_config(self.oldSubTaskListConfigs)` 方法，确保列字段配置恢复原样。
+            - 如果还原配置信息失败，捕获异常并打印堆栈信息，重新抛出异常。
+
+        流程概述:
+        - 编辑列表展示字段以确保获取所需数据。
+        - 获取需求名称并验证其有效性。
+        - 汇总开发人员工时并验证测试任务的存在。
+        - 计算开发周期并打印工时汇总。
+        - 统计BUG数量并计算相关评分。
+        - 创建图表并生成HTML代码。
+        - 添加测试报告并提交。
+        - 捕获异常并打印堆栈信息。
+        - 最终确保列字段展示配置信息被还原。
         """
         try:
             # 编辑列表展示字段
@@ -2517,6 +2712,10 @@ BUG等级分布情况为:
 
             # 汇总开发人员工时
             self.ger_requirement_task()
+
+            # 检查测试任务是否存在
+            if not self.isExistTestTask:
+                raise ValueError(f'没有测试任务, 请检查"{self.requirementName}"需求是否有测试任务')
 
             # 检查工时数据是否获取成功
             if not self.workHours:
@@ -2555,6 +2754,7 @@ BUG等级分布情况为:
                 # 捕获异常并打印堆栈信息
                 traceback.print_exc()
                 raise e
+
 
 
 if __name__ == "__main__":
