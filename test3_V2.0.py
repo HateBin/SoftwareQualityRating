@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from openai import OpenAI
 import matplotlib.pyplot as plt
+import matplotlib
 import cloudscraper
 import os
 import base64
@@ -84,6 +85,8 @@ scraper = cloudscraper.create_scraper(
     }
 )
 
+# matplotlib.use('Agg')
+
 # BUG列表中必须包含的字段
 BUG_LIST_MUST_KEYS = [
     "status",  # 状态
@@ -152,7 +155,7 @@ def create_plot(func):
         """
         try:
             # 执行原始函数，获取返回值
-            plot_data, labels, title, ax = func(*args, **kwargs)
+            plot_data, labels, title, max_bar_height, ax = func(*args, **kwargs)
             plot_data: dict
             labels: list[str]
             title: str
@@ -168,6 +171,7 @@ def create_plot(func):
             ax.tick_params(
                 axis='x',
                 length=10,
+                labelsize=9,
                 color='#c0d0e0',
                 labelcolor='black',
             )
@@ -196,8 +200,16 @@ def create_plot(func):
                     columnspacing=1.3,
                 )
 
-                for handle in legend.legend_handles:
-                    handle.set_height(10)
+                # for handle in legend.legend_handles:
+                #     handle.set_height(10)
+
+            range_max, y_interval = calculation_plot_y_max_height(max_bar_height)
+
+            plt.yticks(range(0, range_max + 1, y_interval))  # 设置刻度为整数
+
+            # 设置Y轴范围，使其稍微超出柱子的最大高度
+            max_height = range_max
+            ax.set_ylim(0, max_height * 1.1)
 
             # 调整布局，防止图形内容被裁剪
             plt.tight_layout()
@@ -725,7 +737,6 @@ def deepseek_chat(content: str):
     return ai_result_switch_html(result)
 
 
-
 def extract_matching(pattern, owner):
     # 使用正则表达式匹配
     regex = re.compile(pattern)
@@ -795,6 +806,7 @@ def encrypt_password_zero_padding(password):
         'data[Login][encrypt_key]': base64.b64encode(key).decode('utf-8')
     }
 
+
 def switch_numpy_data(data: dict) -> tuple:
     labels: list[str] = []
     new_data: dict[str, list[int or float]] = {}
@@ -814,8 +826,54 @@ def switch_numpy_data(data: dict) -> tuple:
     return labels, np_data
 
 
+def calculation_plot_y_max_height(max_number: int):
+    if not max_number:
+        max_number = 1
+        y_interval = 1
+    elif max_number < 5:
+        y_interval = 1
+    elif max_number < 9:
+        y_interval = 2
+    elif max_number < 15:
+        y_interval = 3
+    else:
+        y_interval = 5
+    while True:
+        range_max = math.ceil(max_number / y_interval) * y_interval
+        if range_max == max_number:
+            range_max += y_interval
+        if range_max // y_interval > 7:
+            y_interval *= 2
+        else:
+            break
+    return range_max, y_interval
+
+
+def calculate_plot_width(keys: list, fig: plt.Figure, bar_width: float = 0.2, bar_max_width: float = 0.5):
+    max_key_length = max(len(key) for key in keys)  # 计算最长的名称长度
+    num_bars = len(keys)  # 获取柱状图数据的数量
+
+    # 根据最长名称长度和柱子数量调整图形宽度
+    base_width = 5  # 基础宽度
+    key_length_factor = max_key_length * 1.0  # 名称长度影响因子
+    bar_count_factor = num_bars * 0.1  # 柱子数量影响因子
+
+    min_width = 6.4  # 最小宽度
+    max_width = 20  # 最大宽度
+    desired_width = min(max(base_width + key_length_factor + bar_count_factor, min_width), max_width)  # 计算最终的宽度
+
+    desired_bar_width = bar_width * num_bars
+    if desired_bar_width > bar_max_width:
+        desired_bar_width = bar_max_width
+
+    fig.set_size_inches(desired_width, 4.8)  # 设置图形的尺寸
+
+    plt.xlim(-1, num_bars)
+
+    return desired_bar_width, {'width': desired_width}
+
 @create_plot
-def create_bar_plot(title, data: dict, bar_width=0.2, bar_max_width=0.5):
+def create_bar_plot(title, data: dict):
     """
     创建一个柱状图。
 
@@ -831,28 +889,14 @@ def create_bar_plot(title, data: dict, bar_width=0.2, bar_max_width=0.5):
     - 一个包含图表宽度的字典。
     """
     keys = list(data.keys())  # 获取柱状图数据的键（标签）
-    max_key_length = max(len(key) for key in keys)  # 计算最长的名称长度
-    num_bars = len(keys)  # 获取柱状图数据的数量
-
-    # 根据最长名称长度和柱子数量调整图形宽度
-    base_width = 5  # 基础宽度
-    key_length_factor = max_key_length * 0.7  # 名称长度影响因子
-    bar_count_factor = num_bars * 0.1  # 柱子数量影响因子
-
-    min_width = 6.4  # 最小宽度
-    max_width = 20  # 最大宽度
-    desired_width = min(max(base_width + key_length_factor + bar_count_factor, min_width), max_width)  # 计算最终的宽度
-
-    desired_bar_width = bar_width * num_bars
-    if desired_bar_width > bar_max_width:
-        desired_bar_width = bar_max_width
-
 
     fig, ax = plt.subplots()  # 创建一个图形对象和轴对象
     fig: plt.Figure
     ax: plt.Axes
 
-    fig.set_size_inches(desired_width, 4.8)  # 设置图形的尺寸
+    desired_bar_width, desired_width_data = calculate_plot_width(keys, fig)
+    desired_bar_width: float
+    desired_width_data: dict
 
     # 转换为二维数组
     labels, np_data = switch_numpy_data(data)
@@ -882,7 +926,6 @@ def create_bar_plot(title, data: dict, bar_width=0.2, bar_max_width=0.5):
                     ax.text(bar.get_x() + bar.get_width() / 2, bar.get_y() + yval / 2, str(yval),
                             ha='center', va='center', color='white')
 
-
     # 计算每个柱子的总高度
     total_heights = np.sum(np_data, axis=0)
     # 在每个柱子顶部添加总高度标签
@@ -890,35 +933,7 @@ def create_bar_plot(title, data: dict, bar_width=0.2, bar_max_width=0.5):
         if total_height:  # 如果总高度不为0，则添加总高度标签
             ax.text(keys[i], total_height, round(total_height, 2), ha='center', va='bottom')
 
-    y_max = int(max(total_heights))
-    if y_max == 0:
-        y_max = 1
-        y_interval = 1
-    elif y_max < 5:
-        y_interval = 1
-    elif y_max < 9:
-        y_interval = 2
-    elif y_max < 15:
-        y_interval = 3
-    else:
-        y_interval = 5
-    while True:
-        range_max = math.ceil(y_max / y_interval) * y_interval
-        if range_max == y_max:
-            range_max += y_interval
-        if range_max // y_interval > 7:
-            y_interval *= 2
-        else:
-            break
-    plt.yticks(range(0, range_max + 1, y_interval))  # 设置刻度为整数
-
-    # 设置Y轴范围，使其稍微超出柱子的最大高度
-    max_height = range_max
-    ax.set_ylim(0, max_height * 1.1)
-
-    plt.xlim(-1, num_bars)
-
-    return {'width': desired_width}, labels, title, ax
+    return desired_width_data, labels, title, int(max(total_heights)), ax
 
 
 @create_plot
@@ -933,139 +948,40 @@ def create_broken_line_plot(title, data: dict):
     返回:
     dict: 包含计算出的图表宽度。
     """
-    # 初始化最大数值为0，用于后续计算y轴的最大值
-    max_num = 0
     # 对数据按日期进行排序，确保图表上的数据是按时间顺序展示的
     data = dict(sorted(data.items()))
     keys = list(data.keys())
 
-    # 计算最长的名称长度，用于调整图表宽度
-    max_key_length = max(len(date) for date in keys)
-    # 获取柱状图数据的数量，用于调整图表宽度
-    num_bars = len(data.keys())
-
-    # 根据最长名称长度和柱子数量调整图形宽度
-    base_width = 5  # 基础宽度
-    key_length_factor = max_key_length * 2  # 名称长度影响因子
-    bar_count_factor = num_bars * 0.1  # 值的数量影响因子
-
-    # 计算最终的宽度，确保宽度在最小和最大值之间
-    min_width = 6.4  # 最小宽度
-    max_width = 20  # 最大宽度
-    desired_width = min(max(base_width + key_length_factor + bar_count_factor, min_width), max_width)  # 计算最终的宽度
-
-    if max_num % 5 != 0:  # 如果最大数值不是5的倍数，则将最大数值加5，确保y轴的刻度是5的倍数
-        y_max_num = (max_num // 5 + 1) * 5  # 计算最大数值的5倍加1，确保最大数值是5的倍数
-    else:  # 如果最大数值是5的倍数，则直接使用最大数值
-        y_max_num = max_num
-
-
-    print(data)
-    labels, numpy_data = switch_numpy_data(data)
+    labels, np_data = switch_numpy_data(data)
     labels: list[str]
-    numpy_data: np.ndarray
+    np_data: np.ndarray
 
     fig, ax = plt.subplots()
     fig: plt.Figure
     ax: plt.Axes
 
-    fig.set_size_inches(desired_width, y_max_num / 2)  # 设置图形的尺寸
+    desired_bar_width, desired_width_data = calculate_plot_width(keys, fig)
 
     # 用于存储已经标注过的坐标
     annotated_points = set()
 
     # 绘制每条线并添加标注
     for index in range(len(labels)):
-        print(numpy_data[: ,index])
-        ax.plot(keys, numpy_data[index], marker='o', label=labels[index])  # 绘制折线图
-        for i, (date, value) in enumerate(zip(keys, numpy_data[index])):  # 遍历日期和值
+        # 绘制折线图
+        ax.plot(
+            keys,
+            np_data[index],
+            marker='o',
+            label=labels[index],
+        )
+        for i, (date, value) in enumerate(zip(keys, np_data[index])):  # 遍历日期和值
             point = (date, value)  # 创建坐标点
             if point not in annotated_points:  # 如果坐标点没有被标注过，则添加标注
                 # 添加数值标签，位置为当前坐标点的上方，标签值为当前值
                 ax.annotate(f'{value}', (date, value), textcoords="offset points", xytext=(0, 10), ha='center')
                 annotated_points.add(point)  # 将坐标点添加到已标注的集合中
 
-    # 设置x轴刻度
-    plt.xticks(keys)
-    # 设置y轴刻度
-    plt.yticks(range(0, y_max_num + 1, 5))
-
-
-
-
-
-
-    # # 初始化plot_data字典，用于存储整理后的数据
-    # plot_data = {'dates': []}
-    # # 遍历数据，整理数据为适合绘图的格式
-    # for date, countData in data.items():
-    #     plot_data['dates'].append(date)
-    #     for msg, count in countData.items():
-    #         if not plot_data.get(msg):
-    #             plot_data[msg] = []
-    #         if count > max_num:
-    #             max_num = count
-    #         plot_data[msg].append(count)
-    #
-    # if max_num % 5 != 0:  # 如果最大数值不是5的倍数，则将最大数值加5，确保y轴的刻度是5的倍数
-    #     y_max_num = (max_num // 5 + 1) * 5  # 计算最大数值的5倍加1，确保最大数值是5的倍数
-    # else:  # 如果最大数值是5的倍数，则直接使用最大数值
-    #     y_max_num = max_num
-    #
-    # # 创建 DataFrame
-    # df = pd.DataFrame(plot_data)
-    #
-    # # 获取所有消息类型，用于绘制折线图
-    # msgs = list(plot_data.keys())[1:]
-    #
-    # # 计算最长的名称长度，用于调整图表宽度
-    # max_key_length = max(len(date) for date in plot_data['dates'])
-    # # 获取柱状图数据的数量，用于调整图表宽度
-    # num_bars = len(data.keys())
-    #
-    # # 根据最长名称长度和柱子数量调整图形宽度
-    # base_width = 5  # 基础宽度
-    # key_length_factor = max_key_length * 2  # 名称长度影响因子
-    # bar_count_factor = num_bars * 0.1  # 值的数量影响因子
-    #
-    # # 计算最终的宽度，确保宽度在最小和最大值之间
-    # min_width = 6.4  # 最小宽度
-    # max_width = 20  # 最大宽度
-    # desired_width = min(max(base_width + key_length_factor + bar_count_factor, min_width), max_width)  # 计算最终的宽度
-    #
-    # # 绘制图表
-    # # plt.figure(figsize=(desired_width, y_max_num / 2))
-    #
-    # fig, ax = plt.subplots()
-    # fig: plt.Figure
-    # ax: plt.Axes
-    #
-    # fig.set_size_inches(desired_width, y_max_num / 2)  # 设置图形的尺寸
-    #
-    # # 用于存储已经标注过的坐标
-    # annotated_points = set()
-    #
-    # # 绘制每条线并添加标注
-    # for column in msgs:
-    #     ax.plot(df['dates'], df[column], marker='o', label=column)  # 绘制折线图
-    #     for i, (date, value) in enumerate(zip(df['dates'], df[column])):  # 遍历日期和值
-    #         point = (date, value)  # 创建坐标点
-    #         if point not in annotated_points:  # 如果坐标点没有被标注过，则添加标注
-    #             # 添加数值标签，位置为当前坐标点的上方，标签值为当前值
-    #             ax.annotate(f'{value}', (date, value), textcoords="offset points", xytext=(0, 10), ha='center')
-    #             annotated_points.add(point)  # 将坐标点添加到已标注的集合中
-    #
-    # # 设置x轴刻度
-    # plt.xticks(df['dates'])
-    # # 设置y轴刻度
-    # plt.yticks(range(0, y_max_num + 1, 5))
-    #
-    # # 显示图例
-    #
-    # # 返回计算出的宽度
-    # return {'width': desired_width}, [], title, ax
-
-    plt.show()
+    return desired_width_data, labels, title, np.max(np_data), ax
 
 
 def upload_file(file):
@@ -2547,7 +2463,6 @@ BUG等级分布情况为:
                     break
             else:
                 break
-
 
     def run(self):
         """
