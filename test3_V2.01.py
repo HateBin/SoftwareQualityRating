@@ -135,23 +135,46 @@ PLOT_COLORS = [
 
 def create_plot(func):
     """
-    装饰器函数，用于创建和自定义图表的绘制。
+    图表创建装饰器工厂函数
+    用于标准化生成Matplotlib图表，统一处理样式配置、资源清理和图表保存
 
-    此装饰器应用于一个应返回绘图所需数据和配置的函数。它负责设置图表的样式，
-    包括标题、轴配置、网格、图例等，并处理绘图的保存和资源清理。
+    功能特性：
+    1. 自动处理图表样式的标准化配置
+    2. 自动管理图表对象的生命周期
+    3. 统一错误处理和资源清理
+    4. 支持将图表保存到内存缓冲区
 
-    参数:
-    - func: 被装饰的函数，应返回绘图数据和配置参数的元组。
+    参数：
+    func (Callable): 被装饰的图表数据生成函数，应返回包含图表配置的字典
 
-    返回:
-    - wrapper: 包装函数，处理绘图的创建和样式设置。
+    返回：
+    Callable: 包装后的图表生成函数
+
+    异常：
+    当被装饰函数返回数据不符合规范时抛出 ValueError
+    图表生成过程中发生错误时抛出 RuntimeError
     """
 
-    @functools.wraps(func)
+    @functools.wraps(func)  # 保留被装饰函数的元数据
     def wrapper(*args, **kwargs) -> dict:
+        """
+        装饰器包装函数
+
+        执行流程：
+        1. 执行被装饰函数获取图表数据
+        2. 验证数据完整性
+        3. 配置图表样式
+        4. 保存图表到内存缓冲区
+        5. 清理图表资源
+        """
+        buf = None  # 初始化图表缓冲区对象
         try:
-            # 调用被装饰的函数，获取绘图所需的参数
-            func_data:dict = func(*args, **kwargs)
+            # ==================================================================
+            # 数据准备阶段
+            # ==================================================================
+
+            # 执行被装饰函数获取图表配置数据
+            func_data: dict = func(*args, **kwargs)
 
             # 验证返回数据结构的完整性
             required_keys = {'desiredWidthData', 'labels', 'title', 'maxBarHeight', 'ax'}
@@ -159,15 +182,23 @@ def create_plot(func):
                 missing = required_keys - func_data.keys()
                 raise ValueError(f"缺失必要的图表配置参数: {missing}")
 
-            # 获取绘图数据、标签列表和标题
-            plot_data: dict = func_data['desiredWidthData']  # 绘图数据
-            labels: list[str] = func_data['labels']  # 标签列表
-            title: str = func_data['title']  # 标题
-            max_bar_height: int = func_data['maxBarHeight']  # 最大柱状图高度
-            ax: plt.Axes = func_data['ax']  # 轴对象
+            # ==================================================================
+            # 数据解包与预处理
+            # ==================================================================
 
-            # 设置图表标题
-            plt.title(title, fontsize=17)
+            # 解包图表配置参数
+            plot_data: dict = func_data['desiredWidthData']  # 图表尺寸等元数据
+            labels: list[str] = func_data['labels']  # 数据系列标签列表
+            title: str = func_data['title']  # 图表主标题
+            max_bar_height: int = func_data['maxBarHeight']  # 最大柱状高度值
+            ax: plt.Axes = func_data['ax']  # Matplotlib坐标轴对象
+
+            # ==================================================================
+            # 图表样式配置
+            # ==================================================================
+
+            # 设置图表主标题（字号17pt，默认字体由rcParams配置）
+            plt.title(title, fontsize=17, pad=12)  # pad参数控制标题与图表的间距
 
             # 配置坐标轴边框样式
             # 隐藏顶部、右侧、左侧边框，底部边框设置为浅蓝色
@@ -192,9 +223,8 @@ def create_plot(func):
                 labelcolor='black'  # 标签文字颜色为黑色
             )
 
-            # 设置轴标签在网格之下, 必填y轴的刻度线在图形之上
-            ax.set_axisbelow(True)
-            # 配置y轴的网格
+            # 配置网格系统
+            ax.set_axisbelow(True)  # 将网格线置于数据层下方
             ax.grid(
                 axis='y',  # 仅显示Y轴方向网格线
                 linestyle='-',  # 实线样式
@@ -202,7 +232,10 @@ def create_plot(func):
                 color='#e6ecf2'  # 浅灰色网格线
             )
 
-            # 如果有标签，则添加图例
+            # ==================================================================
+            # 图例配置
+            # ==================================================================
+
             if labels:  # 当存在数据标签时添加图例
                 ax.legend(
                     loc='upper center',  # 图例定位在图表上方中央
@@ -215,40 +248,72 @@ def create_plot(func):
                     columnspacing=1.3  # 列间距1.3字符
                 )
 
-            # 计算y轴的最大值和刻度间隔
+            # ==================================================================
+            # Y轴刻度配置
+            # ==================================================================
+
+            # 计算合适的Y轴范围及刻度间隔
             range_max, y_interval = calculation_plot_y_max_height(max_bar_height)
 
-            # 设置y轴的刻度
-            plt.yticks(range(0, range_max + 1, y_interval))  # 设置刻度为整数
+            # 设置Y轴刻度位置及标签
+            plt.yticks(
+                range(0, range_max + 1, y_interval),  # 生成等间隔刻度位置
+                labels=[str(x) for x in range(0, range_max + 1, y_interval)]  # 生成纯数字标签
+            )
 
             # 设置y轴的最大值
             max_height = range_max
+
+            # 设置Y轴显示范围（扩展10%的上方空间）
             ax.set_ylim(0, max_height * 1.1)
 
-            # 调整布局，确保所有元素都可见
-            plt.tight_layout()
+            # ==================================================================
+            # 布局调整与图表保存
+            # ==================================================================
 
-            # 保存图表到内存中的BytesIO对象
+            plt.tight_layout(pad=2.0)  # 自动调整子图参数，留白2.0英寸
+
+            # 创建内存缓冲区保存图表图像
             buf = BytesIO()
-            plt.savefig(buf, format='png')
+            plt.savefig(
+                buf,
+                format='png',  # 输出PNG格式
+                dpi=plt.rcParams['figure.dpi'],  # 使用全局DPI设置
+                bbox_inches='tight'  # 紧凑模式，去除多余白边
+            )
 
-            # 如果有额外的绘图数据，计算其像素宽度
-            if plot_data:
+            # ==================================================================
+            # 后处理与元数据计算
+            # ==================================================================
+
+            # 计算实际像素宽度（当存在宽度配置时）
+            if plot_data and 'width' in plot_data:
                 current_dpi = plt.rcParams['figure.dpi']
-                if plot_data.get('width'):
-                    plot_data['widthPx'] = plot_data['width'] * current_dpi
+                plot_data['widthPx'] = int(plot_data['width'] * current_dpi)
 
-            # 将BytesIO对象的指针移到开始位置，以便读取数据
+            # 重置缓冲区指针以便读取数据
             buf.seek(0)
 
-            # 返回包含图表路径和绘图数据的字典
-            return {'plotPath': upload_file(buf.getvalue()), 'plotData': plot_data}
+            # 返回图表路径和元数据
+            return {
+                'plotPath': upload_file(buf.getvalue()),  # 上传到文件存储服务
+                'plotData': plot_data  # 包含尺寸等元数据
+            }
+
         except Exception as e:
-            # 如果发生异常，重新抛出以通知调用者
-            raise e
+            # 错误处理：包装原始异常，添加上下文信息
+            raise RuntimeError(f"图表生成失败: {str(e)}") from e
         finally:
-            # 关闭所有图表以释放资源
+            # ==================================================================
+            # 资源清理阶段
+            # ==================================================================
+
+            # 确保关闭所有Matplotlib图形对象
             plt.close('all')
+
+            # 显式释放缓冲区资源
+            if buf:
+                buf.close()
 
     return wrapper
 
