@@ -30,9 +30,9 @@ import platform
 import json
 import math
 
-IS_CREATE_REPORT = True  # 是否创建报告
-IS_CREATE_AI_SUMMARY = True  # 是否创建AI总结
-IS_SUPPORT_RETRY_CREATE_AI_SUMMARY = True  # 是否支持重试创建AI总结, 生成完成后可input进行重新生成
+IS_CREATE_REPORT = False  # 是否创建报告
+IS_CREATE_AI_SUMMARY = False  # 是否创建AI总结
+IS_SUPPORT_RETRY_CREATE_AI_SUMMARY = False  # 是否支持重试创建AI总结, 生成完成后可input进行重新生成
 OPEN_AI_MODEL = '百炼r1'  # deepseek模型名称，目前支持：v3、r1、百炼r1
 # OPEN_AI_KEY = 'sk-00987978d24e445a88f1f5a57944818b'  # OpenAI密钥  deepseek官方
 # OPEN_AI_URL = 'https://api.deepseek.com/v1'  # OpenAI的URL  deepseek官方
@@ -152,7 +152,53 @@ def create_plot(func):
         """
         try:
             # 执行原始函数，获取返回值
-            plot_data = func(*args, **kwargs)
+            plot_data, labels, title, ax = func(*args, **kwargs)
+            plot_data: dict
+            labels: list[str]
+            title: str
+            ax: plt.Axes
+
+            plt.title(title, fontsize=17)  # 设置图表标题
+
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.spines['left'].set_visible(False)
+            ax.spines['bottom'].set_color('#c0d0e0')
+
+            ax.tick_params(
+                axis='x',
+                length=10,
+                color='#c0d0e0',
+                labelcolor='black',
+            )
+
+            ax.tick_params(
+                axis='y',
+                length=10,
+                color='white',
+                labelcolor='black',
+            )
+
+            # 将网格线放在柱子底部
+            ax.set_axisbelow(True)
+            ax.grid(axis='y', linestyle='-', alpha=0.7, color='#e6ecf2')
+
+            if labels:
+                # 绘制图例
+                legend = ax.legend(
+                    loc='upper center',
+                    bbox_to_anchor=(0.5, -0.13),
+                    ncol=8,
+                    fontsize=10,
+                    frameon=False,
+                    handlelength=1.0,
+                    handletextpad=0.3,
+                    columnspacing=1.3,
+                )
+
+                for handle in legend.legend_handles:
+                    handle.set_height(10)
+
             # 调整布局，防止图形内容被裁剪
             plt.tight_layout()
             # 创建一个内存缓冲区，用于保存生成的图表
@@ -801,34 +847,12 @@ def create_bar_plot(title, data: dict, bar_width=0.2, bar_max_width=0.5):
     if desired_bar_width > bar_max_width:
         desired_bar_width = bar_max_width
 
+
     fig, ax = plt.subplots()  # 创建一个图形对象和轴对象
     fig: plt.Figure
     ax: plt.Axes
 
     fig.set_size_inches(desired_width, 4.8)  # 设置图形的尺寸
-
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_visible(False)
-    ax.spines['bottom'].set_color('#c0d0e0')
-
-    ax.tick_params(
-        axis='x',
-        length=10,
-        color='#c0d0e0',
-        labelcolor='black',
-    )
-
-    ax.tick_params(
-        axis='y',
-        length=10,
-        color='white',
-        labelcolor='black',
-    )
-
-    # 将网格线放在柱子底部
-    ax.set_axisbelow(True)
-    ax.grid(axis='y', linestyle='-', alpha=0.7, color='#e6ecf2')
 
     # 转换为二维数组
     labels, np_data = switch_numpy_data(data)
@@ -858,21 +882,6 @@ def create_bar_plot(title, data: dict, bar_width=0.2, bar_max_width=0.5):
                     ax.text(bar.get_x() + bar.get_width() / 2, bar.get_y() + yval / 2, str(yval),
                             ha='center', va='center', color='white')
 
-    if labels:
-        # 绘制图例
-        legend = ax.legend(
-            loc='upper center',
-            bbox_to_anchor=(0.5, -0.13),
-            ncol=8,
-            fontsize=10,
-            frameon=False,
-            handlelength=1.0,
-            handletextpad=0.3,
-            columnspacing=1.3,
-        )
-
-        for handle in legend.legend_handles:
-            handle.set_height(10)
 
     # 计算每个柱子的总高度
     total_heights = np.sum(np_data, axis=0)
@@ -907,10 +916,9 @@ def create_bar_plot(title, data: dict, bar_width=0.2, bar_max_width=0.5):
     max_height = range_max
     ax.set_ylim(0, max_height * 1.1)
 
-    plt.title(title, fontsize=17)  # 设置图表标题
     plt.xlim(-1, num_bars)
 
-    return {'width': desired_width}
+    return {'width': desired_width}, labels, title, ax
 
 
 @create_plot
@@ -929,31 +937,10 @@ def create_broken_line_plot(title, data: dict):
     max_num = 0
     # 对数据按日期进行排序，确保图表上的数据是按时间顺序展示的
     data = dict(sorted(data.items()))
-    # 初始化plot_data字典，用于存储整理后的数据
-    plot_data = {'dates': []}
-    # 遍历数据，整理数据为适合绘图的格式
-    for date, countData in data.items():
-        plot_data['dates'].append(date)
-        for msg, count in countData.items():
-            if not plot_data.get(msg):
-                plot_data[msg] = []
-            if count > max_num:
-                max_num = count
-            plot_data[msg].append(count)
-
-    if max_num % 5 != 0:  # 如果最大数值不是5的倍数，则将最大数值加5，确保y轴的刻度是5的倍数
-        y_max_num = (max_num // 5 + 1) * 5  # 计算最大数值的5倍加1，确保最大数值是5的倍数
-    else:  # 如果最大数值是5的倍数，则直接使用最大数值
-        y_max_num = max_num
-
-    # 创建 DataFrame
-    df = pd.DataFrame(plot_data)
-
-    # 获取所有消息类型，用于绘制折线图
-    msgs = list(plot_data.keys())[1:]
+    keys = list(data.keys())
 
     # 计算最长的名称长度，用于调整图表宽度
-    max_key_length = max(len(date) for date in plot_data['dates'])
+    max_key_length = max(len(date) for date in keys)
     # 获取柱状图数据的数量，用于调整图表宽度
     num_bars = len(data.keys())
 
@@ -967,39 +954,118 @@ def create_broken_line_plot(title, data: dict):
     max_width = 20  # 最大宽度
     desired_width = min(max(base_width + key_length_factor + bar_count_factor, min_width), max_width)  # 计算最终的宽度
 
-    # 绘制图表
-    plt.figure(figsize=(desired_width, y_max_num / 2))
+    if max_num % 5 != 0:  # 如果最大数值不是5的倍数，则将最大数值加5，确保y轴的刻度是5的倍数
+        y_max_num = (max_num // 5 + 1) * 5  # 计算最大数值的5倍加1，确保最大数值是5的倍数
+    else:  # 如果最大数值是5的倍数，则直接使用最大数值
+        y_max_num = max_num
+
+
+    print(data)
+    labels, numpy_data = switch_numpy_data(data)
+    labels: list[str]
+    numpy_data: np.ndarray
+
+    fig, ax = plt.subplots()
+    fig: plt.Figure
+    ax: plt.Axes
+
+    fig.set_size_inches(desired_width, y_max_num / 2)  # 设置图形的尺寸
 
     # 用于存储已经标注过的坐标
     annotated_points = set()
 
     # 绘制每条线并添加标注
-    for column in msgs:
-        plt.plot(df['dates'], df[column], marker='o', label=column)  # 绘制折线图
-        for i, (date, value) in enumerate(zip(df['dates'], df[column])):  # 遍历日期和值
+    for index in range(len(labels)):
+        print(numpy_data[: ,index])
+        ax.plot(keys, numpy_data[index], marker='o', label=labels[index])  # 绘制折线图
+        for i, (date, value) in enumerate(zip(keys, numpy_data[index])):  # 遍历日期和值
             point = (date, value)  # 创建坐标点
             if point not in annotated_points:  # 如果坐标点没有被标注过，则添加标注
                 # 添加数值标签，位置为当前坐标点的上方，标签值为当前值
-                plt.annotate(f'{value}', (date, value), textcoords="offset points", xytext=(0, 10), ha='center')
+                ax.annotate(f'{value}', (date, value), textcoords="offset points", xytext=(0, 10), ha='center')
                 annotated_points.add(point)  # 将坐标点添加到已标注的集合中
 
-    # 添加水平参考线
-    for y in range(0, y_max_num + 1, 5):  # 从0到y_max_num，每隔5画一条横线
-        plt.axhline(y=y, color='gray', linestyle='--', linewidth=0.5)  # 绘制水平参考线
-
     # 设置x轴刻度
-    plt.xticks(df['dates'])
+    plt.xticks(keys)
     # 设置y轴刻度
     plt.yticks(range(0, y_max_num + 1, 5))
 
-    # 添加标题和标签
-    plt.title(title)
 
-    # 显示图例
-    plt.legend()
 
-    # 返回计算出的宽度
-    return {'width': desired_width}
+
+
+
+    # # 初始化plot_data字典，用于存储整理后的数据
+    # plot_data = {'dates': []}
+    # # 遍历数据，整理数据为适合绘图的格式
+    # for date, countData in data.items():
+    #     plot_data['dates'].append(date)
+    #     for msg, count in countData.items():
+    #         if not plot_data.get(msg):
+    #             plot_data[msg] = []
+    #         if count > max_num:
+    #             max_num = count
+    #         plot_data[msg].append(count)
+    #
+    # if max_num % 5 != 0:  # 如果最大数值不是5的倍数，则将最大数值加5，确保y轴的刻度是5的倍数
+    #     y_max_num = (max_num // 5 + 1) * 5  # 计算最大数值的5倍加1，确保最大数值是5的倍数
+    # else:  # 如果最大数值是5的倍数，则直接使用最大数值
+    #     y_max_num = max_num
+    #
+    # # 创建 DataFrame
+    # df = pd.DataFrame(plot_data)
+    #
+    # # 获取所有消息类型，用于绘制折线图
+    # msgs = list(plot_data.keys())[1:]
+    #
+    # # 计算最长的名称长度，用于调整图表宽度
+    # max_key_length = max(len(date) for date in plot_data['dates'])
+    # # 获取柱状图数据的数量，用于调整图表宽度
+    # num_bars = len(data.keys())
+    #
+    # # 根据最长名称长度和柱子数量调整图形宽度
+    # base_width = 5  # 基础宽度
+    # key_length_factor = max_key_length * 2  # 名称长度影响因子
+    # bar_count_factor = num_bars * 0.1  # 值的数量影响因子
+    #
+    # # 计算最终的宽度，确保宽度在最小和最大值之间
+    # min_width = 6.4  # 最小宽度
+    # max_width = 20  # 最大宽度
+    # desired_width = min(max(base_width + key_length_factor + bar_count_factor, min_width), max_width)  # 计算最终的宽度
+    #
+    # # 绘制图表
+    # # plt.figure(figsize=(desired_width, y_max_num / 2))
+    #
+    # fig, ax = plt.subplots()
+    # fig: plt.Figure
+    # ax: plt.Axes
+    #
+    # fig.set_size_inches(desired_width, y_max_num / 2)  # 设置图形的尺寸
+    #
+    # # 用于存储已经标注过的坐标
+    # annotated_points = set()
+    #
+    # # 绘制每条线并添加标注
+    # for column in msgs:
+    #     ax.plot(df['dates'], df[column], marker='o', label=column)  # 绘制折线图
+    #     for i, (date, value) in enumerate(zip(df['dates'], df[column])):  # 遍历日期和值
+    #         point = (date, value)  # 创建坐标点
+    #         if point not in annotated_points:  # 如果坐标点没有被标注过，则添加标注
+    #             # 添加数值标签，位置为当前坐标点的上方，标签值为当前值
+    #             ax.annotate(f'{value}', (date, value), textcoords="offset points", xytext=(0, 10), ha='center')
+    #             annotated_points.add(point)  # 将坐标点添加到已标注的集合中
+    #
+    # # 设置x轴刻度
+    # plt.xticks(df['dates'])
+    # # 设置y轴刻度
+    # plt.yticks(range(0, y_max_num + 1, 5))
+    #
+    # # 显示图例
+    #
+    # # 返回计算出的宽度
+    # return {'width': desired_width}, [], title, ax
+
+    plt.show()
 
 
 def upload_file(file):
@@ -1695,7 +1761,7 @@ class SoftwareQualityRating:
             fetch_data(url=url, params=params, data=data, method='POST')  # 提交测试报告请求
         else:  # 如果关闭了创建测试报告开关, 则打印测试报告data
             print('\n请求测试报告data:')
-            print(json.dumps(data, indent=4, ensure_ascii=False))
+            # print(json.dumps(data, indent=4, ensure_ascii=False))
 
     def create_chart(self):
         """
