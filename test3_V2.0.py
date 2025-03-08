@@ -30,9 +30,9 @@ import platform
 import json
 import math
 
-IS_CREATE_REPORT = True  # 是否创建报告
-IS_CREATE_AI_SUMMARY = True  # 是否创建AI总结
-IS_SUPPORT_RETRY_CREATE_AI_SUMMARY = True  # 是否支持重试创建AI总结, 生成完成后可input进行重新生成
+IS_CREATE_REPORT = False  # 是否创建报告
+IS_CREATE_AI_SUMMARY = False  # 是否创建AI总结
+IS_SUPPORT_RETRY_CREATE_AI_SUMMARY = False  # 是否支持重试创建AI总结, 生成完成后可input进行重新生成
 OPEN_AI_MODEL = '百炼r1'  # deepseek模型名称，目前支持：v3、r1、百炼r1
 # OPEN_AI_KEY = 'sk-00987978d24e445a88f1f5a57944818b'  # OpenAI密钥  deepseek官方
 # OPEN_AI_URL = 'https://api.deepseek.com/v1'  # OpenAI的URL  deepseek官方
@@ -152,7 +152,51 @@ def create_plot(func):
         """
         try:
             # 执行原始函数，获取返回值
-            plot_data = func(*args, **kwargs)
+            plot_data, labels, title, ax = func(*args, **kwargs)
+            plot_data: dict
+            labels: list[str]
+            title: str
+            ax: plt.Axes
+
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.spines['left'].set_visible(False)
+            ax.spines['bottom'].set_color('#c0d0e0')
+
+            ax.tick_params(
+                axis='x',
+                length=10,
+                color='#c0d0e0',
+                labelcolor='black',
+            )
+
+            ax.tick_params(
+                axis='y',
+                length=10,
+                color='white',
+                labelcolor='black',
+            )
+
+            # 将网格线放在柱子底部
+            ax.set_axisbelow(True)
+            ax.grid(axis='y', linestyle='-', alpha=0.7, color='#e6ecf2')
+
+            if labels:
+                # 绘制图例
+                legend = ax.legend(
+                    loc='upper center',
+                    bbox_to_anchor=(0.5, -0.13),
+                    ncol=8,
+                    fontsize=10,
+                    frameon=False,
+                    handlelength=1.0,
+                    handletextpad=0.3,
+                    columnspacing=1.3,
+                )
+
+                for handle in legend.legend_handles:
+                    handle.set_height(10)
+
             # 调整布局，防止图形内容被裁剪
             plt.tight_layout()
             # 创建一个内存缓冲区，用于保存生成的图表
@@ -801,34 +845,12 @@ def create_bar_plot(title, data: dict, bar_width=0.2, bar_max_width=0.5):
     if desired_bar_width > bar_max_width:
         desired_bar_width = bar_max_width
 
+
     fig, ax = plt.subplots()  # 创建一个图形对象和轴对象
     fig: plt.Figure
     ax: plt.Axes
 
     fig.set_size_inches(desired_width, 4.8)  # 设置图形的尺寸
-
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_visible(False)
-    ax.spines['bottom'].set_color('#c0d0e0')
-
-    ax.tick_params(
-        axis='x',
-        length=10,
-        color='#c0d0e0',
-        labelcolor='black',
-    )
-
-    ax.tick_params(
-        axis='y',
-        length=10,
-        color='white',
-        labelcolor='black',
-    )
-
-    # 将网格线放在柱子底部
-    ax.set_axisbelow(True)
-    ax.grid(axis='y', linestyle='-', alpha=0.7, color='#e6ecf2')
 
     # 转换为二维数组
     labels, np_data = switch_numpy_data(data)
@@ -858,21 +880,6 @@ def create_bar_plot(title, data: dict, bar_width=0.2, bar_max_width=0.5):
                     ax.text(bar.get_x() + bar.get_width() / 2, bar.get_y() + yval / 2, str(yval),
                             ha='center', va='center', color='white')
 
-    if labels:
-        # 绘制图例
-        legend = ax.legend(
-            loc='upper center',
-            bbox_to_anchor=(0.5, -0.13),
-            ncol=8,
-            fontsize=10,
-            frameon=False,
-            handlelength=1.0,
-            handletextpad=0.3,
-            columnspacing=1.3,
-        )
-
-        for handle in legend.legend_handles:
-            handle.set_height(10)
 
     # 计算每个柱子的总高度
     total_heights = np.sum(np_data, axis=0)
@@ -910,7 +917,7 @@ def create_bar_plot(title, data: dict, bar_width=0.2, bar_max_width=0.5):
     plt.title(title, fontsize=17)  # 设置图表标题
     plt.xlim(-1, num_bars)
 
-    return {'width': desired_width}
+    return {'width': desired_width}, labels, title, ax
 
 
 @create_plot
@@ -968,24 +975,30 @@ def create_broken_line_plot(title, data: dict):
     desired_width = min(max(base_width + key_length_factor + bar_count_factor, min_width), max_width)  # 计算最终的宽度
 
     # 绘制图表
-    plt.figure(figsize=(desired_width, y_max_num / 2))
+    # plt.figure(figsize=(desired_width, y_max_num / 2))
+
+    fig, ax = plt.subplots()
+    fig: plt.Figure
+    ax: plt.Axes
+
+    fig.set_size_inches(desired_width, y_max_num / 2)  # 设置图形的尺寸
 
     # 用于存储已经标注过的坐标
     annotated_points = set()
 
     # 绘制每条线并添加标注
     for column in msgs:
-        plt.plot(df['dates'], df[column], marker='o', label=column)  # 绘制折线图
+        ax.plot(df['dates'], df[column], marker='o', label=column)  # 绘制折线图
         for i, (date, value) in enumerate(zip(df['dates'], df[column])):  # 遍历日期和值
             point = (date, value)  # 创建坐标点
             if point not in annotated_points:  # 如果坐标点没有被标注过，则添加标注
                 # 添加数值标签，位置为当前坐标点的上方，标签值为当前值
-                plt.annotate(f'{value}', (date, value), textcoords="offset points", xytext=(0, 10), ha='center')
+                ax.annotate(f'{value}', (date, value), textcoords="offset points", xytext=(0, 10), ha='center')
                 annotated_points.add(point)  # 将坐标点添加到已标注的集合中
 
-    # 添加水平参考线
-    for y in range(0, y_max_num + 1, 5):  # 从0到y_max_num，每隔5画一条横线
-        plt.axhline(y=y, color='gray', linestyle='--', linewidth=0.5)  # 绘制水平参考线
+    # # 添加水平参考线
+    # for y in range(0, y_max_num + 1, 5):  # 从0到y_max_num，每隔5画一条横线
+    #     ax.axhline(y=y, color='gray', linestyle='--', linewidth=0.5)  # 绘制水平参考线
 
     # 设置x轴刻度
     plt.xticks(df['dates'])
@@ -996,10 +1009,9 @@ def create_broken_line_plot(title, data: dict):
     plt.title(title)
 
     # 显示图例
-    plt.legend()
 
     # 返回计算出的宽度
-    return {'width': desired_width}
+    return {'width': desired_width}, [], title, ax
 
 
 def upload_file(file):
