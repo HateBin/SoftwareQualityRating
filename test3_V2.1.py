@@ -29,8 +29,8 @@ import platform
 import json
 import math
 
-IS_CREATE_REPORT = True  # 是否创建报告
-IS_CREATE_AI_SUMMARY = True  # 是否创建AI总结
+IS_CREATE_REPORT = False  # 是否创建报告
+IS_CREATE_AI_SUMMARY = False  # 是否创建AI总结
 IS_SUPPORT_RETRY_CREATE_AI_SUMMARY = True  # 是否支持重试创建AI总结, 生成完成后可input进行重新生成
 OPEN_AI_MODEL = '百炼v3'  # deepseek模型名称，目前支持：v3、r1、百炼r1、百炼v3
 # OPEN_AI_KEY = 'sk-00987978d24e445a88f1f5a57944818b'  # OpenAI密钥  deepseek官方
@@ -44,12 +44,12 @@ ACCOUNT = 'wuchong@addcn.com'  # 账号
 PASSWORD = 'WUchong_1008'  # 密码
 PROJECT_ID = "63835346"  # 项目ID
 # REQUIREMENT_ID = "1163835346001078047"  # 需求ID 无BUG
-# REQUIREMENT_ID = "1163835346001071668"  # 需求ID
+REQUIREMENT_ID = "1163835346001071668"  # 需求ID
 # REQUIREMENT_ID = "1163835346001033609"  # 需求ID 中规中矩  TypeError: '<=' not supported between instances of 'str' and 'NoneType'
 # REQUIREMENT_ID = "1163835346001051222"  # 需求ID 较差的质量
 # REQUIREMENT_ID = "1163835346001049795"  # 需求ID 较差的质量  开发周期也是很多小数点尾数
 # REQUIREMENT_ID = "1163835346001055792"  # 需求ID 较差的质量
-REQUIREMENT_ID = "1163835346001118124"  # 需求ID
+# REQUIREMENT_ID = "1163835346001118124"  # 需求ID
 REQUIREMENT_LIST_ID = '1000000000000000417'  # 需求列表ID, 用于查询或者编辑列表展示字段的配置
 
 DEPARTMENT = 'T5'  # 部门名称
@@ -369,177 +369,513 @@ def calculate_bug_count_rating(X: float) -> int or None:
 
 def calculate_bug_reopen_rating(X):
     """
-    根据输入的缺陷重新打开次数计算缺陷重新打开评分。
+    根据缺陷重新打开次数计算软件质量评分
+
+    评分规则（左闭右闭区间）:
+        0次  → 20分（质量优秀）
+        1次  → 15分（质量良好）
+        2次  → 10分（质量合格）
+        3次  → 5分（质量堪忧）
+        4次及以上 → 1分（质量差）
 
     参数:
-    X (int): 缺陷重新打开的次数。
+        X (int): 缺陷重新打开次数，应为非负整数。
+                  当输入值非整数时会触发隐式类型转换
 
     返回:
-    int: 缺陷重新打开评分，如果X的值不在预期范围内则返回None。
+        int: 对应评分值（20/15/10/5/1分），输入不符合规范时返回None
+
+    异常处理:
+        - 输入负数值时触发AssertionError
+        - 输入非数值类型将触发TypeError
+        - 所有未定义情况返回None并打印警告
     """
-    # 定义缺陷重新打开次数与评分的映射关系
+    # 防御性处理：将输入强制转换为整数（处理浮点数输入情况）
+    try:
+        X = int(X)
+    except (ValueError, TypeError):
+        raise TypeError("错误：输入值必须为可转换为整数的类型")
+
+    # 处理负值输入（根据业务逻辑视为最差情况）
+    try:
+        assert X >= 0
+    except AssertionError:
+        raise ValueError("错误：缺陷重新打开次数不应为负数")
+
+    # 定义评分映射字典（key为最大次数阈值，value为对应得分）
     score_mapping = {
-        0: 20,
-        1: 15,
-        2: 10,
-        3: 5,
-        4: 1
+        0: 20,  # 0次重开得满分
+        1: 15,  # 1次重开扣5分
+        2: 10,  # 2次重开扣10分
+        3: 5,  # 3次重开扣15分
+        4: 1  # 4次及以上扣19分
     }
 
-    # 如果缺陷重新打开次数超过4次，返回最低评分1分
-    if X > 4:
-        return 1
-
-    # 如果缺陷重新打开次数在评分映射中，返回对应的评分
-    if X in score_mapping:
-        return score_mapping[X]
-
-    # 如果缺陷重新打开次数不在预期范围内，打印错误信息并返回None
-    print("错误：X的值不在预期范围内")
-    return
+    # 遍历评分阈值判断区间（按阈值降序排列）
+    for threshold in sorted(score_mapping.keys(), reverse=True):
+        if X >= threshold:
+            return score_mapping[threshold]
 
 
-def calculate_bug_repair_rating(unrepaired_bug: dict):
+def calculate_bug_repair_rating(unrepaired_bug: dict) -> int or None:
     """
-    计算BUG修复的评分, 根据入参的dict中的参数进行判断分数
-    :param unrepaired_bug: 用于判断判分的各级别BUG修复情况
-    :return: 最终BUG修复评分, 如判断都不满足则返回None
-    """
-    prod_day_unrepaired = unrepaired_bug['deployProdDayUnrepaired']
-    on_that_day_unrepaired = unrepaired_bug['onThatDayUnrepaired']
-    if prod_day_unrepaired['P0P1']:
-        return 1
-    elif prod_day_unrepaired['P2']:
-        return 5
-    elif not on_that_day_unrepaired['P0'] and on_that_day_unrepaired['P1']:
-        return 10
-    elif not on_that_day_unrepaired['P0'] and not on_that_day_unrepaired['P1'] and on_that_day_unrepaired['P2']:
-        return 15
-    elif not on_that_day_unrepaired['P0'] and not on_that_day_unrepaired['P1'] and not on_that_day_unrepaired['P2']:
-        return 20
-    else:
-        print("错误：无法计算缺陷修复评分")
-        return
+    根据未修复缺陷的严重程度计算缺陷修复质量评分
 
-
-def _input(text, input_type=None, allow_content=None):
-    """
-    从用户获取输入，并尝试将其转换为指定的类型。
+    评分规则（按优先级从高到低判断）：
+    - 若上线当天存在未修复的致命(P0)或严重(P1)缺陷 → 1分（质量极差）
+    - 若上线当天存在未修复的一般(P2)缺陷 → 5分（质量堪忧）
+    - 若缺陷创建当天未修复致命(P0)但存在未修复严重(P1) → 10分（质量合格）
+    - 若缺陷创建当天已修复所有P0/P1，但存在未修复P2 → 15分（质量良好）
+    - 若所有缺陷在创建当天均被修复 → 20分（质量优秀）
 
     参数:
-    text (str): 显示在用户输入提示符之前的文本。
-    input_type (type): 用户输入应被转换的类型。如果为None，则不进行类型转换。
-    allow_content (list): 一组允许的输入值。如果用户输入的值不在这个列表中，将提示重新输入。
+        unrepaired_bug (dict): 未修复缺陷分类字典，结构示例：
+            {
+                # 上线当天未修复的缺陷（按严重等级分组）
+                "deployProdDayUnrepaired": {
+                    "P0P1": ["BUG_ID1", ...],  # 致命/严重缺陷列表
+                    "P2": ["BUG_ID2", ...]     # 一般缺陷列表
+                },
+                # 缺陷创建当天未修复的缺陷（按严重等级分组）
+                "onThatDayUnrepaired": {
+                    "P0": ["BUG_ID3", ...],    # 致命缺陷列表
+                    "P1": ["BUG_ID4", ...],    # 严重缺陷列表
+                    "P2": ["BUG_ID5", ...]     # 一般缺陷列表
+                }
+            }
 
     返回:
-    用户输入的值，经过指定类型的转换。如果输入值不符合指定类型或不在允许的内容中，则提示重新输入。
+        int: 质量评分（20/15/10/5/1分）
+        None: 当数据结构异常或未匹配任何条件时返回
+
+    异常处理:
+        - 当输入数据结构不符合预期时，打印错误日志并返回None
     """
-    # 无限循环，直到用户输入符合指定类型
+
+    # 解构输入数据，提高可读性
+    prod_day_unrepaired = unrepaired_bug.get('deployProdDayUnrepaired', {})
+    on_that_day_unrepaired = unrepaired_bug.get('onThatDayUnrepaired', {})
+
+    # ----------------------------
+    # 优先级1：上线当天存在P0/P1未修复
+    # ----------------------------
+    # 检查上线当天未修复的致命/严重缺陷列表是否非空
+    if prod_day_unrepaired.get('P0P1'):
+        return 1  # 存在上线未修复的高危缺陷，最低评分
+
+    # ----------------------------
+    # 优先级2：上线当天存在P2未修复
+    # ----------------------------
+    # 检查上线当天未修复的一般缺陷列表是否非空
+    if prod_day_unrepaired.get('P2'):
+        return 5  # 存在上线未修复的中等缺陷，较低评分
+
+    # ----------------------------
+    # 优先级3：创建当天P0已修复但存在P1未修复
+    # ----------------------------
+    # P0已修复（列表为空）且P1未修复（列表非空）
+    if not on_that_day_unrepaired.get('P0') and on_that_day_unrepaired.get('P1'):
+        return 10  # 存在当天未修复的严重缺陷，中等评分
+
+    # ----------------------------
+    # 优先级4：创建当天P0/P1已修复但存在P2未修复
+    # ----------------------------
+    # P0和P1已修复（列表为空）且P2未修复（列表非空）
+    if (not on_that_day_unrepaired.get('P0')
+            and not on_that_day_unrepaired.get('P1')
+            and on_that_day_unrepaired.get('P2')):
+        return 15  # 仅存在当天未修复的低风险缺陷，良好评分
+
+    # ----------------------------
+    # 优先级5：所有缺陷均及时修复
+    # ----------------------------
+    # 所有严重等级缺陷列表均为空
+    if (not on_that_day_unrepaired.get('P0')
+            and not on_that_day_unrepaired.get('P1')
+            and not on_that_day_unrepaired.get('P2')):
+        return 20  # 无当天未修复缺陷，最高评分
+
+    # ----------------------------
+    # 异常处理：未匹配任何条件
+    # ----------------------------
+    # 打印结构化错误日志（实际项目中建议使用logging模块）
+    print("错误：缺陷修复评分计算失败，数据结构异常或存在未覆盖的逻辑分支")
+    print(f"输入数据结构：{json.dumps(unrepaired_bug, indent=2)}")
+    return None  # 防御性返回
+
+
+def _input(text: str, input_type: type = None, allow_content: list = None) -> any:
+    """
+    从用户获取输入并进行类型及有效性验证
+
+    该函数实现一个交互式输入循环，持续提示用户输入直到满足以下条件：
+    1. 输入内容能正确转换为指定类型（若指定 input_type）
+    2. 输入内容存在于允许的值列表（若指定 allow_content）
+
+    特性：
+    - 自动处理类型转换异常
+    - 支持自定义允许值范围验证
+    - 提供友好的错误提示
+    - 支持任意可转换类型（int/float/str等）
+
+    参数详解：
+    :param text: str -> 输入提示文本，显示在输入框前（如 "请输入年龄："）
+    :param input_type: type -> 目标数据类型（如 int/float/str），None表示保持字符串类型
+    :param allow_content: list -> 允许的输入值列表，None表示不限制输入范围
+
+    返回：
+    any -> 返回经过验证和类型转换后的输入值
+
+    异常处理：
+    - 类型转换失败时自动提示重新输入
+    - 输入值不在允许范围内时提示有效值列表
+    """
+    # 无限循环直到获得合法输入
     while True:
         try:
-            # 尝试将用户输入转换为指定类型
-            value = input_type(input(text)) if input_type else input(text)
-            # 如果指定了允许的内容，检查用户输入是否在允许的内容中
-            if allow_content:
-                assert value in allow_content
-            # 如果转换成功，返回用户输入的值
-            return value
-        except (ValueError, Exception):
-            # 如果转换失败，捕获ValueError并提示用户重新输入
-            print(_print_text_font("\n输入错误，请重新输入。\n"))
+            # 显示提示信息并获取原始输入
+            raw_input = input(text)  # 调用内置input函数获取用户输入
+
+            # 类型转换处理
+            if input_type:
+                # 尝试将输入转换为目标类型（如int('123')）
+                converted_value = input_type(raw_input)
+            else:
+                # 未指定类型则保持原始字符串
+                converted_value = raw_input
+
+            # 允许值范围验证
+            if allow_content is not None:
+                # 检查转换后的值是否在允许列表中
+                if converted_value not in allow_content:
+                    # 构建友好的错误提示信息
+                    allowed_values = ', '.join(map(str, allow_content))
+                    error_msg = f"输入值必须在 [{allowed_values}] 范围内"
+                    # 打印带颜色的错误提示
+                    print(_print_text_font(f"\n错误：{error_msg}\n", color='red'))
+                    continue  # 跳过后续代码，重新循环
+
+            # 通过所有检查，返回合法值
+            return converted_value
+
+        except ValueError as ve:  # 捕获类型转换错误（如将字母串转为数字）
+            # 提取目标类型名称（如 'int'/'float'）
+            type_name = input_type.__name__ if input_type else '字符串'
+            # 生成具体错误描述
+            error_detail = f"无法将输入 '{raw_input}' 转换为 {type_name} 类型"
+            print(_print_text_font(f"\n格式错误：{error_detail}\n", color='red'))
+
+        except Exception as e:  # 防御性编程，捕获其他未预料异常
+            # 打印通用错误提示（理论上不会执行到这里）
+            print(_print_text_font("\n发生未预期的错误，请重新输入\n", color='red'))
 
 
-def _print_text_font(text, is_weight: bool = False, color: str = 'red'):
+def _print_text_font(text: str, is_weight: bool = False, color: str = 'red') -> str:
     """
-    以指定颜色和权重打印文本。
+    生成带有指定颜色和字重的ANSI转义序列格式化文本
 
-    :param text: 要打印的文本。
-    :param is_weight: 是否以粗体打印文本，默认为False。
-    :param color: 文本的颜色，默认为'red'。支持的颜色有：black, green, yellow, blue, purple, cyan, white, red。
+    该函数通过ANSI转义码实现在终端输出彩色文本，支持8种基础颜色和字体加粗效果。
+    返回的字符串可直接用于print()函数，在支持ANSI转义的终端中显示彩色文本。
+
+    参数详解:
+        text (str):
+            需要格式化的文本内容。支持任意字符串，包含多行文本和特殊字符。
+            示例："Hello World"
+
+        is_weight (bool):
+            字体加粗开关，默认为False。
+            - True: 使用加粗字体(实际表现为增加亮度，因部分终端不支持真正的粗体)
+            - False: 使用正常字体
+            示例：is_weight=True 显示亮色文本
+
+        color (str):
+            文本颜色名称，不区分大小写，默认为'red'。支持以下颜色：
+            - 基础色：black, red, green, yellow, blue, purple, cyan, white
+            - 扩展色：默认红色(当输入颜色不在支持列表时)
+            示例："blue" 显示蓝色文本
+
+    返回值:
+        str: 包含ANSI转义序列的格式化字符串。格式为：
+            \033[字重代码;颜色代码m文本内容\033[0m
+        示例：\033[1;91mError!\033[0m
+
+    异常处理:
+        无显式异常抛出，但颜色参数不在支持列表时会默认使用红色
+
+    实现原理:
+        1. ANSI转义码结构：
+           - \033[  : 转义序列起始符
+           - 代码部分: 由分号分隔的多个数值组成
+           - m      : 表示样式设置结束
+           - 文本内容: 应用样式的文本
+           - \033[0m: 重置所有样式
+
+        2. 颜色代码映射：
+           基础颜色使用90-97区间的高亮前景色代码，与常规30-37代码相比具有更好的兼容性
+
+    示例用法:
+        print(_print_text_font("警告信息", is_weight=True, color="yellow"))
     """
-    # 根据is_weight参数决定是否使用粗体
-    if is_weight:
-        weight = "1"  # 粗体
-    else:
-        weight = "0"  # 不加粗
 
-    # 将颜色参数转换为小写，以支持大小写不敏感的颜色名称
+    # 处理字重参数：将布尔值转换为ANSI代码
+    # 0 = 正常，1 = 加粗/高亮（注意：部分终端中1表现为字体加亮而非真正加粗）
+    weight_code = "1" if is_weight else "0"
+
+    # 统一颜色参数为小写，实现大小写不敏感的匹配
     color = color.lower()
 
-    # 根据颜色参数选择相应的颜色代码
-    if color == 'black':  # 黑色
-        color_code = "90"
-    elif color == 'green':  # 绿色
-        color_code = "92"
-    elif color == 'yellow':  # 黄色
-        color_code = "93"
-    elif color == 'blue':  # 蓝色
-        color_code = "94"
-    elif color == 'purple':  # 紫色
-        color_code = "95"
-    elif color == 'cyan':  # 青色
-        color_code = "96"
-    elif color == 'white':  # 白色
-        color_code = "97"
-    else:
-        # 如果颜色不在支持的范围内，默认使用红色
-        color_code = "91"  # 红色
+    # ANSI颜色代码映射字典
+    # 键为颜色名称，值为对应的ANSI前景色代码
+    color_codes = {
+        'black': "90",  # 黑色
+        'red': "91",  # 红色
+        'green': "92",  # 绿色
+        'yellow': "93",  # 黄色
+        'blue': "94",  # 蓝色
+        'purple': "95",  # 紫色
+        'cyan': "96",  # 青色
+        'white': "97"  # 白色
+    }
 
-    # 返回格式化后的文本，包括颜色和加粗
-    return f"\033[{weight}m\033[{color_code}m{text}\033[0m"
+    # 获取颜色代码，若颜色不存在则默认使用红色
+    # 使用字典的get方法提供默认值，等效于：
+    # color_code = color_codes[color] if color in color_codes else "91"
+    color_code = color_codes.get(color, "91")  # 默认红色
+
+    # 构建完整的ANSI转义序列
+    # 结构说明：
+    # - \033[         : 转义序列开始
+    # - ;             : 分隔字重和颜色代码
+    # - m             : 样式设置结束符
+    # - {text}        : 需要格式化的文本
+    # - \033[0m       : 重置所有样式到默认
+    formatted_text = (
+        f"\033[{weight_code};{color_code}m"  # 设置样式
+        f"{text}"  # 添加文本内容
+        "\033[0m"  # 重置样式
+    )
+
+    return formatted_text
 
 
 def get_session_id():
     """
-    尝试登录给定的URL以获取会话ID。
+    用户登录认证并获取有效会话ID
 
-    该函数构造了登录所需的数据，发送POST请求，并处理可能的请求异常。
-    如果登录成功，将返回会话ID；如果失败，则打印错误信息并退出程序。
+    本方法实现完整的登录流程，包含以下关键步骤：
+    1. 构造登录请求的URL和查询参数
+    2. 准备登录表单数据（包含账户信息及加密后的密码）
+    3. 发送加密的POST请求进行登录认证
+    4. 处理响应及异常状态
+    5. 自动更新会话cookie供后续请求使用
+
+    流程细节：
+    - 使用AES-CBC算法对密码进行零填充加密
+    - 通过cloudscraper绕过基础的反爬机制
+    - 自动处理cookie存储，成功登录后cookie会保存在scraper实例中
+    - 严格检查HTTP状态码，识别403等异常状态
+    - 登录失败时程序主动退出，避免后续无效操作
+
+    异常处理：
+    - 网络请求异常：捕获requests库相关异常并打印错误信息
+    - 加密异常：由encrypt_password_zero_padding方法处理加密过程异常
+    - 状态码异常：检测403等非常规状态，触发cookie更新流程
+
+    关联方法：
+    - encrypt_password_zero_padding()：实现密码加密逻辑
+    - fetch_data()：后续请求使用本方法维护的会话状态
     """
     try:
-        # 定义登录URL
+        # 构建登录接口URL（主域名+登录路径）
         login_url = HOST + '/cloud_logins/login'
+
+        # 构造URL查询参数：
+        # - site：指定认证站点标识
+        # - ref：登录成功后的跳转地址（经过URL编码的页面地址）
         login_params = {
             'site': 'TAPD',
             'ref': 'https://www.tapd.cn/tapd_fe/63835346/story/list?categoryId=0&useScene=storyList&groupType=&conf_id=1163835346001048563&left_tree=1',
         }
-        # 构造登录所需的数据，包括引用URL、登录标识和用户邮箱
+
+        # 初始化基础登录表单数据
         login_data = {
+            # 登录后重定向地址（需与ref参数保持一致）
             'data[Login][ref]': 'https://www.tapd.cn/tapd_fe/63835346/story/list?categoryId=0&useScene=storyList&groupType=&conf_id=1163835346001048563&left_tree=1',
+            # 登录操作标识符
             'data[Login][login]': 'login',
+            # 用户邮箱账号（从全局常量ACCOUNT获取）
             'data[Login][email]': ACCOUNT,
         }
-        # 更新登录数据，添加加密后的密码
-        login_data.update(encrypt_password_zero_padding(PASSWORD))
-        # 发送POST请求以登录
-        response = scraper.post(url=login_url, params=login_params, data=login_data)
-        # 检查响应状态，如果发生请求异常则抛出
+
+        # 通过加密方法生成密码相关字段：
+        # 返回示例：
+        # {
+        #   'data[Login][password]': 'Base64加密后的密码',
+        #   'data[Login][encrypt_iv]': 'Base64加密后的初始化向量',
+        #   'data[Login][encrypt_key]': 'Base64加密后的密钥'
+        # }
+        encrypted_password = encrypt_password_zero_padding(PASSWORD)
+
+        # 合并加密字段到登录表单数据
+        login_data.update(encrypted_password)
+
+        # 发送POST登录请求
+        # 使用预配置的scraper实例（包含cloudscraper的防爬特性）
+        # 关键参数：
+        # - url：登录接口地址
+        # - params：URL查询参数
+        # - data：表单数据（application/x-www-form-urlencoded格式）
+        response = scraper.post(
+            url=login_url,
+            params=login_params,
+            data=login_data
+        )
+
+        # 严格检查HTTP状态码（非2xx状态会抛出HTTPError）
+        # 作用：
+        # 1. 识别网络错误（如500服务器错误）
+        # 2. 检测登录失败（如401未授权）
         response.raise_for_status()
+
     except requests.RequestException as e:
-        # 打印登录失败的错误信息，并退出程序
-        print(f"登录失败: {e}")
-        sys.exit()
+        # 统一处理请求异常：
+        # 包含连接超时、SSL错误、超时等所有requests异常
+        # 打印错误信息后终止程序，避免后续无效操作
+        print(f"登录失败: {str(e)}")
+        sys.exit(1)
 
 
-def get_workitem_status_transfer_history(entity_type, entity_id):
+def get_workitem_status_transfer_history(entity_type: str, entity_id: str) -> list:
     """
-    获取工作项状态转换历史。
+    获取工作项（需求/任务/BUG）的状态流转历史记录
 
-    该函数构造了获取工作项状态转换历史的URL，发送GET请求，并处理可能的请求异常。
-    如果请求成功，将返回工作项状态转换历史的JSON数据；如果失败，则打印错误信息并返回None。
+    通过TAPD官方API接口，获取指定实体的全生命周期状态变更记录，
+    包括状态变更时间、操作人、来源状态和目标状态等关键信息。
+
+    参数:
+        entity_type (str): 实体类型标识符，取值范围：
+            - 'story'   : 需求类实体
+            - 'task'    : 任务类实体
+            - 'bug'     : 缺陷类实体
+        entity_id (str): 实体唯一标识符，如需求ID、任务ID、BUGID
+
+    返回:
+        dict: 结构化状态历史数据，格式示例：
+        [
+            {
+                "change_type": "manual_update",
+                "creator": "T5段雪花",
+                "created": "2025-03-11 10:14:49",
+                "changes": [
+                    {
+                        "field": "状态",
+                        "value_before": "已验证",
+                        "value_after": "已关闭",
+                        "value_before_origin": "verified",
+                        "value_after_origin": "closed",
+                        "html_type": ""
+                    },
+                    {
+                        "field": "关闭时间",
+                        "value_before": "",
+                        "value_after": "2025-03-11 10:14:49",
+                        "value_before_origin": "",
+                        "value_after_origin": "2025-03-11 10:14:49",
+                        "html_type": ""
+                    }
+                ],
+                "current_status": "已关闭",
+                "current_status_origin": "closed",
+                "status_remain_time": "0",
+                "status_remain_begin_date": "2025-03-11 10:14:49",
+                "status_remain_end_date": "2025-03-11 10:14:49",
+                "entity_type": "bug"
+            },
+            ...
+        ]
+        若接口无数据或请求失败，返回空列表
+
+    异常:
+        requests.HTTPError: HTTP状态码非2xx时抛出
+        ValueError: 响应数据解析异常时抛出
+        KeyError: 响应数据结构缺失关键字段时抛出
+
+    实现逻辑:
+        1. 动态构建API请求URL和鉴权参数
+        2. 通过统一请求方法fetch_data发送GET请求
+        3. 校验响应状态码和数据完整性
+        4. 提取核心业务数据并返回结构化结果
     """
-    url = HOST + '/api/entity/workitems/get_workitem_status_transfer_history'
+    # ------------------------------
+    # 阶段1：请求参数构造
+    # ------------------------------
+    # 拼接完整API端点URL（HOST取自全局常量）
+    api_path = "/api/entity/workitems/get_workitem_status_transfer_history"
+    url = f"{HOST}{api_path}"  # 示例：https://www.tapd.cn/api/entity/...
+
+    # 构造查询参数：
+    # - workspace_id : 项目空间ID（取自全局PROJECT_ID）
+    # - program_id   : 项目集ID（当前项目未使用，置空字符串）
+    # - entity_type  : 实体类型透传
+    # - entity_id    : 实体ID强制转换为字符串类型
     params = {
-        'workspace_id': PROJECT_ID,
-        'program_id': '',
-        'entity_type': entity_type,
-        'entity_id': str(entity_id)
+        "workspace_id": PROJECT_ID,
+        "program_id": "",  # 保留字段，保持为空
+        "entity_type": entity_type,
+        "entity_id": str(entity_id)  # 防御性类型转换
     }
-    response = fetch_data(url, params=params).json()
-    if response and response.get('data'):
-        return response['data']
-    else:
-        return
+
+    try:
+        # ------------------------------
+        # 阶段2：发送API请求
+        # ------------------------------
+        # 通过封装后的fetch_data方法发送GET请求
+        # 该方法已内置重试机制和Cookie管理
+        response = fetch_data(
+            url=url,
+            params=params,
+            method="GET"
+        )
+
+        # 显式检查HTTP状态码（fetch_data已处理非200状态码，此处为防御性校验）
+        # 触发HTTPError时将中断流程
+        response.raise_for_status()
+
+        # ------------------------------
+        # 阶段3：响应数据处理
+        # ------------------------------
+        # 将响应内容解析为JSON格式
+        # 可能抛出JSONDecodeError（继承自ValueError）
+        response_json = response.json()
+
+        # 数据完整性校验：
+        # 检查顶层data字段是否存在（TAPD标准响应结构）
+        if "data" not in response_json:
+            raise KeyError("API响应缺少'data'字段")
+
+        # 提取业务数据主体
+        status_history_data = response_json["data"]
+
+        # 二次校验数据结构类型（防御非字典类型响应）
+        if not isinstance(status_history_data, list):
+            raise ValueError(
+                f"预期列表类型状态数据，实际获取类型：{type(status_history_data)}"
+            )
+
+        return status_history_data
+
+    except requests.JSONDecodeError as json_err:
+        # 捕获JSON解析异常并附加上下文信息
+        error_msg = f"响应内容非JSON格式，原始内容：{response.text[:200]}..."
+        raise ValueError(error_msg) from json_err
+    except KeyError as key_err:
+        # 细化键缺失异常信息
+        raise KeyError(f"响应数据缺失关键字段：{str(key_err)}") from key_err
+    except Exception as orig_err:
+        # 通用异常包装（保留原始堆栈信息）
+        raise RuntimeError(
+            f"获取状态历史记录失败，实体类型[{entity_type}] ID[{entity_id}]"
+        ) from orig_err
 
 
 def get_requirement_list_config():
