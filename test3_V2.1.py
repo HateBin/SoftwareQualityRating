@@ -29,10 +29,10 @@ import platform
 import json
 import math
 
-IS_CREATE_REPORT = False  # 是否创建报告
-IS_CREATE_AI_SUMMARY = False  # 是否创建AI总结
+IS_CREATE_REPORT = True  # 是否创建报告
+IS_CREATE_AI_SUMMARY = True  # 是否创建AI总结
 IS_SUPPORT_RETRY_CREATE_AI_SUMMARY = True  # 是否支持重试创建AI总结, 生成完成后可input进行重新生成
-OPEN_AI_MODEL = '百炼r1'  # deepseek模型名称，目前支持：v3、r1、百炼r1
+OPEN_AI_MODEL = '百炼v3'  # deepseek模型名称，目前支持：v3、r1、百炼r1、百炼v3
 # OPEN_AI_KEY = 'sk-00987978d24e445a88f1f5a57944818b'  # OpenAI密钥  deepseek官方
 # OPEN_AI_URL = 'https://api.deepseek.com/v1'  # OpenAI的URL  deepseek官方
 OPEN_AI_KEY = 'sk-a5ae4633515d448e9bbbe03770712d4e'  # OpenAI密钥  百炼
@@ -318,37 +318,53 @@ def create_plot(func):
     return wrapper
 
 
-def calculate_bug_count_rating(X):
+def calculate_bug_count_rating(X: float) -> int or None:
     """
-    根据BUG密度计算质量评分。
+    根据BUG密度计算软件质量评分。
 
-    本函数通过比较输入的BUG密度X与预设的密度区间，来确定相应的质量评分。
-    质量评分是根据BUG密度映射得到的，密度越高，评分越低。
+    评分规则：
+    - BUG密度 = BUG总数 / (开发人数 × 日均工时)
+    - 评分基于BUG密度所在的预设区间映射得到，密度越低评分越高
 
     参数:
-    X (float): BUG密度，用于确定质量评分的输入值。
+        X (float): 计算得到的BUG密度值，表示平均每个开发人日的BUG数量
+                   X的取值范围应为 X > 0，但方法内做了容错处理
 
     返回:
-    int 或 None: 根据BUG密度返回对应的质量评分，如果输入值不在预设范围内，则返回None。
-    """
+        int or None: 返回对应的质量评分(20/15/10/5/1分)，若输入不在任何区间则返回None
 
-    # 创建一个字典，用于映射BUG密度和质量评分
+    异常处理:
+        - 当输入X为负数时，默认匹配第一个区间(-1,1]
+        - 当输入X为非数值类型时，会触发类型错误
+
+    评分映射规则（左开右闭区间）:
+        (-∞, 1]   → 20分（极低密度，质量优秀）
+        (1, 1.5]  → 15分（低密度，质量良好）
+        (1.5, 2]  → 10分（中等密度，质量合格）
+        (2, 3]    → 5分（较高密度，质量堪忧）
+        (3, +∞)   → 1分（极高密度，质量差）
+    """
+    # 定义评分区间与得分的映射关系（按评分从高到低排列）
+    # 每个元组格式：(区间下界, 区间上界), 得分
+    # 注意：区间为左开右闭，即 lower < X <= upper
     score_mapping = {
-        (0, 1): 20,
-        (1, 1.5): 15,
-        (1.5, 2): 10,
-        (2, 3): 5,
-        (3, float('inf')): 1
+        (-1, 1): 20,  # 特殊处理负值情况，实际业务中X应为正数
+        (1, 1.5): 15,  # 1 < X <= 1.5
+        (1.5, 2): 10,  # 1.5 < X <= 2
+        (2, 3): 5,  # 2 < X <= 3
+        (3, float('inf')): 1  # X > 3
     }
 
-    # 遍历映射字典，找到匹配的BUG密度和评分
+    # 遍历所有评分区间
     for (lower, upper), score in score_mapping.items():
-        if lower <= X <= upper:
+        # 检查X是否在当前区间内（左开右闭）
+        if lower < X <= upper:
             return score
 
-    # 如果X不在预期范围内，打印错误信息并返回None
-    print("错误：X的值不在预期范围内")
-    return
+    # 若未匹配任何区间（理论上不会执行到这里，因最后一个区间覆盖+∞）
+    # 防御性编程：打印警告信息并返回None
+    print("错误：BUG密度值不在预期范围内，请检查输入数据有效性")
+    return None
 
 
 def calculate_bug_reopen_rating(X):
@@ -753,6 +769,33 @@ def ai_result_switch_html(result: str) -> str:
     return result
 
 
+def ai_output_template() -> str:
+    template = """***一、总体评价***
+▶ 项目最终评分为XX分（满分100），整体质量处于XX水平。XXXXXXXXXXXXXXXXXXXX
+---
+***二、核心亮点***
+▶ **XXXXXX**：XXXXXXXX
+▶ **XXXXXX**：XXXXXXXX
+---
+***三、主要不足与改进建议***
+▶ **XXXXXXX**
+    ▷ XXXXXXXXXX
+    ▷ <red>建议</red>：XXXXXXXXXXXX
+▶ **XXXXXXX**
+    ▷ XXXXXXXXXX
+    ▷ <red>建议</red>：XXXXXXXXXXXX
+▶ **XXXXXXX**
+    ▷ XXXXXXXXXX
+    ▷ <red>建议</red>：XXXXXXXXXXXX
+---
+***四、后续优化重点***
+▶ **XXXXXXXX**：XXXXXXXX
+▶ **XXXXXXXX**：XXXXXXXX
+---
+***五、风险预警***
+▶ XXXXXXXXXXXXXXXXX"""
+    return template
+
 
 def deepseek_chat(content: str):
     """
@@ -777,6 +820,8 @@ def deepseek_chat(content: str):
         model = 'deepseek-reasoner'
     elif open_ai_model == '百炼r1':
         model = 'deepseek-r1'
+    elif open_ai_model == '百炼v3':
+        model = 'deepseek-v3'
 
     # 如果模型变量为空，说明OPEN_AI_MODEL配置错误
     if not model:
@@ -810,7 +855,8 @@ def deepseek_chat(content: str):
         is_content: bool = False
         # 处理流式响应
         for chunk in completion:  # 流式响应用这个
-            reasoning_content: str = chunk.choices[0].delta.reasoning_content
+            response_delta = dict(chunk.choices[0].delta)
+            reasoning_content: str = response_delta.get('reasoning_content')
             content: str = chunk.choices[0].delta.content
             # 处理思考过程内容
             if reasoning_content is not None:
@@ -856,7 +902,6 @@ def extract_matching(pattern, owner):
     match = regex.findall(owner)
     # 返回所有匹配项的列表
     return match
-
 
 
 def get_days(start_date, end_date, is_workday=True):
@@ -1133,7 +1178,6 @@ def create_bar_plot(title, data: dict):
     }
 
 
-
 @create_plot
 def create_broken_line_plot(title, data: dict):
     """
@@ -1202,7 +1246,6 @@ def create_broken_line_plot(title, data: dict):
         'maxBarHeight': np.max(np_data),
         'ax': ax,
     }
-
 
 
 def upload_file(file):
@@ -2524,12 +2567,12 @@ class SoftwareQualityRating:
         if self.bugTotal:
             # 打印各优先级未修复BUG的数量
             self.bugRepairScoreMsg += \
-                f'''P0=致命缺陷, P1=严重缺陷, P2=一般缺陷、提示、建议
+                f'''P0=致命缺陷, P1=严重缺陷, P2=一般缺陷、提示、建议;创建当天未修复BUG不一定是指项目上线当天未修复BUG
 在项目上线当天存在P0或者P1未修复BUG数为：{_print_text_font(len(self.unrepairedBugs["deployProdDayUnrepaired"]["P0P1"]), color="green")}
 在项目上线当天存在P2未修复BUG数为：{_print_text_font(len(self.unrepairedBugs["deployProdDayUnrepaired"]["P2"]), color="green")}
-P0未当天修复BUG数为：{_print_text_font(len(self.unrepairedBugs["onThatDayUnrepaired"]["P0"]), color="green")}
-P1未当天修复BUG数为：{_print_text_font(len(self.unrepairedBugs["onThatDayUnrepaired"]["P1"]), color="green")}
-P2未当天修复BUG数为：{_print_text_font(len(self.unrepairedBugs["onThatDayUnrepaired"]["P2"]), color="green")}'''
+P0未创建当天修复BUG数为：{_print_text_font(len(self.unrepairedBugs["onThatDayUnrepaired"]["P0"]), color="green")}
+P1未创建当天修复BUG数为：{_print_text_font(len(self.unrepairedBugs["onThatDayUnrepaired"]["P1"]), color="green")}
+P2未创建当天修复BUG数为：{_print_text_font(len(self.unrepairedBugs["onThatDayUnrepaired"]["P2"]), color="green")}'''
             print(self.bugRepairScoreMsg)
             print('-' * LINE_LENGTH)
 
@@ -2615,77 +2658,51 @@ BUG未修复数为：{_print_text_font(unrepaired_bug_count, color="green")}'''
         无
         """
         # 构建摘要的基本信息
-        text = f"""
-需求名称: {self.requirementName}
-开发周期总天数为：{round(self.developmentCycle, 1)}
-BUG总数为: {self.bugTotal}
-开发人员数量为: {self.developerCount}
-"""
+        text = f"需求名称: {self.requirementName},开发周期总天数为：{round(self.developmentCycle, 1)},BUG总数为: {self.bugTotal},开发人员数量为: {self.developerCount};"
 
         # 如果有BUG等级分布数据，则添加到摘要中
         if self.bugLevelsCount:
-            text += f"""
-BUG等级分布情况为: 
-{self.bugLevelsCount}
-"""
+            text += f"BUG等级分布情况为:{self.bugLevelsCount};"
 
         # 如果有评分内容，则添加到摘要中
         if self.scoreContents:
             text += '项目研发评分情况:'
             for scoreData in self.scoreContents:
-                text += f"""
-{scoreData['title']}评分:
-{scoreData['scoreRule']}
-得分为: {scoreData['score']}
-"""
+                text += f"{scoreData['title']}评分:{scoreData['scoreRule']},得分为: {scoreData['score']};"
 
-        # 如果有开发人员工作小时数据，则添加到摘要中
-        if self.workHours:
-            text += f"""
-开发人员工时情况(单位为小时): 
-{self.workHours}
-"""
-
-        # 如果有BUG修复者数据，则添加到摘要中
-        if self.fixers:
-            text += f"""
-开发人员修复BUG情况(数值为BUG修复数): 
-{self.fixers}
-"""
-
-        # 如果有各端缺陷级别分布数据，则添加到摘要中
-        if self.bugLevelsMultiClientCount:
-            text += f"""
-各端缺陷级别分布为(数值为BUG数量): 
-{self.bugLevelsMultiClientCount}
-"""
-
-        # 如果有各端缺陷来源分布数据，则添加到摘要中
-        if self.bugSourceMultiClientCount:
-            text += f"""
-各端缺陷来源分布为(数值为BUG数量): 
-{self.bugSourceMultiClientCount}
-"""
+        # 存在工时、修复BUG情况、缺陷级别分布、缺陷来源分布等数据，则添加到摘要中
+        if self.workHours and self.fixers and self.bugLevelsMultiClientCount and self.bugSourceMultiClientCount:
+            text += (f"开发人员工时情况(单位为小时): {self.workHours},"
+                     f"开发人员修复BUG情况(数值为BUG修复数): {self.fixers},"
+                     f"各端缺陷级别分布为(数值为BUG数量): {self.bugLevelsMultiClientCount},"
+                     f"各端缺陷来源分布为(数值为BUG数量): {self.bugSourceMultiClientCount},"
+                     f"总分:{sum(self.score.values())}")
+            text += ';'
 
         # 添加测试经理的需求说明和格式要求
-        text += ('我是一个测试经理，我现在需要做提测质量报告分析，根据以上信息给我一个对开发情况和测试结果的一个详细总结、点评和建议, '
-                 '在总结中可以看到一些不足之处的描述、改进办法和建议之类的, 并且需要美观的格式、描述清晰、直观、言简意赅、简明扼要\n'
-                 '\n'
-                 '下面是格式要求：\n'
-                 '不要有尾部的签名和日期, 内容不要带表格，1级标题直接从分析的各个类型开始，又重复写质量总结或者报告分析之类的标题了\n'
-                 '1级主题文字前后各加"***"并且加上序号(一、二、三、)，并且把2级主题字体加粗(需要加粗的字体前后各加**), 1级标题于下一个1级标题之间需要加分隔横线(用"---"来表示, 不要给我多三个以上的"-"), 不要在1级标题和1级标题的内容之间分隔横线\n'
-                 '1级主题下面的内容每一行开头统一使用"▶ "作为开头（不要给1级主题加）, 然后2级主题下面的内容每一行最前面用"    "四个空格来制造缩进效果并且统一使用"▷"开头, 如果还有下层内容使用"        "八个空格并且使用"-"开头\n'
-                 '将内容中的关键点使用<red>内容</red>标识\n'
-                 '我需要将总结写进%(reportSummary)s中, 请给我合理的格式, 我只需要用来代替reportSummary的内容, 不要把%(reportSummary)s也写在内容中\n'
-                 '行尾最后内容中不要出现备注, 比如: "注: *********"\n'
-                 '内容正常返回就行, 不需要有html的标签, 我自己会处理\n')
+        text += ('重点:我是一个测试经理，我现在需要做提测质量报告分析，根据以上信息给我一个对开发情况和测试结果的一个详细总结、点评和建议, '
+                 '在总结中可以看到一些不足之处的描述、改进办法和建议之类的, 并且需要美观的格式、描述清晰、直观、言简意赅、简明扼要、关键部分需要详细（比如BUG总数是多少，重启占比多少）'
+                 '项目上线当天未修复BUG数的数量才是项目上线当天未修复的BUG数, 创建当天未修复的BUG数不是指项目上线当天未修复的BUG;'
+                 '下面是格式要求：'
+                 # '不要有尾部的签名和日期, 内容不要带表格，1级标题直接从分析的各个类型开始，又重复写质量总结或者报告分析之类的标题了\n'
+                 # '1级主题文字前后各加"***"并且加上序号(一、二、三、)，并且把2级主题字体加粗(需要加粗的字体前后各加**), 1级标题于下一个1级标题之间需要加分隔横线(用"---"来表示, 不要给我多三个以上的"-"), 不要在1级标题和1级标题的内容之间分隔横线\n'
+                 # '1级主题下面的内容每一行开头统一使用"▶ "作为开头（不要给1级主题加）, 然后2级主题下面的内容每一行最前面用"    "四个空格来制造缩进效果并且统一使用"▷ "开头, 如果还有下层内容使用"        "八个空格并且使用"-"开头\n'
+                 '将内容中的关键点使用<red>内容</red>标识,'
+                 # '我需要将总结写进%(reportSummary)s中, 请给我合理的格式, 我只需要用来代替reportSummary的内容, 不要把%(reportSummary)s也写在内容中\n'
+                 # '行尾最后内容中不要出现备注, 比如: "注: *********"\n'
+                 # '内容正常返回就行, 不需要有html的标签, 我自己会处理\n'
+                 )
+        text += ';'
 
         # 如果定义了报告摘要的组成部分，则添加到摘要中
         if TEST_REPORT_SUMMARY_COMPOSITION:
             text += '组成部分为: ' + '、'.join(TEST_REPORT_SUMMARY_COMPOSITION)
 
-        # 添加测试报告的HTML内容
-        text += self.testReportHtml
+        text = text.replace(' ', '')
+
+        # # 添加测试报告的HTML内容
+        # text += self.testReportHtml
+        text += f'\n输出模板(只是参考, 按照实际的来写):{ai_output_template()}'
 
         # 循环生成报告摘要，直到满足条件
         while True:
@@ -2830,7 +2847,6 @@ BUG等级分布情况为:
                 # 捕获异常并打印堆栈信息
                 traceback.print_exc()
                 raise e
-
 
 
 if __name__ == "__main__":
