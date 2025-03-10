@@ -1,12 +1,5 @@
 # 2025年3月9日00:35:14
 
-"""
-1、加入各大评分项的分数以及内容传给ds进行分析
-2、分析结果汇总全部放进测试报告里的“总结”后
-3、针对每个图标相关的代码和数据，一个一个的丢给DS进行分析
-4、最后统筹加入优化代码  添加注释
-"""
-
 # 导入必要的库
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
@@ -86,8 +79,6 @@ scraper = cloudscraper.create_scraper(
         'desktop': True,  # 模拟桌面环境，而非移动设备
     }
 )
-
-# matplotlib.use('Agg')
 
 # BUG列表中必须包含的字段
 BUG_LIST_MUST_KEYS = [
