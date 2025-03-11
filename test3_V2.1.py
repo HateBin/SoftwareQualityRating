@@ -11,6 +11,7 @@
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Dict, Optional, Union, TypeVar, List, Tuple, Pattern
 from io import BytesIO
 from openai import OpenAI
 import matplotlib.pyplot as plt
@@ -28,9 +29,10 @@ import numpy as np
 import platform
 import json
 import math
+import time
 
-IS_CREATE_REPORT = False  # 是否创建报告
-IS_CREATE_AI_SUMMARY = False  # 是否创建AI总结
+IS_CREATE_REPORT = True  # 是否创建报告
+IS_CREATE_AI_SUMMARY = True  # 是否创建AI总结
 IS_SUPPORT_RETRY_CREATE_AI_SUMMARY = True  # 是否支持重试创建AI总结, 生成完成后可input进行重新生成
 OPEN_AI_MODEL = '百炼v3'  # deepseek模型名称，目前支持：v3、r1、百炼r1、百炼v3
 # OPEN_AI_KEY = 'sk-00987978d24e445a88f1f5a57944818b'  # OpenAI密钥  deepseek官方
@@ -87,7 +89,8 @@ scraper = cloudscraper.create_scraper(
     }
 )
 
-# matplotlib.use('Agg')
+# 定义泛型类型变量用于返回类型
+ResponseType = TypeVar('ResponseType', requests.Response, Dict[str, Any])
 
 # BUG列表中必须包含的字段
 BUG_LIST_MUST_KEYS = [
@@ -562,7 +565,7 @@ def _input(text: str, input_type: type = None, allow_content: list = None) -> an
             # 提取目标类型名称（如 'int'/'float'）
             type_name = input_type.__name__ if input_type else '字符串'
             # 生成具体错误描述
-            error_detail = f"无法将输入 '{raw_input}' 转换为 {type_name} 类型"
+            error_detail = f"输入的内容数据类型不匹配, 期望为 {type_name} 类型"
             print(_print_text_font(f"\n格式错误：{error_detail}\n", color='red'))
 
         except Exception as e:  # 防御性编程，捕获其他未预料异常
@@ -570,7 +573,7 @@ def _input(text: str, input_type: type = None, allow_content: list = None) -> an
             print(_print_text_font("\n发生未预期的错误，请重新输入\n", color='red'))
 
 
-def _print_text_font(text: str, is_weight: bool = False, color: str = 'red') -> str:
+def _print_text_font(text: str or int, is_weight: bool = False, color: str = 'red') -> str:
     """
     生成带有指定颜色和字重的ANSI转义序列格式化文本
 
@@ -578,8 +581,8 @@ def _print_text_font(text: str, is_weight: bool = False, color: str = 'red') -> 
     返回的字符串可直接用于print()函数，在支持ANSI转义的终端中显示彩色文本。
 
     参数详解:
-        text (str):
-            需要格式化的文本内容。支持任意字符串，包含多行文本和特殊字符。
+        text (str or int):
+            需要格式化的文本内容。支持任意字符串或者数字，包含多行文本和特殊字符。
             示例："Hello World"
 
         is_weight (bool):
@@ -796,14 +799,14 @@ def get_workitem_status_transfer_history(entity_type: str, entity_id: str) -> li
         若接口无数据或请求失败，返回空列表
 
     异常:
-        requests.HTTPError: HTTP状态码非2xx时抛出
+        requests.JSONDecodeError: 响应数据解析json异常时抛出
         ValueError: 响应数据解析异常时抛出
         KeyError: 响应数据结构缺失关键字段时抛出
 
     实现逻辑:
         1. 动态构建API请求URL和鉴权参数
         2. 通过统一请求方法fetch_data发送GET请求
-        3. 校验响应状态码和数据完整性
+        3. 校验数据完整性
         4. 提取核心业务数据并返回结构化结果
     """
     # ------------------------------
@@ -825,22 +828,18 @@ def get_workitem_status_transfer_history(entity_type: str, entity_id: str) -> li
         "entity_id": str(entity_id)  # 防御性类型转换
     }
 
+    # ------------------------------
+    # 阶段2：发送API请求
+    # ------------------------------
+    # 通过封装后的fetch_data方法发送GET请求
+    # 该方法已内置重试机制和Cookie管理
+    response = fetch_data(
+        url=url,
+        params=params,
+        method="GET"
+    )
+
     try:
-        # ------------------------------
-        # 阶段2：发送API请求
-        # ------------------------------
-        # 通过封装后的fetch_data方法发送GET请求
-        # 该方法已内置重试机制和Cookie管理
-        response = fetch_data(
-            url=url,
-            params=params,
-            method="GET"
-        )
-
-        # 显式检查HTTP状态码（fetch_data已处理非200状态码，此处为防御性校验）
-        # 触发HTTPError时将中断流程
-        response.raise_for_status()
-
         # ------------------------------
         # 阶段3：响应数据处理
         # ------------------------------
@@ -878,259 +877,686 @@ def get_workitem_status_transfer_history(entity_type: str, entity_id: str) -> li
         ) from orig_err
 
 
-def get_requirement_list_config():
+def get_requirement_list_config() -> list:
     """
-    获取tapd需求列表展示的列字段信息, 用于编辑列字段配置
-    :return: 已json格式返回接口响应的data信息
-    """
-    url = HOST + '/api/basic/userviews/get_show_fields'
-    params = {
-        "id": REQUIREMENT_LIST_ID,
-        "workspace_id": PROJECT_ID,
-        "location": "/prong/stories/stories_list",
-        "form": "show_fields",
-    }
-    response = fetch_data(url, params=params, method='GET').json()
-    if response and response.get('data', dict).get('fields', list):
-        return response['data']['fields']
-    else:
-        return
+    获取TAPD需求列表视图的列字段配置信息
 
-
-def edit_requirement_list_config(custom_fields: str):
-    """
-    编辑"需求"列表中展示的列字段
-    :param custom_fields: 配置需要展示出来的列字段, 示例: id;title;name;status
-    :return: 如果接口返回成功时, 返回True, 否则False
-    """
-    url = HOST + '/api/basic/userviews/edit_show_fields'
-    data = {
-        "id": REQUIREMENT_LIST_ID,
-        "custom_fields": custom_fields,
-        "workspace_id": PROJECT_ID,
-        "location": "/search/get_all/bug",
-    }
-    response = fetch_data(url, json=data, method='POST').json()
-    if response and response.get('meta', {}).get('message', str) == 'success':
-        return True
-    else:
-        return False
-
-
-def get_query_filtering_list_config():
-    """
-    获取tapd"查询过滤"列表展示的列字段信息, 用于编辑列字段配置
-    :return: 已json格式返回接口响应的data信息
-    """
-    url = HOST + '/api/search_filter/search_filter/get_show_fields'
-    data = {
-        "workspace_ids": [
-            PROJECT_ID
-        ],
-        "location": "/search/get_all/bug",
-        "form": "show_fields",
-    }
-    response = fetch_data(url, json=data, method='POST').json()
-    if response and response.get('data', dict).get('fields', list):
-        return response['data']['fields']
-    else:
-        return
-
-
-def edit_query_filtering_list_config(custom_fields: str):
-    """
-    编辑"查询过滤"列表中展示的列字段
-    :param custom_fields: 配置需要展示出来的列字段, 示例: id;title;name;status
-    :return: 如果接口返回成功时, 返回True, 否则False
-    """
-    url = HOST + '/api/search_filter/search_filter/edit_show_fields'
-    data = {
-        "custom_fields": custom_fields,
-        "location": "/search/get_all/bug",
-    }
-    response = fetch_data(url, json=data, method='POST').json()
-    if response and response.get('meta', {}).get('message', str) == 'success':
-        return True
-    else:
-        return False
-
-
-def get_user_detail():
-    """
-    获取当前用户信息
-    :return: 用户信息
-    """
-    # 获取用户信息的URL
-    url = HOST + '/api/aggregation/user_and_workspace_aggregation/get_user_and_workspace_basic_info'
-
-    # 发送GET请求并获取响应数据，然后将其解析为JSON格式
-    response = fetch_data(url, method='GET').json()
-
-    # 返回解析后的JSON数据
-    return response
-
-
-def fetch_data(url, params=None, data=None, json=None, files=None, method='GET'):
-    """
-    发送HTTP请求并处理响应。
-
-    本函数根据指定的URL和请求方法发送HTTP请求，并处理可能的请求失败情况。
-    如果请求失败，将重试最多3次。如果重试次数超过3次，程序将退出。
-
-    参数:
-    - url (str): 目标URL。
-    - params (dict, optional): URL参数。
-    - data (dict, optional): 发送的数据，适用于POST请求。
-    - json (dict, optional): 发送的JSON数据，适用于POST请求。
-    - files (dict, optional): 发送的文件，适用于POST请求。
-    - method (str, optional): 请求方法，默认为'GET'。
+    通过TAPD官方API接口，获取指定需求列表视图的字段展示配置，包括系统字段和自定义字段。
+    该配置决定在需求列表页面中展示哪些字段及字段的排列顺序。
 
     返回:
-    - response: HTTP响应对象。
+        list: 包含已配置字段标识符的列表，按视图中的显示顺序排列。
+              示例: ['id', 'title', 'status', 'owner']
+              若接口无数据或请求失败，返回空列表
+
+    异常:
+        requests.JSONDecodeError: 响应数据解析json异常时抛出
+        ValueError: 响应数据解析异常时抛出
+        KeyError: 响应数据结构缺失关键字段时抛出
+
+    实现逻辑:
+        1. 构造带鉴权参数的API请求URL
+        2. 发送GET请求获取配置数据
+        3. 校验响应数据结构完整性
+        4. 提取字段配置信息并返回
     """
-    # 初始化重试计数
-    retry_count = 0
-    # 无限循环，直到成功或失败退出
-    while retry_count <= 3:
-        # 如果重试次数在1到3之间，打印重试信息
+    # 构建完整API端点URL
+    url = HOST + '/api/basic/userviews/get_show_fields'
+
+    # 构造查询参数
+    params = {
+        "id": REQUIREMENT_LIST_ID,  # 需求列表视图ID
+        "workspace_id": PROJECT_ID,  # 项目空间ID
+        "location": "/prong/stories/stories_list",  # 视图位置路径
+        "form": "show_fields",  # 表单类型标识
+    }
+
+    # 发送API请求并获取响应
+    response = fetch_data(url, params=params, method='GET').json()
+
+    try:
+        # 数据完整性校验（防御性编程）
+        if not isinstance(response, dict):
+            raise ValueError("响应数据格式异常，预期字典类型")
+
+        data = response.get('data', {})
+        if not isinstance(data, dict):
+            raise KeyError("响应数据缺失'data'字段")
+
+        fields = data.get('fields', [])
+        if not isinstance(fields, list):
+            raise ValueError("字段配置数据格式异常，预期列表类型")
+
+        return fields
+
+    except requests.JSONDecodeError as json_err:
+        error_msg = f"JSON解析失败，原始响应: {response.text[:200]}..." if 'response' in locals() else "响应内容为空"
+        raise ValueError(error_msg) from json_err
+    except KeyError as key_err:
+        raise KeyError(f"响应数据缺失关键字段: {str(key_err)}") from key_err
+
+
+def edit_requirement_list_config(custom_fields: str) -> bool:
+    """
+    编辑需求列表视图的列展示字段配置
+
+    通过TAPD官方API接口，更新指定需求列表视图的字段展示配置。
+    该操作将直接影响需求列表页面的字段显示和排序。
+
+    参数:
+        custom_fields (str): 配置的字段标识符字符串，多个字段用分号分隔
+                            示例: "id;title;status;owner"
+
+    返回:
+        bool: 操作结果标识
+              - True: 配置更新成功
+              - False: 配置更新失败
+
+    异常:
+        requests.JSONDecodeError: 响应数据解析json异常时抛出
+        ValueError: 输入参数格式异常或响应数据异常时抛出
+
+    实现逻辑:
+        1. 参数格式校验
+        2. 构造带鉴权参数的API请求URL
+        3. 发送POST请求更新配置
+        4. 校验响应状态及业务状态码
+    """
+    # 参数校验
+    if not isinstance(custom_fields, str) or ';' not in custom_fields:
+        raise ValueError("参数格式异常，应为分号分隔的字符串")
+
+    # 构建完整API端点URL
+    url = HOST + '/api/basic/userviews/edit_show_fields'
+
+    # 构造请求体数据
+    data = {
+        "id": REQUIREMENT_LIST_ID,  # 需求列表视图ID
+        "custom_fields": custom_fields,  # 字段配置字符串
+        "workspace_id": PROJECT_ID,  # 项目空间ID
+        "location": "/search/get_all/bug",  # 视图位置路径（保留字段）
+    }
+
+    # 发送API请求并获取响应
+    response = fetch_data(url, json=data, method='POST').json()
+
+    try:
+        # 响应状态校验（防御性编程）
+        meta = response.get('meta', {})
+        if meta.get('message') == 'success':
+            return True
+        return False
+
+    except requests.JSONDecodeError as json_err:
+        error_msg = f"响应数据非JSON格式，原始内容: {response.text[:200]}..."
+        raise ValueError(error_msg) from json_err
+
+
+def get_query_filtering_list_config() -> list:
+    """
+    获取TAPD查询过滤列表的字段展示配置
+
+    通过TAPD官方API接口，获取指定查询过滤视图的字段展示配置，包含系统字段和自定义字段。
+    该配置决定在缺陷列表页面中展示哪些字段及字段的排列顺序。
+
+    返回:
+        list: 包含已配置字段标识符的列表，按视图中的显示顺序排列。
+              示例: ['id', 'title', 'status', 'owner']
+              若接口无数据或请求失败，返回空列表
+
+    异常:
+        requests.JSONDecodeError: 响应数据解析json异常时抛出
+        ValueError: 响应数据解析异常时抛出
+        KeyError: 响应数据结构缺失关键字段时抛出
+
+    实现逻辑:
+        1. 构造带鉴权参数的API请求URL
+        2. 发送POST请求获取配置数据
+        3. 校验响应数据结构完整性
+        4. 提取字段配置信息并返回
+    """
+    # 构建完整API端点URL（HOST取自全局常量）
+    url = HOST + '/api/search_filter/search_filter/get_show_fields'
+
+    # 构造请求体数据
+    request_body = {
+        "workspace_ids": [PROJECT_ID],  # 项目空间ID列表（当前仅支持单个项目）
+        "location": "/search/get_all/bug",  # 视图位置路径（缺陷列表页面）
+        "form": "show_fields",  # 表单类型标识
+    }
+
+    # 发送API请求并获取响应（使用封装后的fetch_data方法）
+    response = fetch_data(
+        url=url,
+        json=request_body,
+        method='POST'
+    ).json()
+
+    try:
+        # ==================================================================
+        # 数据完整性校验（防御性编程）
+        # ==================================================================
+        # 检查顶层data字段是否存在（TAPD标准响应结构）
+        if "data" not in response:
+            raise KeyError("API响应缺少'data'字段")
+
+        # 提取业务数据主体
+        config_data = response["data"]
+
+        # 检查fields字段是否存在且为列表类型
+        if not isinstance(config_data.get('fields'), list):
+            raise ValueError(
+                f"字段配置数据格式异常，预期列表类型，实际类型：{type(config_data.get('fields'))}"
+            )
+
+        return config_data['fields']
+
+    except requests.JSONDecodeError as json_err:
+        # 捕获JSON解析异常并附加上下文信息
+        error_msg = f"响应内容非JSON格式，原始内容：{response.text[:200]}..." if 'response' in locals() else "响应内容为空"
+        raise ValueError(error_msg) from json_err
+    except KeyError as key_err:
+        # 细化键缺失异常信息
+        raise KeyError(f"响应数据缺失关键字段：{str(key_err)}") from key_err
+    except Exception as orig_err:
+        # 通用异常包装（保留原始堆栈信息）
+        raise RuntimeError("获取查询过滤列表配置失败") from orig_err
+
+
+def edit_query_filtering_list_config(custom_fields: str) -> bool:
+    """
+    编辑查询过滤列表的字段展示配置
+
+    通过TAPD官方API接口，更新指定查询过滤视图的字段展示配置。
+    该操作将直接影响缺陷列表页面的字段显示和排序。
+
+    参数:
+        custom_fields (str): 字段配置字符串，多个字段用分号分隔
+                            格式要求：字段标识符必须存在于系统字段或自定义字段中
+                            示例: "id;title;status;current_owner"
+
+    返回:
+        bool: 操作结果标识
+              - True: 配置更新成功
+              - False: 配置更新失败
+
+    异常:
+        requests.JSONDecodeError: 响应数据解析json异常时抛出
+        ValueError: 输入参数格式异常或响应数据异常时抛出
+
+    实现逻辑:
+        1. 参数格式校验
+        2. 构造带鉴权参数的API请求URL
+        3. 发送POST请求更新配置
+        4. 校验响应状态及业务状态码
+    """
+    # ==================================================================
+    # 参数校验阶段
+    # ==================================================================
+    if not isinstance(custom_fields, str) or ';' not in custom_fields:
+        raise ValueError("参数格式异常，应为分号分隔的字符串")
+
+    # ==================================================================
+    # 请求构造阶段
+    # ==================================================================
+    # 构建完整API端点URL
+    url = HOST + '/api/search_filter/search_filter/edit_show_fields'
+
+    # 构造请求体数据
+    request_body = {
+        "custom_fields": custom_fields,  # 字段配置字符串
+        "location": "/search/get_all/bug",  # 视图位置路径（与获取配置时保持一致）
+    }
+
+    # ==================================================================
+    # 请求执行阶段
+    # ==================================================================
+    response = fetch_data(
+        url=url,
+        json=request_body,
+        method='POST'
+    ).json()
+
+    try:
+        # ==================================================================
+        # 响应校验阶段
+        # ==================================================================
+        # 检查meta字段是否存在（TAPD标准响应结构）
+        if "meta" not in response:
+            raise KeyError("API响应缺少'meta'字段")
+
+        # 提取业务状态码
+        meta_info = response["meta"]
+        if meta_info.get('message') == 'success':
+            return True
+        return False
+
+    except requests.JSONDecodeError as json_err:
+        error_msg = f"JSON解析失败，原始响应: {response.text[:200]}..." if 'response' in locals() else "响应内容为空"
+        raise ValueError(error_msg) from json_err
+    except KeyError as key_err:
+        raise KeyError(f"响应数据缺失关键字段: {str(key_err)}") from key_err
+
+
+def get_user_detail() -> dict:
+    """
+    获取当前用户的详细信息
+
+    通过TAPD官方API接口，获取当前认证用户的完整信息，包括：
+    - 用户基础信息（ID、昵称、邮箱等）
+    - 所属部门信息
+    - 权限配置信息
+    - 工作空间关联信息
+
+    返回:
+        dict: 结构化用户信息
+        若接口无数据或请求失败，返回空字典
+
+    异常:
+        requests.JSONDecodeError: 响应数据解析json异常时抛出
+        ValueError: 响应数据解析异常时抛出
+        KeyError: 响应数据结构缺失关键字段时抛出
+
+    实现逻辑:
+        1. 构造用户信息API端点URL
+        2. 发送GET请求获取用户数据
+        3. 校验响应状态码和数据完整性
+        4. 提取核心用户数据并返回
+    """
+    # ==================================================================
+    # 阶段1：请求参数构造
+    # ==================================================================
+    # 拼接用户信息API端点（HOST取自全局常量）
+    api_path = "/api/aggregation/user_and_workspace_aggregation/get_user_and_workspace_basic_info"
+    url = f"{HOST}{api_path}"  # 完整URL示例：https://www.tapd.cn/api/aggregation/...
+
+    # ==================================================================
+    # 阶段2：发送API请求
+    # ==================================================================
+    # 通过封装后的fetch_data方法发送GET请求（已内置重试和Cookie管理）
+    response = fetch_data(
+        url=url,
+        method="GET"
+    )
+
+    try:
+        # ==================================================================
+        # 阶段3：响应数据处理
+        # ==================================================================
+        # 将响应内容解析为JSON格式（可能抛出JSONDecodeError）
+        response_json = response.json()
+
+        # 数据完整性校验（多层防御校验）：
+        # 1. 检查顶层data字段是否存在
+        if "data" not in response_json:
+            raise KeyError("API响应缺少'data'字段")
+
+        # 2. 检查用户数据主体结构
+        user_data = response_json["data"]
+        if "get_current_user_ret" not in user_data:
+            raise KeyError("响应数据缺少用户信息主体字段")
+
+        # 3. 检查核心用户信息字段
+        core_user_info = user_data["get_current_user_ret"].get("data", {})
+        return core_user_info
+
+    except requests.JSONDecodeError as json_err:
+        # 捕获JSON解析异常并附加上下文信息
+        error_msg = f"响应内容非JSON格式，原始内容：{response.text[:200]}..." if 'response' in locals() else "响应内容为空"
+        raise ValueError(error_msg) from json_err
+    except KeyError as key_err:
+        # 细化键缺失异常信息
+        raise KeyError(f"用户数据解析失败：{str(key_err)}") from key_err
+    except Exception as orig_err:
+        # 通用异常包装（保留原始堆栈信息）
+        raise RuntimeError("获取用户信息失败") from orig_err
+
+
+def fetch_data(
+        url: str,
+        params: Optional[Dict[str, Any]] = None,
+        data: Optional[Dict[str, Any]] = None,
+        json: Optional[Dict[str, Any]] = None,
+        files: Optional[Dict[str, Any]] = None,
+        method: str = 'GET'
+) -> ResponseType:
+    """
+    执行HTTP请求并处理重试逻辑
+
+    核心功能：
+    1. 统一请求执行入口，支持GET/POST/PUT/DELETE方法
+    2. 自动处理会话Cookie管理
+    3. 智能重试机制（网络错误/鉴权失败/服务端错误）
+    4. 标准化响应处理
+
+    参数:
+        url (str): 请求目标URL
+        params (Dict, optional): URL查询参数. 默认None
+        data (Dict, optional): 表单数据. 默认None
+        json (Dict, optional): JSON请求体. 默认None
+        files (Dict, optional): 文件上传数据. 默认None
+        method (str): HTTP方法，支持['GET', 'POST', 'PUT', 'DELETE']. 默认'GET'
+
+    返回:
+        Union[requests.Response, Dict]:
+            - 成功时返回requests.Response对象
+            - JSON解析失败时返回原始字典
+
+    异常:
+        requests.RequestException: 网络相关错误
+        ValueError: 参数校验失败
+        RuntimeError: 超过最大重试次数
+
+    实现流程:
+        1. 参数校验与准备
+        2. 请求执行与状态检查
+        3. 会话失效检测与更新
+        4. 智能重试控制
+        5. 响应格式标准化
+    """
+    # ==================================================================
+    # 阶段1：参数校验与准备
+    # ==================================================================
+    # 校验HTTP方法有效性
+    method = method.upper()
+    if method not in {'GET', 'POST', 'PUT', 'DELETE'}:
+        raise ValueError(f"不支持的HTTP方法: {method}")
+
+    # 初始化重试计数器
+    retry_count: int = 0
+    max_retries: int = 3
+    last_exception: Optional[Exception] = None
+
+    # ==================================================================
+    # 阶段2：请求循环执行
+    # ==================================================================
+    while retry_count <= max_retries:
+        # 打印重试日志（非首次尝试时）
         if retry_count > 0:
-            print(f'正在重试请求(重试{retry_count}次): {url}')
+            print(f'请求重试中({retry_count}/{max_retries}): {method} {url}')
+
+        # 执行请求
+        response = scraper.request(
+            method=method,
+            url=url,
+            params=params,
+            data=data,
+            json=json,
+            files=files,
+            timeout=30  # 统一超时设置
+        )
         try:
-            # 根据请求方法发送HTTP请求
-            response = scraper.request(method, url, params=params, data=data, json=json, files=files)
-            # 检查响应状态码
+            # ==================================================================
+            # 阶段3：响应处理
+            # ==================================================================
+            # 强制检查HTTP状态码
             response.raise_for_status()
-        # 捕获HTTP请求异常
+
+            if (response.status_code == 200
+                    and "meta" in response.text
+                    and "20002" in response.text):
+                get_session_id()  # 重新获取会话
+                raise requests.HTTPError('会话已过期', response=response)
+
+            # 返回原始响应对象供后续处理
+            return response
+
         except requests.RequestException as e:
-            # 打印错误信息
-            print(f"请求失败: {e}")
-            # 更新重试计数
+            # ==================================================================
+            # 阶段4：异常分类处理
+            # ==================================================================
+            last_exception = e
+            response = getattr(e, 'response', None)
+
+            # 处理会话过期(403)和业务错误码
+            if isinstance(e, requests.HTTPError):
+                if (response.status_code == 200
+                        and "meta" in response.text
+                        and "20002" in response.text):
+                    print('检测到会话过期，正在更新Cookie...')
+                    get_session_id()  # 重新获取会话
+                elif 500 <= response.status_code < 600:
+                    print(f'服务端错误({response.status_code})，等待重试...')
+
+            # 更新重试计数器
             retry_count += 1
-        else:
-            # 检查响应状态码以确定是否需要更新cookie
-            if response.status_code == 403 or (
-                    response.status_code == 200 and "meta" in response.text and "20002" in response.text):
-                print('cookie已失效, 正在获取新的cookie')
-                # 调用get_session_id函数以获取新的cookie
-                get_session_id()
-                print('cookie已更新')
-                # 更新重试计数
-                retry_count += 1
-            else:
-                # 如果重试次数大于0，打印重试成功信息
-                if retry_count > 0:
-                    print(f"重试请求成功: {url}")
-                # 返回response 对象
-                return response
-    # 如果重试次数超过3次，打印错误信息并退出程序
-    print(f"请求失败，重试次数过多，程序退出; url: {url}")
-    sys.exit()
 
+            # 最终重试检查
+            if retry_count > max_retries:
+                break
 
-def _ai_result_label_switch_html_label(
-        result: str,
-        old_text: str = None,
-        re_exp: str = None,
-        new_text: str or list[str] or tuple[str] = None
-) -> str:
-    """
-    根据给定的条件替换字符串中的特定文本。
+            # 智能等待策略（指数退避）
+            wait_time = min(2 ** retry_count, 10)  # 上限10秒
+            print(f'{wait_time}秒后重试...')
+            time.sleep(wait_time)
 
-    :param result: 原始结果字符串。
-    :param old_text: 需要被替换的旧文本。
-    :param re_exp: 正则表达式，用于匹配需要替换的文本。
-    :param new_text: 替换后的文本，可以是字符串，也可以是包含两个字符串的列表或元组。
-    :return: 替换后的结果字符串。
-    """
-    # 当提供了正则表达式和新的文本，并且新的文本是列表或元组时
-    if re_exp and new_text is not None and isinstance(new_text, (list, tuple)):
-        # 从正则表达式中提取需要替换的旧文本
-        old_texts: list[str] = re_exp.replace('\\', '').split('.*?')
-        # 使用正则表达式提取匹配的文本
-        re_results: list[str] = extract_matching(re_exp, result)
-        # 遍历匹配的文本，进行替换
-        for reResult in re_results:
-            re_result: str = reResult.replace(old_texts[0], '').replace(old_texts[1], '')
-            result = result.replace(reResult, new_text[0] + re_result + new_text[1])
-    # 当提供了旧文本和新的文本，并且新的文本是字符串时
-    elif old_text and new_text is not None and isinstance(new_text, str):
-        # 直接替换旧文本为新文本
-        result = result.replace(old_text, new_text)
-    # 返回替换后的结果
-    return result
+    # ==================================================================
+    # 阶段5：最终错误处理
+    # ==================================================================
+    error_msg = f"请求失败，超过最大重试次数({max_retries})"
+    if last_exception is not None:
+        error_msg += f": {str(last_exception)}"
 
+    # 包含调试信息
+    debug_info = {
+        'url': url,
+        'method': method,
+        'retries': retry_count - 1,
+        'status_code': getattr(response, 'status_code', None)
+    }
+    print(f"调试信息: {debug_info}")
+
+    raise RuntimeError(error_msg)
 
 def ai_result_switch_html(result: str) -> str:
     """
-    将AI结果中的特定文本格式转换为HTML格式。
+    将AI生成结果中的特定文本标记转换为标准HTML格式
 
-    该函数通过一系列的文本替换操作，将AI输出结果中的特定文本标记转换为相应的HTML标签，
-    以便在网页等环境中更好地显示和格式化这些结果。
+    该函数通过一系列正则匹配和文本替换操作，将AI输出内容中的标记符号转换为HTML标签，
+    使其能够在Web环境中正确显示格式和样式。转换规则包括颜色标记、标题层级、强调样式等。
 
     参数:
-    result (str): AI输出的原始文本结果，包含特定的文本格式。
+        result (str): AI输出的原始文本内容，包含约定的特殊标记符号
 
     返回:
-    str: 转换为HTML格式后的文本结果。
+        str: 转换后的HTML格式文本，可直接嵌入网页显示
+
+    异常:
+        re.error: 当正则表达式模式非法时抛出
+        ValueError: 当输入内容非字符串类型时抛出
+
+    实现逻辑:
+        1. 移除井号标记，仅作为段落分隔符处理
+        2. 转换基础排版符号（换行、水平线、空格、制表符）
+        3. 处理颜色标记（红色强调文本）
+        4. 转换标题标记（三级标题、二级标题）
+        5. 处理强调文本（加粗效果）
+        6. 防御性处理非法字符和嵌套标记
+
+    转换规则说明:
+        - "#文本" → 移除井号，作为普通段落
+        - "\n" → <br/> 换行标签
+        - "---" → <hr> 水平线
+        - 空格 → &nbsp; 非断行空格
+        - <red>文本</red> → <span style="color:#ff3b30;">文本</span>
+        - ***文本*** → <h3>文本</h3> 三级标题
+        - **文本** → <b>文本</b> 加粗文本
     """
-    # 移除井号，不进行文本替换，仅作为标记移除
-    result = _ai_result_label_switch_html_label(result=result, old_text='#', new_text='')
-    # 将换行符替换为HTML的换行标签，以在网页中正确显示换行
-    result = _ai_result_label_switch_html_label(result=result, old_text='\n', new_text='<br/>')
-    # 将三个短横线替换为HTML的水平线标签，用于分隔内容
-    result = _ai_result_label_switch_html_label(result=result, old_text='---', new_text='<hr>')
-    # 将空格替换为HTML的非断行空格实体，以在网页中正确显示空格
-    result = _ai_result_label_switch_html_label(result=result, old_text=' ', new_text='&nbsp;')
-    # 将制表符替换为四个非断行空格实体，以近似表示制表符的缩进效果
-    result = _ai_result_label_switch_html_label(result=result, old_text='\t', new_text='&nbsp;' * 4)
-    # 将<red>...</red>标记内的文本转换为红色显示，增加视觉强调效果
-    result = _ai_result_label_switch_html_label(
-        result=result,
-        re_exp=r'<red>.*?</red>',
-        new_text=('<span style="color:#ff3b30;">', '</span>')
-    )
-    # 将三个星号包围的文本转换为HTML的三级标题，提高文本的层次感
-    result = _ai_result_label_switch_html_label(
-        result=result,
-        re_exp=r'\*\*\*.*?\*\*\*',
-        new_text=('<h3>', '</h3>')
-    )
-    # 将两个星号包围的文本转换为HTML的粗体文本，增强文本的强调效果
-    result = _ai_result_label_switch_html_label(
-        result=result,
-        re_exp=r'\*\*.*?\*\*',
-        new_text=('<b>', '</b>')
-    )
-    # 返回转换完成的HTML格式文本
-    return result
+    try:
+        # ==================================================================
+        # 参数校验
+        # ==================================================================
+        if not isinstance(result, str):
+            raise ValueError("输入必须为字符串类型")
+
+        # ==================================================================
+        # 基础排版转换
+        # ==================================================================
+        # 移除段落标记井号（非破坏性处理，不影响原有结构）
+        result = result.replace('#', '')
+
+        # 换行符转换为HTML换行标签（保留段落结构）
+        result = result.replace('\n', '<br/>')
+
+        # 三个短横线转换为水平线标签（视觉分隔区块）
+        result = result.replace('---', '<hr>')
+
+        # 空格转换为非断行空格实体（保持文本对齐）
+        result = result.replace(' ', '&nbsp;')
+
+        # 制表符转换为四个非断行空格（模拟代码缩进效果）
+        result = result.replace('\t', '&nbsp;' * 4)
+
+        # ==================================================================
+        # 颜色标记处理（使用正则确保完整标签匹配）
+        # ==================================================================
+        # 匹配<red>标签对并替换为红色span（支持嵌套内容捕获）
+        result = re.sub(
+            r'<red>(.*?)</red>',
+            r'<span style="color:#ff3b30;">\1</span>',
+            result,
+            flags=re.DOTALL  # 允许跨行匹配
+        )
+
+        # ==================================================================
+        # 标题标记转换（严格匹配三级标题标记）
+        # ==================================================================
+        # 匹配***包裹的文本生成h3标题（排除中间含*的情况）
+        result = re.sub(
+            r'\*\*\*(.*?)\*\*\*',
+            r'<h3>\1</h3>',
+            result,
+            flags=re.DOTALL
+        )
+
+        # ==================================================================
+        # 强调文本处理（避免与标题标记冲突）
+        # ==================================================================
+        # 匹配**包裹的文本生成加粗标签（不支持嵌套）
+        result = re.sub(
+            r'\*\*(.*?)\*\*',
+            r'<b>\1</b>',
+            result,
+            flags=re.DOTALL
+        )
+
+        return result
+
+    except re.error as e:
+        # 包装正则错误并附加上下文信息
+        error_msg = f"正则表达式处理失败: {str(e)}"
+        raise re.error(error_msg) from e
+    except Exception as e:
+        # 通用异常处理（保留原始堆栈）
+        raise RuntimeError(f"HTML转换失败: {str(e)}") from e
 
 
-def ai_output_template() -> str:
-    template = """***一、总体评价***
-▶ 项目最终评分为XX分（满分100），整体质量处于XX水平。XXXXXXXXXXXXXXXXXXXX
----
-***二、核心亮点***
-▶ **XXXXXX**：XXXXXXXX
-▶ **XXXXXX**：XXXXXXXX
----
-***三、主要不足与改进建议***
-▶ **XXXXXXX**
-    ▷ XXXXXXXXXX
-    ▷ <red>建议</red>：XXXXXXXXXXXX
-▶ **XXXXXXX**
-    ▷ XXXXXXXXXX
-    ▷ <red>建议</red>：XXXXXXXXXXXX
-▶ **XXXXXXX**
-    ▷ XXXXXXXXXX
-    ▷ <red>建议</red>：XXXXXXXXXXXX
----
-***四、后续优化重点***
-▶ **XXXXXXXX**：XXXXXXXX
-▶ **XXXXXXXX**：XXXXXXXX
----
-***五、风险预警***
-▶ XXXXXXXXXXXXXXXXX"""
-    return template
+def ai_output_template(
+        total_score: int = 100,
+        sections: Optional[List[str]] = None,
+        section_details: Optional[Dict[str, List[str]]] = None
+) -> str:
+    """
+    生成AI总结报告的标准化模板结构
+
+    本方法提供可定制的报告模板生成能力，支持动态配置章节内容和细节描述，
+    同时保持格式规范性和视觉一致性。模板采用分级标题体系，支持多级结构化内容展示。
+
+    参数详解:
+        total_score (int): 项目总分值，用于总体评价部分展示。默认值100表示满分基准
+        sections (List[str]): 需要包含的章节标题列表，控制模板结构。可选值：
+            - "总体评价"    : 项目综合评分及总体结论
+            - "核心亮点"    : 关键成功要素展示
+            - "主要不足"    : 存在问题分析
+            - "改进建议"    : 具体优化建议
+            - "后续重点"    : 未来工作方向
+            - "风险预警"    : 潜在风险说明
+            默认包含全部章节
+        section_details (Dict[str, List[str]]): 各章节预填充的细节内容字典
+            格式示例：{
+                "总体评价": ["项目最终评分为85分", "整体质量处于良好水平"],
+                "核心亮点": ["架构设计合理性", "代码审查机制完善"]
+            }
+
+    返回:
+        str: 结构化的模板字符串，包含Markdown格式标记，可直接用于AI内容生成引导
+
+    异常:
+        ValueError: 当传入的section_details包含未在sections中声明的章节时抛出
+
+    实现策略:
+        1. 模块化结构配置：通过sections参数控制模板包含的章节及顺序
+        2. 分层内容填充：支持预定义内容占位符，提升模板实用性
+        3. 智能默认值：当参数未指定时自动生成完整模板结构
+        4. 防御性校验：确保用户自定义内容与模板结构的一致性
+
+    模板特性:
+        - 采用***作为一级标题标识符
+        - 使用▶作为二级条目标识
+        - 使用▷作为三级子项标识
+        - 支持<red>标签突出关键内容
+        - 自动生成水平分隔线
+    """
+    # ==================================================================
+    # 中文序号构建
+    # ==================================================================
+    # 转换数字编号为中文
+    def num_to_chinese(num: int) -> str:
+        """将数字转换为中文序号"""
+        chinese_num = ["一", "二", "三", "四", "五", "六", "七", "八", "九"]
+        return chinese_num[num] if 0 <= num <= len(chinese_num) else str(num)
+
+    # 处理章节参数
+    valid_sections = sections if sections else TEST_REPORT_SUMMARY_COMPOSITION
+
+    # 校验预填充内容
+    if section_details:
+        invalid_keys = set(section_details.keys()) - set(valid_sections)
+        if invalid_keys:
+            raise ValueError(f"无效的章节配置: {invalid_keys}")
+
+    # ==================================================================
+    # 模板结构构建
+    # ==================================================================
+    template = []
+
+    # 动态生成中间章节
+    for idx, section in enumerate(valid_sections):
+        # 章节标题
+        template.append(f"***{num_to_chinese(idx)}、{section}***")
+
+        # 预填充内容处理
+        if section == "总体评价":
+            template.extend([f"▶ 项目最终评分为XX分（满分{total_score}），整体质量处于XX水平。XXXXXXXXXXXXXXXXXXXX"])
+        elif section_details and section in section_details:
+            for item in section_details[section]:
+                template.append(f"▶ **{item}**：XXXXXXXX")
+        else:
+            # 默认占位符生成规则
+            if section == "核心亮点":
+                template.extend([
+                    "▶ **XXXXXX**：XXXXXXXX",
+                    "▶ **XXXXXX**：XXXXXXXX"
+                ])
+            elif "不足" in section:
+                template.extend([
+                    "▶ **XXXXXXX**",
+                    "    ▷ XXXXXXXXXX",
+                    "    ▷ <red>建议</red>：XXXXXXXXXXXX"
+                ])
+            elif "优化" in section:
+                template.extend([
+                    "▶ **XXXXXXXX**：XXXXXXXX",
+                    "▶ **XXXXXXXX**：XXXXXXXX"
+                ])
+            else:
+                template.append("▶ XXXXXXXXXXXXXXXXX")
+
+        # 添加分隔线（最后一个章节不添加）
+        if section != valid_sections[-1]:
+            template.append("---")
+
+    return '\n'.join(template)
 
 
 def deepseek_chat(content: str):
@@ -1179,9 +1605,6 @@ def deepseek_chat(content: str):
             {'role': 'user', 'content': content}
         ],
         stream=OPEN_AI_IS_STREAM_RESPONSE,  # 流式响应开关，True=流式响应，False=普通响应
-        # temperature=0.1,  # 模型采样温度，取值范围[0,1]，越小越 deterministic，越大越 stochastic。
-        # top_p=0.5,  # 模型采样 nucleus probability，取值范围[0,1]，越大越 stochastic。
-        # max_tokens=1024,  # 最大输出长度，取值范围[1, 4096]。
     )
 
     # 根据是否是流式响应，选择不同的处理方式
@@ -2716,7 +3139,7 @@ class SoftwareQualityRating:
                 self.testersStr += f'{tester}' if is_last else f'{tester}、'
 
             # 获取当前用户的昵称
-            current_user_name = get_user_detail()['data']['get_current_user_ret']['data']['user_nick']
+            current_user_name = get_user_detail()['user_nick']
             # 如果当前用户在测试收件人列表中，则移除
             if current_user_name in self.testRecipient:
                 self.testRecipient.remove(current_user_name)
