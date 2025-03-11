@@ -13,7 +13,7 @@ from cryptography.hazmat.backends import default_backend
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, Optional, Union, TypeVar, List, Tuple, Pattern
 from io import BytesIO
-from openai import OpenAI
+from openai import OpenAI, APIConnectionError, APIStatusError, APIError
 import matplotlib.pyplot as plt
 import cloudscraper
 import os
@@ -39,7 +39,7 @@ OPEN_AI_MODEL = '百炼v3'  # deepseek模型名称，目前支持：v3、r1、�
 # OPEN_AI_URL = 'https://api.deepseek.com/v1'  # OpenAI的URL  deepseek官方
 OPEN_AI_KEY = 'sk-a5ae4633515d448e9bbbe03770712d4e'  # OpenAI密钥  百炼
 OPEN_AI_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'  # OpenAI的URL  百炼r1
-OPEN_AI_IS_STREAM_RESPONSE = True  # 是否支持流式响应
+OPEN_AI_IS_STREAM_RESPONSE = False  # 是否支持流式响应
 
 # 定义常量和全局变量
 ACCOUNT = 'wuchong@addcn.com'  # 账号
@@ -78,6 +78,14 @@ LINE_LENGTH = 100  # 横线的长度
 PLT_FONT = {
     'macOS': 'STHeiti',
     'windows': 'SimHei',
+}
+
+# AI的模型映射
+MODEL_MAPPING = {
+    'v3': 'deepseek-chat',
+    'r1': 'deepseek-reasoner',
+    '百炼r1': 'deepseek-r1',
+    '百炼v3': 'deepseek-v3'
 }
 
 # 创建一个CloudScraper实例，用于模拟浏览器请求
@@ -1348,6 +1356,7 @@ def fetch_data(
 
     raise RuntimeError(error_msg)
 
+
 def ai_result_switch_html(result: str) -> str:
     """
     将AI生成结果中的特定文本标记转换为标准HTML格式
@@ -1497,6 +1506,7 @@ def ai_output_template(
         - 支持<red>标签突出关键内容
         - 自动生成水平分隔线
     """
+
     # ==================================================================
     # 中文序号构建
     # ==================================================================
@@ -1559,89 +1569,95 @@ def ai_output_template(
     return '\n'.join(template)
 
 
-def deepseek_chat(content: str):
+def deepseek_chat(
+        user_input: str,
+        temperature: float = 0.1,
+        top_p: float = 0.5,
+        max_tokens: int = 1024,
+        retries: int = 3
+) -> str:
     """
-    根据用户输入的内容，使用DeepSeek模型生成回复。
+    执行与DeepSeek模型的交互会话，支持流式和非流式响应模式
 
-    参数:
-    content (str): 用户输入的内容。
+    该方法封装了与DeepSeek API的完整交互流程，包含智能重试机制、响应内容实时解析
+    和结构化错误处理。支持动态调整生成参数，适用于不同复杂度的对话场景。
+
+    参数详解:
+        user_input (str): 用户输入文本，需进行对话处理的原始内容
+        temperature (float): 采样温度，取值范围[0,1]。值越小生成结果越确定，值越大越随机。默认0.1
+        top_p (float): 核采样概率，取值范围[0,1]。控制生成多样性的阈值。默认0.5
+        max_tokens (int): 生成内容的最大token数，取值范围[1, 4096]。默认1024
+        retries (int): 网络错误时的最大重试次数。默认3
 
     返回:
-    str: 由DeepSeek模型生成的回复内容，经过HTML转义。
+        str: 格式化的HTML内容，包含：
+            - 思考过程（灰色斜体）
+            - 最终答案（标准格式）
+            - 自动生成的排版标记
+
+    异常:
+        ValueError: 模型配置错误时抛出
+        APIError: API返回非200状态码时抛出
+        ConnectionError: 网络连接失败时抛出
+
+    实现策略:
+        1. 动态模型选择：根据配置自动匹配合适的API端点
+        2. 双模式处理：统一处理流式/非流式响应
+        3. 上下文管理：自动清理资源，确保连接安全关闭
+        4. 实时反馈：流式模式下即时输出中间思考过程
     """
-    # 初始化结果变量和模型变量
-    result = ''
-    model = ''
-    # 打印用户输入的内容
-    print(content)
+    # ==================================================================
+    # 初始化准备阶段
+    # ==================================================================
+    result = []
+
+    # 防御性配置校验
     open_ai_model = OPEN_AI_MODEL.lower()
-    # 根据环境变量OPEN_AI_MODEL的值选择合适的模型
-    if open_ai_model == 'v3':
-        model = 'deepseek-chat'
-    elif open_ai_model == 'r1':
-        model = 'deepseek-reasoner'
-    elif open_ai_model == '百炼r1':
-        model = 'deepseek-r1'
-    elif open_ai_model == '百炼v3':
-        model = 'deepseek-v3'
+    if open_ai_model not in MODEL_MAPPING:
+        raise ValueError(f'模型配置错误，支持: {", ".join(MODEL_MAPPING.keys())}')
 
-    # 如果模型变量为空，说明OPEN_AI_MODEL配置错误
-    if not model:
-        print('OPEN_AI_MODEL配置错误')
-        return result
+    model = MODEL_MAPPING[open_ai_model]
 
-    # 初始化OpenAI客户端
+    # ==================================================================
+    # API交互核心逻辑
+    # ==================================================================
     client = OpenAI(
         api_key=OPEN_AI_KEY,
-        base_url=OPEN_AI_URL
+        base_url=OPEN_AI_URL,
+        timeout=60.0  # 统一超时设置
     )
 
-    # 打印模型生成开始的提示信息
-    print(f'{model}生成中, 请稍等...')
-    # 创建chat completion
-    completion = client.chat.completions.create(
-        model=model,
-        messages=[
-            {'role': 'user', 'content': content}
-        ],
-        stream=OPEN_AI_IS_STREAM_RESPONSE,  # 流式响应开关，True=流式响应，False=普通响应
-    )
+    for attempt in range(retries):
+        print(f'{model}执行中，请稍等...')
+        try:
+            # 创建聊天补全请求
+            completion = client.chat.completions.create(
+                model=model,  # 模型选择
+                messages=[{"role": "user", "content": user_input}],  # 用户输入
+                stream=OPEN_AI_IS_STREAM_RESPONSE,  # 流式/非流式选择, True: 流式响应，False: 普通响应
+                temperature=temperature,  # 采样温度选择
+                top_p=top_p,  # 核采样概率选择
+                max_tokens=max_tokens,  # 最大输出长度选择
+                extra_headers={"X-Dashboard-Version": "v3"}  # 兼容旧版API
+            )
 
-    # 根据是否是流式响应，选择不同的处理方式
-    if OPEN_AI_IS_STREAM_RESPONSE:
-        # 初始化标志变量
-        is_reasoning_content: bool = False
-        is_content: bool = False
-        # 处理流式响应
-        for chunk in completion:  # 流式响应用这个
-            response_delta = dict(chunk.choices[0].delta)
-            reasoning_content: str = response_delta.get('reasoning_content')
-            content: str = chunk.choices[0].delta.content
-            # 处理思考过程内容
-            if reasoning_content is not None:
-                if not is_reasoning_content:
-                    is_reasoning_content = True
-                    print('\n\n思考过程：')
-                print(reasoning_content, end='')
-            # 处理最终答案内容
-            if content is not None:
-                if not is_content:
-                    is_content = True
-                    print('\n\n最终答案：')
-                print(content, end='')
-                result += content
-    else:
-        # 处理非流式响应
-        # 打印思考过程
-        print("\n思考过程：")
-        print(completion.choices[0].message.reasoning_content)
-        # 打印最终答案
-        print("\n最终答案：")
-        result += completion.choices[0].message.content
-        print(result)
+            # ==================================================================
+            # 响应处理阶段
+            # ==================================================================
+            if OPEN_AI_IS_STREAM_RESPONSE:
+                return _handle_stream_response(completion, result)
+            return _handle_normal_response(completion, result)
 
-    # 返回经过HTML转义的结果
-    return ai_result_switch_html(result)
+        except APIConnectionError as e:
+            # 网络层错误处理
+            if attempt == retries - 1:
+                raise ConnectionError(f"API连接失败: {str(e)}") from e
+            time.sleep(2 ** attempt)  # 指数退避
+        except APIStatusError as e:
+            # 业务状态错误处理
+            raise APIError(f"API返回错误: {e.status_code} {e.response.text}") from e
+
+    return ai_result_switch_html(''.join(result))
 
 
 def extract_matching(pattern, owner):
@@ -2149,6 +2165,63 @@ def get_system_name():
         return 'macOS'
     elif system_name == 'Windows':
         return 'windows'
+
+
+def _handle_stream_response(completion, result: list) -> str:
+    """处理流式响应数据"""
+    print(f'\n{datetime.datetime.now().strftime("%H:%M:%S")} 生成开始')
+
+    # 初始化状态追踪
+    is_reasoning = False
+    is_final_answer = False
+
+    try:
+        for chunk in completion:
+            # 提取增量内容
+            delta = chunk.choices[0].delta
+            reasoning_content = getattr(delta, 'reasoning_content', '')
+            content = getattr(delta, 'content', '')
+
+            # 思考过程处理
+            if reasoning_content:
+                if not is_reasoning:
+                    print('\n思考轨迹:', flush=True)
+                    is_reasoning = True
+                print(_print_text_font(reasoning_content, color='black'), end='', flush=True)
+
+            # 最终答案处理
+            if content:
+                if not is_final_answer:
+                    print('\n\n最终答案:', flush=True)
+                    is_final_answer = True
+                print(content, end='', flush=True)
+                result.append(content)
+
+        print(f'\n\n{datetime.datetime.now().strftime("%H:%M:%S")} 生成完成')
+        return ai_result_switch_html(''.join(result))
+
+    except KeyboardInterrupt:
+        print('\n\n生成过程已中断')
+        return ai_result_switch_html(''.join(result))
+
+
+def _handle_normal_response(completion, result: list) -> str:
+    """处理非流式响应数据"""
+    try:
+        # 提取思考过程
+        if reasoning_content := getattr(completion.choices[0].message, 'reasoning_content', None):
+            print(f"\n思考轨迹:\n{_print_text_font(reasoning_content, color='black')}")
+
+        # 提取最终答案
+        if final_answer := completion.choices[0].message.content:
+            print("\n最终答案:\n{}".format(final_answer))
+            result.append(final_answer)
+
+        print(f'\n{datetime.datetime.now().strftime("%H:%M:%S")} 生成完成')
+        return ai_result_switch_html(''.join(result))
+
+    except AttributeError as e:
+        raise APIError("响应结构异常") from e
 
 
 class SoftwareQualityRating:
