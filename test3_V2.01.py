@@ -11,7 +11,7 @@
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, Optional, Union, TypeVar, List, Tuple, Pattern
+from typing import Any, Dict, Optional, TypeVar, List, Union, Tuple
 from io import BytesIO
 from openai import OpenAI, APIConnectionError, APIStatusError, APIError
 import matplotlib.pyplot as plt
@@ -31,15 +31,15 @@ import json
 import math
 import time
 
-IS_CREATE_REPORT = True  # 是否创建报告
-IS_CREATE_AI_SUMMARY = True  # 是否创建AI总结
+IS_CREATE_REPORT = False  # 是否创建报告
+IS_CREATE_AI_SUMMARY = False  # 是否创建AI总结
 IS_SUPPORT_RETRY_CREATE_AI_SUMMARY = True  # 是否支持重试创建AI总结, 生成完成后可input进行重新生成
 OPEN_AI_MODEL = '百炼v3'  # deepseek模型名称，目前支持：v3、r1、百炼r1、百炼v3
 # OPEN_AI_KEY = 'sk-00987978d24e445a88f1f5a57944818b'  # OpenAI密钥  deepseek官方
 # OPEN_AI_URL = 'https://api.deepseek.com/v1'  # OpenAI的URL  deepseek官方
 OPEN_AI_KEY = 'sk-a5ae4633515d448e9bbbe03770712d4e'  # OpenAI密钥  百炼
 OPEN_AI_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'  # OpenAI的URL  百炼r1
-OPEN_AI_IS_STREAM_RESPONSE = False  # 是否支持流式响应
+OPEN_AI_IS_STREAM_RESPONSE = True  # 是否支持流式响应
 
 # 定义常量和全局变量
 ACCOUNT = 'wuchong@addcn.com'  # 账号
@@ -1660,80 +1660,271 @@ def deepseek_chat(
     return ai_result_switch_html(''.join(result))
 
 
-def extract_matching(pattern, owner):
+def extract_matching(pattern: str, text: str) -> list:
     """
-    使用正则表达式提取文本中匹配的模式。
+    使用预编译的正则表达式模式从输入文本中提取所有匹配项
+
+    该方法通过预编译正则表达式模式优化匹配效率，并返回所有符合模式的子字符串列表。
+    支持处理多行文本和复杂匹配规则，适用于从结构化文本中批量提取特定格式的信息。
 
     参数:
-    pattern (str): 正则表达式模式，用于定义需要提取的字符串格式。
-    owner (str): 要从中提取匹配模式的文本内容。
+        pattern (str): 正则表达式模式字符串，定义需要匹配的文本规则。示例: r"\d(.*?)$"
+        text (str): 需要执行匹配操作的原始文本内容。支持多行文本和Unicode字符
 
     返回:
-    list: 包含所有匹配模式的字符串列表。
+        list: 包含所有非重叠匹配结果的字符串列表，按出现顺序排列。
+              若无匹配项或输入为空，返回空列表
+
+    异常:
+        re.error: 当传入的pattern不是有效的正则表达式时抛出
+        TypeError: 当text参数不是字符串类型时抛出
+
+    实现逻辑:
+        1. 正则表达式预编译
+        2. 输入参数校验
+        3. 执行匹配操作
+        4. 返回标准化结果
     """
-    # 编译正则表达式模式以提高效率
-    regex = re.compile(pattern)
-    # 使用编译后的正则表达式查找所有匹配项
-    match = regex.findall(owner)
-    # 返回所有匹配项的列表
-    return match
+    try:
+        # ==================================================================
+        # 阶段1：正则表达式预编译
+        # ==================================================================
+        # 编译正则表达式模式以提高重复使用效率，添加re.DOTALL标志支持跨行匹配
+        regex = re.compile(pattern, flags=re.DOTALL)  # re.DOTALL使.匹配包括换行符的所有字符
+
+        # ==================================================================
+        # 阶段2：输入参数校验
+        # ==================================================================
+        # 校验文本输入类型，防御非字符串类型输入
+        if not isinstance(text, str):
+            raise TypeError(f"文本参数必须为字符串类型，当前类型: {type(text).__name__}")
+
+        # ==================================================================
+        # 阶段3：执行匹配操作
+        # ==================================================================
+        # 使用预编译的正则对象查找所有非重叠匹配，返回匹配字符串列表
+        matches = regex.findall(text)
+
+        # ==================================================================
+        # 阶段4：结果标准化处理
+        # ==================================================================
+        # 过滤空匹配项，确保返回列表元素均为有效字符串
+        return [match for match in matches if match]
+
+    except re.error as e:
+        # 包装原始异常，添加模式上下文信息
+        error_msg = f"无效的正则表达式模式: '{pattern}' - {str(e)}"
+        raise re.error(error_msg) from e
 
 
-def get_days(start_date, end_date, is_workday=True):
+def get_days(
+    start_date: Union[str, datetime.date],
+    end_date: Union[str, datetime.date],
+    is_workday: bool = True,
+    date_format: str = "%Y-%m-%d"
+) -> List[str]:
     """
-    获取指定日期范围内的所有日期或工作日。
+    获取指定日期范围内的日期序列，支持工作日过滤和自定义格式输出
 
-    :param start_date: 起始日期，可以是字符串或date对象
-    :param end_date: 结束日期，可以是字符串或date对象
-    :param is_workday: 是否仅返回工作日，默认为True
-    :return: 日期列表，根据is_workday参数决定是否包含所有日期或仅工作日
+    该方法提供完整的日期处理流程，包含类型转换、范围校验、工作日过滤等功能，
+    适用于需要获取连续日期序列的业务场景，支持多种输入格式和灵活的输出配置
+
+    参数:
+        start_date (Union[str, datetime.date]):
+            起始日期，接受"YYYY-MM-DD"格式字符串或datetime.date对象
+        end_date (Union[str, datetime.date]):
+            结束日期，格式要求与start_date一致，需大于等于起始日期
+        is_workday (bool):
+            是否进行工作日过滤，True返回仅工作日，False返回所有日期，默认为True
+        date_format (str):
+            输出日期的格式化字符串，遵循datetime.strftime语法，默认为"%Y-%m-%d"
+
+    返回:
+        List[str]:
+            符合要求的日期字符串列表，按时间升序排列，格式由date_format参数指定
+
+    异常:
+        ValueError:
+            1. 当日期字符串格式不符合YYYY-MM-DD规范时抛出
+            2. 当起始日期晚于结束日期时抛出
+        TypeError:
+            当输入参数不是str/datetime.date类型时抛出
+
+    实现流程:
+        1. 参数校验与统一类型转换
+        2. 日期范围有效性验证
+        3. 基础日期序列生成
+        4. 工作日过滤处理
+        5. 最终格式标准化
     """
-    # 如果输入的日期是字符串，则将其转换为date对象
-    if isinstance(start_date, str):
-        start_date = datetime.datetime.strptime(start_date, '%Y-%m-%d').date()
-    # 如果输入的日期是字符串，则将其转换为date对象
-    if isinstance(end_date, str):
-        end_date = datetime.datetime.strptime(end_date, '%Y-%m-%d').date()
-    # 创建一个生成器，用于遍历给定范围内的所有日期
-    days = [start_date + datetime.timedelta(n) for n in range((end_date - start_date).days + 1)]
-    # 如果仅返回工作日，则过滤掉非工作日
+
+    # ==================================================================
+    # 阶段1：参数校验与统一类型转换
+    # ==================================================================
+    def _convert_date(date_value: Union[str, datetime.date]) -> datetime.date:
+        """统一日期输入格式，支持字符串和date对象类型转换"""
+        if isinstance(date_value, str):
+            try:
+                # 严格校验日期字符串格式
+                return datetime.datetime.strptime(date_value, "%Y-%m-%d").date()
+            except ValueError as e:
+                # 包装异常信息，增强可读性
+                raise ValueError(
+                    f"无效的日期格式: '{date_value}'，要求格式: YYYY-MM-DD"
+                ) from e
+        if isinstance(date_value, datetime.date):
+            return date_value
+        # 明确提示支持的类型
+        raise TypeError(
+            f"不支持的日期类型: {type(date_value).__name__}，"
+            f"支持类型: str/datetime.date"
+        )
+
+    try:
+        # 执行双日期转换
+        start_dt = _convert_date(start_date)
+        end_dt = _convert_date(end_date)
+    except (ValueError, TypeError) as e:
+        # 捕获底层异常并重新抛出
+        raise type(e)(f"参数校验失败: {str(e)}") from e
+
+    # ==================================================================
+    # 阶段2：日期范围有效性验证
+    # ==================================================================
+    if start_dt > end_dt:
+        # 生成明确的错误描述
+        raise ValueError(
+            f"无效的日期范围: 起始日期({start_dt.isoformat()}) "
+            f"不能晚于结束日期({end_dt.isoformat()})"
+        )
+
+    # ==================================================================
+    # 阶段3：基础日期序列生成
+    # ==================================================================
+    date_sequence = []
+    current_dt = start_dt
+    # 使用增量方式生成日期，避免计算总天数时的潜在错误
+    while current_dt <= end_dt:
+        date_sequence.append(current_dt)
+        current_dt += datetime.timedelta(days=1)
+
+    # ==================================================================
+    # 阶段4：工作日过滤处理
+    # ==================================================================
     if is_workday:
-        days = [datetime.datetime.strftime(day, '%Y-%m-%d') for day in days if calendar.is_workday(day)]
-    # 返回日期列表
-    return days
+        # 使用列表推导式进行高效过滤
+        filtered_dates = [
+            dt
+            for dt in date_sequence
+            if calendar.is_workday(dt)
+            and not calendar.is_holiday(dt)  # 明确排除节假日
+        ]
+    else:
+        filtered_dates = date_sequence
+
+    # ==================================================================
+    # 阶段5：最终格式标准化
+    # ==================================================================
+    # 统一进行格式化处理，确保输出一致性
+    return [dt.strftime(date_format) for dt in filtered_dates]
 
 
-def encrypt_password_zero_padding(password):
+def encrypt_password_zero_padding(password: str) -> Dict[str, str]:
     """
-    使用AES加密算法和零字节填充技术来加密密码。
+    使用AES-CBC算法对密码进行零填充加密，并进行Base64编码
 
-    该函数首先生成一个随机密钥和一个随机IV（初始化向量）。然后，它创建一个AES加密器对象。
-    接着，它对输入的密码进行零字节填充，以确保其长度是AES块大小的倍数。最后，它使用加密器对象加密
-    填充后的密码，并返回加密后的密码、IV和密钥，所有这些都经过了Base64编码。
+    该方法严格遵循零填充规范实现加密流程，主要面向需要兼容传统系统的场景。
+    注意：零填充存在安全隐患，建议优先使用PKCS7等标准填充方案
 
     参数:
-    password (str): 需要加密的密码。
+        password (str):
+            需要加密的明文密码，支持任意长度的UTF-8字符串。
+            空字符串将被拒绝，最小长度建议为8个字符
 
     返回:
-    dict: 包含加密后的密码、IV和密钥的字典，所有这些都经过了Base64编码。
+        Dict[str, str]:
+            包含加密结果的字典，结构为：
+            {
+                'data[Login][password]': Base64编码的密文,
+                'data[Login][encrypt_iv]': Base64编码的初始化向量,
+                'data[Login][encrypt_key]': Base64编码的加密密钥
+            }
+
+    异常:
+        ValueError:
+            1. 当输入密码为空字符串时抛出
+            2. 当密码包含非UTF-8字符时抛出
+            3. 当填充后数据长度不符合块大小时抛出
+        TypeError:
+            当输入参数不是字符串类型时抛出
+
+    实现流程:
+        1. 输入参数校验与预处理
+        2. 密码学安全随机数生成
+        3. 零填充处理
+        4. 加密器初始化与加密操作
+        5. 安全返回结果
     """
-    # 生成随机密钥和IV
-    key = os.urandom(32)
-    iv = os.urandom(16)
 
-    # 创建AES加密器对象
-    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
-    # 创建加密器对象
-    encryptor = cipher.encryptor()
+    # ==================================================================
+    # 阶段1：输入参数校验与预处理
+    # ==================================================================
+    if not isinstance(password, str):
+        raise TypeError(f"密码必须为字符串类型，当前类型: {type(password).__name__}")
 
-    # 使用零字节填充技术对密码进行填充
-    block_size = algorithms.AES.block_size // 8
-    # 填充密码
-    padded_data = password.encode('utf-8') + b'\x00' * (block_size - len(password) % block_size)
-    # 加密数据
-    ciphertext = encryptor.update(padded_data) + encryptor.finalize()
+    if not password:
+        raise ValueError("密码不能为空字符串")
 
-    # 返回Base64编码后的密文、IV和密钥
+    try:
+        plaintext = password.encode('utf-8')
+    except UnicodeEncodeError as e:
+        raise ValueError("密码包含非UTF-8编码字符") from e
+
+    # ==================================================================
+    # 阶段2：密码学安全随机数生成
+    # ==================================================================
+    key = os.urandom(32)  # AES-256密钥
+    iv = os.urandom(16)  # CBC模式初始化向量
+
+    # ==================================================================
+    # 阶段3：零填充处理
+    # ==================================================================
+    block_size = 16  # AES块大小
+    padding_length = block_size - (len(plaintext) % block_size)
+
+    # 验证填充有效性
+    if padding_length == 0:
+        padding_length = block_size  # 处理正好对齐的情况
+
+    try:
+        # 使用二进制零字节填充
+        padded_data = plaintext + b'\x00' * padding_length
+    except OverflowError as e:
+        raise ValueError("填充长度计算错误") from e
+
+    # 防御性检查
+    if len(padded_data) % block_size != 0:
+        raise ValueError("填充后数据长度不符合块大小要求")
+
+    # ==================================================================
+    # 阶段4：加密器初始化与加密操作
+    # ==================================================================
+    try:
+        cipher = Cipher(
+            algorithms.AES(key),
+            modes.CBC(iv),
+            backend=default_backend()
+        )
+        encryptor = cipher.encryptor()
+        ciphertext = encryptor.update(padded_data) + encryptor.finalize()
+    except ValueError as e:
+        raise RuntimeError("加密过程参数错误") from e
+    except Exception as e:
+        raise RuntimeError("加密操作失败") from e
+
+    # ==================================================================
+    # 阶段5：安全返回结果
+    # ==================================================================
     return {
         'data[Login][password]': base64.b64encode(ciphertext).decode('utf-8'),
         'data[Login][encrypt_iv]': base64.b64encode(iv).decode('utf-8'),
@@ -1741,46 +1932,73 @@ def encrypt_password_zero_padding(password):
     }
 
 
-def switch_numpy_data(data: dict) -> tuple:
+def switch_numpy_data(data: Dict[str, Union[Dict[str, float], float]]) -> Tuple[List[str], np.ndarray]:
     """
-    将给定的字典数据转换为NumPy数组，同时提取并生成对应的标签。
+    通用数据转换方法，支持多层级字典结构处理
 
     参数:
-    data: dict - 包含数据的字典，其中值可以是字典或数字。
+        data: 支持两种数据结构：
+            1. 多层结构：{样本名: {特征名: 值}}
+            2. 单层结构：{样本名: 数值}
 
     返回:
-    tuple - 包含标签列表和转换后的NumPy数组的元组。
-    """
-    # 初始化标签列表
-    labels: list[str] = []
-    # 初始化新的数据字典，用于存储转换后的数据
-    new_data: dict[str, list[int or float]] = {}
+        Tuple[List[str], np.ndarray]:
+            - 特征标签列表（多层结构返回特征名，单层结构返回空列表）
+            - 数据矩阵（多层结构形状为(特征数, 样本数)，单层结构为(1, 样本数))
 
-    # 遍历原始数据字典的值
-    for value in data.values():
-        # 如果值是一个字典，则进一步处理
-        if isinstance(value, dict):
-            # 遍历子字典的键值对
-            for subKey, subValue in value.items():
-                # 如果子键不在标签列表中，则添加到列表中
-                if subKey not in labels:
-                    labels.append(subKey)
-                # 如果当前子键对应的列表不存在，则初始化
-                if not new_data.get(subKey):
-                    new_data[subKey] = []
-                # 将子值添加到对应子键的列表中
-                new_data[subKey].append(subValue)
-        # 如果值是一个整数或浮点数，则将其添加到特殊键'_'对应的列表中
-        elif isinstance(value, int) or isinstance(value, float):
-            # 如果特殊键'_'对应的列表不存在，则初始化
-            if not new_data.get('_'):
-                new_data['_'] = []
-            # 将值添加到特殊键'_'对应的列表中
-            new_data['_'].append(value)
-    # 将新数据字典的值转换为NumPy数组
-    np_data = np.array(list(new_data.values()))
-    # 返回标签列表和转换后的NumPy数组
-    return labels, np_data
+    实现策略:
+        1. 智能数据结构检测
+        2. 多层结构特征顺序保留
+        3. 自动维度对齐
+        4. 空值安全处理
+    """
+    # ==================================================================
+    # 阶段1：数据结构分析与校验
+    # ==================================================================
+    if not data:
+        return [], np.array([], dtype=np.float64)
+
+    # 检测数据结构类型
+    is_multilayer = isinstance(next(iter(data.values())), dict)
+
+    # 统一格式校验
+    if is_multilayer:
+        for v in data.values():
+            if not isinstance(v, dict):
+                raise TypeError("混合数据结构：包含字典和非字典值")
+
+    # ==================================================================
+    # 阶段2：特征标签处理
+    # ==================================================================
+    if is_multilayer:
+        # 保持第一个样本的特征顺序
+        feature_labels = list(next(iter(data.values())).keys())
+        # 验证所有样本特征一致性
+        for sample in data.values():
+            if list(sample.keys()) != feature_labels:
+                missing = set(feature_labels) - set(sample.keys())
+                extra = set(sample.keys()) - set(feature_labels)
+                raise ValueError(f"特征不一致，缺失：{missing}, 多余：{extra}")
+    else:
+        feature_labels = []
+
+    # ==================================================================
+    # 阶段3：数据矩阵构建
+    # ==================================================================
+    sample_names = list(data.keys())
+    num_samples = len(sample_names)
+
+    if is_multilayer:
+        num_features = len(feature_labels)
+        matrix = np.zeros((num_features, num_samples), dtype=np.float64)
+
+        for col_idx, sample in enumerate(data.values()):
+            for row_idx, label in enumerate(feature_labels):
+                matrix[row_idx, col_idx] = sample.get(label, 0.0)
+    else:
+        matrix = np.array([list(data.values())], dtype=np.float64)
+
+    return feature_labels, matrix
 
 
 def calculation_plot_y_max_height(max_number: int):

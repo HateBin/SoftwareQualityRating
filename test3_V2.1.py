@@ -11,9 +11,9 @@
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, Optional, Union, TypeVar, List, Tuple, Pattern
+from typing import Any, Dict, Optional, TypeVar, List, Union
 from io import BytesIO
-from openai import OpenAI
+from openai import OpenAI, APIConnectionError, APIStatusError, APIError
 import matplotlib.pyplot as plt
 import cloudscraper
 import os
@@ -31,8 +31,8 @@ import json
 import math
 import time
 
-IS_CREATE_REPORT = True  # 是否创建报告
-IS_CREATE_AI_SUMMARY = True  # 是否创建AI总结
+IS_CREATE_REPORT = False  # 是否创建报告
+IS_CREATE_AI_SUMMARY = False  # 是否创建AI总结
 IS_SUPPORT_RETRY_CREATE_AI_SUMMARY = True  # 是否支持重试创建AI总结, 生成完成后可input进行重新生成
 OPEN_AI_MODEL = '百炼v3'  # deepseek模型名称，目前支持：v3、r1、百炼r1、百炼v3
 # OPEN_AI_KEY = 'sk-00987978d24e445a88f1f5a57944818b'  # OpenAI密钥  deepseek官方
@@ -78,6 +78,14 @@ LINE_LENGTH = 100  # 横线的长度
 PLT_FONT = {
     'macOS': 'STHeiti',
     'windows': 'SimHei',
+}
+
+# AI的模型映射
+MODEL_MAPPING = {
+    'v3': 'deepseek-chat',
+    'r1': 'deepseek-reasoner',
+    '百炼r1': 'deepseek-r1',
+    '百炼v3': 'deepseek-v3'
 }
 
 # 创建一个CloudScraper实例，用于模拟浏览器请求
@@ -1348,6 +1356,7 @@ def fetch_data(
 
     raise RuntimeError(error_msg)
 
+
 def ai_result_switch_html(result: str) -> str:
     """
     将AI生成结果中的特定文本标记转换为标准HTML格式
@@ -1497,6 +1506,7 @@ def ai_output_template(
         - 支持<red>标签突出关键内容
         - 自动生成水平分隔线
     """
+
     # ==================================================================
     # 中文序号构建
     # ==================================================================
@@ -1559,165 +1569,362 @@ def ai_output_template(
     return '\n'.join(template)
 
 
-def deepseek_chat(content: str):
+def deepseek_chat(
+        user_input: str,
+        temperature: float = 0.1,
+        top_p: float = 0.5,
+        max_tokens: int = 1024,
+        retries: int = 3
+) -> str:
     """
-    根据用户输入的内容，使用DeepSeek模型生成回复。
+    执行与DeepSeek模型的交互会话，支持流式和非流式响应模式
 
-    参数:
-    content (str): 用户输入的内容。
+    该方法封装了与DeepSeek API的完整交互流程，包含智能重试机制、响应内容实时解析
+    和结构化错误处理。支持动态调整生成参数，适用于不同复杂度的对话场景。
+
+    参数详解:
+        user_input (str): 用户输入文本，需进行对话处理的原始内容
+        temperature (float): 采样温度，取值范围[0,1]。值越小生成结果越确定，值越大越随机。默认0.1
+        top_p (float): 核采样概率，取值范围[0,1]。控制生成多样性的阈值。默认0.5
+        max_tokens (int): 生成内容的最大token数，取值范围[1, 4096]。默认1024
+        retries (int): 网络错误时的最大重试次数。默认3
 
     返回:
-    str: 由DeepSeek模型生成的回复内容，经过HTML转义。
+        str: 格式化的HTML内容，包含：
+            - 思考过程（灰色斜体）
+            - 最终答案（标准格式）
+            - 自动生成的排版标记
+
+    异常:
+        ValueError: 模型配置错误时抛出
+        APIError: API返回非200状态码时抛出
+        ConnectionError: 网络连接失败时抛出
+
+    实现策略:
+        1. 动态模型选择：根据配置自动匹配合适的API端点
+        2. 双模式处理：统一处理流式/非流式响应
+        3. 上下文管理：自动清理资源，确保连接安全关闭
+        4. 实时反馈：流式模式下即时输出中间思考过程
     """
-    # 初始化结果变量和模型变量
-    result = ''
-    model = ''
-    # 打印用户输入的内容
-    print(content)
+    # ==================================================================
+    # 初始化准备阶段
+    # ==================================================================
+    result = []
+
+    # 防御性配置校验
     open_ai_model = OPEN_AI_MODEL.lower()
-    # 根据环境变量OPEN_AI_MODEL的值选择合适的模型
-    if open_ai_model == 'v3':
-        model = 'deepseek-chat'
-    elif open_ai_model == 'r1':
-        model = 'deepseek-reasoner'
-    elif open_ai_model == '百炼r1':
-        model = 'deepseek-r1'
-    elif open_ai_model == '百炼v3':
-        model = 'deepseek-v3'
+    if open_ai_model not in MODEL_MAPPING:
+        raise ValueError(f'模型配置错误，支持: {", ".join(MODEL_MAPPING.keys())}')
 
-    # 如果模型变量为空，说明OPEN_AI_MODEL配置错误
-    if not model:
-        print('OPEN_AI_MODEL配置错误')
-        return result
+    model = MODEL_MAPPING[open_ai_model]
 
-    # 初始化OpenAI客户端
+    # ==================================================================
+    # API交互核心逻辑
+    # ==================================================================
     client = OpenAI(
         api_key=OPEN_AI_KEY,
-        base_url=OPEN_AI_URL
+        base_url=OPEN_AI_URL,
+        timeout=60.0  # 统一超时设置
     )
 
-    # 打印模型生成开始的提示信息
-    print(f'{model}生成中, 请稍等...')
-    # 创建chat completion
-    completion = client.chat.completions.create(
-        model=model,
-        messages=[
-            {'role': 'user', 'content': content}
-        ],
-        stream=OPEN_AI_IS_STREAM_RESPONSE,  # 流式响应开关，True=流式响应，False=普通响应
-    )
+    for attempt in range(retries):
+        print(f'{model}执行中，请稍等...')
+        try:
+            # 创建聊天补全请求
+            completion = client.chat.completions.create(
+                model=model,  # 模型选择
+                messages=[{"role": "user", "content": user_input}],  # 用户输入
+                stream=OPEN_AI_IS_STREAM_RESPONSE,  # 流式/非流式选择, True: 流式响应，False: 普通响应
+                temperature=temperature,  # 采样温度选择
+                top_p=top_p,  # 核采样概率选择
+                max_tokens=max_tokens,  # 最大输出长度选择
+                extra_headers={"X-Dashboard-Version": "v3"}  # 兼容旧版API
+            )
 
-    # 根据是否是流式响应，选择不同的处理方式
-    if OPEN_AI_IS_STREAM_RESPONSE:
-        # 初始化标志变量
-        is_reasoning_content: bool = False
-        is_content: bool = False
-        # 处理流式响应
-        for chunk in completion:  # 流式响应用这个
-            response_delta = dict(chunk.choices[0].delta)
-            reasoning_content: str = response_delta.get('reasoning_content')
-            content: str = chunk.choices[0].delta.content
-            # 处理思考过程内容
-            if reasoning_content is not None:
-                if not is_reasoning_content:
-                    is_reasoning_content = True
-                    print('\n\n思考过程：')
-                print(reasoning_content, end='')
-            # 处理最终答案内容
-            if content is not None:
-                if not is_content:
-                    is_content = True
-                    print('\n\n最终答案：')
-                print(content, end='')
-                result += content
-    else:
-        # 处理非流式响应
-        # 打印思考过程
-        print("\n思考过程：")
-        print(completion.choices[0].message.reasoning_content)
-        # 打印最终答案
-        print("\n最终答案：")
-        result += completion.choices[0].message.content
-        print(result)
+            # ==================================================================
+            # 响应处理阶段
+            # ==================================================================
+            if OPEN_AI_IS_STREAM_RESPONSE:
+                return _handle_stream_response(completion, result)
+            return _handle_normal_response(completion, result)
 
-    # 返回经过HTML转义的结果
-    return ai_result_switch_html(result)
+        except APIConnectionError as e:
+            # 网络层错误处理
+            if attempt == retries - 1:
+                raise ConnectionError(f"API连接失败: {str(e)}") from e
+            time.sleep(2 ** attempt)  # 指数退避
+        except APIStatusError as e:
+            # 业务状态错误处理
+            raise APIError(f"API返回错误: {e.status_code} {e.response.text}") from e
+
+    return ai_result_switch_html(''.join(result))
 
 
-def extract_matching(pattern, owner):
+def extract_matching(pattern: str, text: str) -> list:
     """
-    使用正则表达式提取文本中匹配的模式。
+    使用预编译的正则表达式模式从输入文本中提取所有匹配项
+
+    该方法通过预编译正则表达式模式优化匹配效率，并返回所有符合模式的子字符串列表。
+    支持处理多行文本和复杂匹配规则，适用于从结构化文本中批量提取特定格式的信息。
 
     参数:
-    pattern (str): 正则表达式模式，用于定义需要提取的字符串格式。
-    owner (str): 要从中提取匹配模式的文本内容。
+        pattern (str): 正则表达式模式字符串，定义需要匹配的文本规则。示例: r"\d(.*?)$"
+        text (str): 需要执行匹配操作的原始文本内容。支持多行文本和Unicode字符
 
     返回:
-    list: 包含所有匹配模式的字符串列表。
+        list: 包含所有非重叠匹配结果的字符串列表，按出现顺序排列。
+              若无匹配项或输入为空，返回空列表
+
+    异常:
+        re.error: 当传入的pattern不是有效的正则表达式时抛出
+        TypeError: 当text参数不是字符串类型时抛出
+
+    实现逻辑:
+        1. 正则表达式预编译
+        2. 输入参数校验
+        3. 执行匹配操作
+        4. 返回标准化结果
     """
-    # 编译正则表达式模式以提高效率
-    regex = re.compile(pattern)
-    # 使用编译后的正则表达式查找所有匹配项
-    match = regex.findall(owner)
-    # 返回所有匹配项的列表
-    return match
+    try:
+        # ==================================================================
+        # 阶段1：正则表达式预编译
+        # ==================================================================
+        # 编译正则表达式模式以提高重复使用效率，添加re.DOTALL标志支持跨行匹配
+        regex = re.compile(pattern, flags=re.DOTALL)  # re.DOTALL使.匹配包括换行符的所有字符
+
+        # ==================================================================
+        # 阶段2：输入参数校验
+        # ==================================================================
+        # 校验文本输入类型，防御非字符串类型输入
+        if not isinstance(text, str):
+            raise TypeError(f"文本参数必须为字符串类型，当前类型: {type(text).__name__}")
+
+        # ==================================================================
+        # 阶段3：执行匹配操作
+        # ==================================================================
+        # 使用预编译的正则对象查找所有非重叠匹配，返回匹配字符串列表
+        matches = regex.findall(text)
+
+        # ==================================================================
+        # 阶段4：结果标准化处理
+        # ==================================================================
+        # 过滤空匹配项，确保返回列表元素均为有效字符串
+        return [match for match in matches if match]
+
+    except re.error as e:
+        # 包装原始异常，添加模式上下文信息
+        error_msg = f"无效的正则表达式模式: '{pattern}' - {str(e)}"
+        raise re.error(error_msg) from e
 
 
-def get_days(start_date, end_date, is_workday=True):
+def get_days(
+    start_date: Union[str, datetime.date],
+    end_date: Union[str, datetime.date],
+    is_workday: bool = True,
+    date_format: str = "%Y-%m-%d"
+) -> List[str]:
     """
-    获取指定日期范围内的所有日期或工作日。
+    获取指定日期范围内的日期序列，支持工作日过滤和自定义格式输出
 
-    :param start_date: 起始日期，可以是字符串或date对象
-    :param end_date: 结束日期，可以是字符串或date对象
-    :param is_workday: 是否仅返回工作日，默认为True
-    :return: 日期列表，根据is_workday参数决定是否包含所有日期或仅工作日
+    该方法提供完整的日期处理流程，包含类型转换、范围校验、工作日过滤等功能，
+    适用于需要获取连续日期序列的业务场景，支持多种输入格式和灵活的输出配置
+
+    参数:
+        start_date (Union[str, datetime.date]):
+            起始日期，接受"YYYY-MM-DD"格式字符串或datetime.date对象
+        end_date (Union[str, datetime.date]):
+            结束日期，格式要求与start_date一致，需大于等于起始日期
+        is_workday (bool):
+            是否进行工作日过滤，True返回仅工作日，False返回所有日期，默认为True
+        date_format (str):
+            输出日期的格式化字符串，遵循datetime.strftime语法，默认为"%Y-%m-%d"
+
+    返回:
+        List[str]:
+            符合要求的日期字符串列表，按时间升序排列，格式由date_format参数指定
+
+    异常:
+        ValueError:
+            1. 当日期字符串格式不符合YYYY-MM-DD规范时抛出
+            2. 当起始日期晚于结束日期时抛出
+        TypeError:
+            当输入参数不是str/datetime.date类型时抛出
+
+    实现流程:
+        1. 参数校验与统一类型转换
+        2. 日期范围有效性验证
+        3. 基础日期序列生成
+        4. 工作日过滤处理
+        5. 最终格式标准化
     """
-    # 如果输入的日期是字符串，则将其转换为date对象
-    if isinstance(start_date, str):
-        start_date = datetime.datetime.strptime(start_date, '%Y-%m-%d').date()
-    # 如果输入的日期是字符串，则将其转换为date对象
-    if isinstance(end_date, str):
-        end_date = datetime.datetime.strptime(end_date, '%Y-%m-%d').date()
-    # 创建一个生成器，用于遍历给定范围内的所有日期
-    days = [start_date + datetime.timedelta(n) for n in range((end_date - start_date).days + 1)]
-    # 如果仅返回工作日，则过滤掉非工作日
+
+    # ==================================================================
+    # 阶段1：参数校验与统一类型转换
+    # ==================================================================
+    def _convert_date(date_value: Union[str, datetime.date]) -> datetime.date:
+        """统一日期输入格式，支持字符串和date对象类型转换"""
+        if isinstance(date_value, str):
+            try:
+                # 严格校验日期字符串格式
+                return datetime.datetime.strptime(date_value, "%Y-%m-%d").date()
+            except ValueError as e:
+                # 包装异常信息，增强可读性
+                raise ValueError(
+                    f"无效的日期格式: '{date_value}'，要求格式: YYYY-MM-DD"
+                ) from e
+        if isinstance(date_value, datetime.date):
+            return date_value
+        # 明确提示支持的类型
+        raise TypeError(
+            f"不支持的日期类型: {type(date_value).__name__}，"
+            f"支持类型: str/datetime.date"
+        )
+
+    try:
+        # 执行双日期转换
+        start_dt = _convert_date(start_date)
+        end_dt = _convert_date(end_date)
+    except (ValueError, TypeError) as e:
+        # 捕获底层异常并重新抛出
+        raise type(e)(f"参数校验失败: {str(e)}") from e
+
+    # ==================================================================
+    # 阶段2：日期范围有效性验证
+    # ==================================================================
+    if start_dt > end_dt:
+        # 生成明确的错误描述
+        raise ValueError(
+            f"无效的日期范围: 起始日期({start_dt.isoformat()}) "
+            f"不能晚于结束日期({end_dt.isoformat()})"
+        )
+
+    # ==================================================================
+    # 阶段3：基础日期序列生成
+    # ==================================================================
+    date_sequence = []
+    current_dt = start_dt
+    # 使用增量方式生成日期，避免计算总天数时的潜在错误
+    while current_dt <= end_dt:
+        date_sequence.append(current_dt)
+        current_dt += datetime.timedelta(days=1)
+
+    # ==================================================================
+    # 阶段4：工作日过滤处理
+    # ==================================================================
     if is_workday:
-        days = [datetime.datetime.strftime(day, '%Y-%m-%d') for day in days if calendar.is_workday(day)]
-    # 返回日期列表
-    return days
+        # 使用列表推导式进行高效过滤
+        filtered_dates = [
+            dt
+            for dt in date_sequence
+            if calendar.is_workday(dt)
+            and not calendar.is_holiday(dt)  # 明确排除节假日
+        ]
+    else:
+        filtered_dates = date_sequence
+
+    # ==================================================================
+    # 阶段5：最终格式标准化
+    # ==================================================================
+    # 统一进行格式化处理，确保输出一致性
+    return [dt.strftime(date_format) for dt in filtered_dates]
 
 
-def encrypt_password_zero_padding(password):
+def encrypt_password_zero_padding(password: str) -> Dict[str, str]:
     """
-    使用AES加密算法和零字节填充技术来加密密码。
+    使用AES-CBC算法对密码进行零填充加密，并进行Base64编码
 
-    该函数首先生成一个随机密钥和一个随机IV（初始化向量）。然后，它创建一个AES加密器对象。
-    接着，它对输入的密码进行零字节填充，以确保其长度是AES块大小的倍数。最后，它使用加密器对象加密
-    填充后的密码，并返回加密后的密码、IV和密钥，所有这些都经过了Base64编码。
+    该方法严格遵循零填充规范实现加密流程，主要面向需要兼容传统系统的场景。
+    注意：零填充存在安全隐患，建议优先使用PKCS7等标准填充方案
 
     参数:
-    password (str): 需要加密的密码。
+        password (str):
+            需要加密的明文密码，支持任意长度的UTF-8字符串。
+            空字符串将被拒绝，最小长度建议为8个字符
 
     返回:
-    dict: 包含加密后的密码、IV和密钥的字典，所有这些都经过了Base64编码。
+        Dict[str, str]:
+            包含加密结果的字典，结构为：
+            {
+                'data[Login][password]': Base64编码的密文,
+                'data[Login][encrypt_iv]': Base64编码的初始化向量,
+                'data[Login][encrypt_key]': Base64编码的加密密钥
+            }
+
+    异常:
+        ValueError:
+            1. 当输入密码为空字符串时抛出
+            2. 当密码包含非UTF-8字符时抛出
+            3. 当填充后数据长度不符合块大小时抛出
+        TypeError:
+            当输入参数不是字符串类型时抛出
+
+    实现流程:
+        1. 输入参数校验与预处理
+        2. 密码学安全随机数生成
+        3. 零填充处理
+        4. 加密器初始化与加密操作
+        5. 安全返回结果
     """
-    # 生成随机密钥和IV
-    key = os.urandom(32)
-    iv = os.urandom(16)
 
-    # 创建AES加密器对象
-    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
-    # 创建加密器对象
-    encryptor = cipher.encryptor()
+    # ==================================================================
+    # 阶段1：输入参数校验与预处理
+    # ==================================================================
+    if not isinstance(password, str):
+        raise TypeError(f"密码必须为字符串类型，当前类型: {type(password).__name__}")
 
-    # 使用零字节填充技术对密码进行填充
-    block_size = algorithms.AES.block_size // 8
-    # 填充密码
-    padded_data = password.encode('utf-8') + b'\x00' * (block_size - len(password) % block_size)
-    # 加密数据
-    ciphertext = encryptor.update(padded_data) + encryptor.finalize()
+    if not password:
+        raise ValueError("密码不能为空字符串")
 
-    # 返回Base64编码后的密文、IV和密钥
+    try:
+        plaintext = password.encode('utf-8')
+    except UnicodeEncodeError as e:
+        raise ValueError("密码包含非UTF-8编码字符") from e
+
+    # ==================================================================
+    # 阶段2：密码学安全随机数生成
+    # ==================================================================
+    key = os.urandom(32)  # AES-256密钥
+    iv = os.urandom(16)  # CBC模式初始化向量
+
+    # ==================================================================
+    # 阶段3：零填充处理
+    # ==================================================================
+    block_size = 16  # AES块大小
+    padding_length = block_size - (len(plaintext) % block_size)
+
+    # 验证填充有效性
+    if padding_length == 0:
+        padding_length = block_size  # 处理正好对齐的情况
+
+    try:
+        # 使用二进制零字节填充
+        padded_data = plaintext + b'\x00' * padding_length
+    except OverflowError as e:
+        raise ValueError("填充长度计算错误") from e
+
+    # 防御性检查
+    if len(padded_data) % block_size != 0:
+        raise ValueError("填充后数据长度不符合块大小要求")
+
+    # ==================================================================
+    # 阶段4：加密器初始化与加密操作
+    # ==================================================================
+    try:
+        cipher = Cipher(
+            algorithms.AES(key),
+            modes.CBC(iv),
+            backend=default_backend()
+        )
+        encryptor = cipher.encryptor()
+        ciphertext = encryptor.update(padded_data) + encryptor.finalize()
+    except ValueError as e:
+        raise RuntimeError("加密过程参数错误") from e
+    except Exception as e:
+        raise RuntimeError("加密操作失败") from e
+
+    # ==================================================================
+    # 阶段5：安全返回结果
+    # ==================================================================
     return {
         'data[Login][password]': base64.b64encode(ciphertext).decode('utf-8'),
         'data[Login][encrypt_iv]': base64.b64encode(iv).decode('utf-8'),
@@ -2149,6 +2356,63 @@ def get_system_name():
         return 'macOS'
     elif system_name == 'Windows':
         return 'windows'
+
+
+def _handle_stream_response(completion, result: list) -> str:
+    """处理流式响应数据"""
+    print(f'\n{datetime.datetime.now().strftime("%H:%M:%S")} 生成开始')
+
+    # 初始化状态追踪
+    is_reasoning = False
+    is_final_answer = False
+
+    try:
+        for chunk in completion:
+            # 提取增量内容
+            delta = chunk.choices[0].delta
+            reasoning_content = getattr(delta, 'reasoning_content', '')
+            content = getattr(delta, 'content', '')
+
+            # 思考过程处理
+            if reasoning_content:
+                if not is_reasoning:
+                    print('\n思考轨迹:', flush=True)
+                    is_reasoning = True
+                print(_print_text_font(reasoning_content, color='black'), end='', flush=True)
+
+            # 最终答案处理
+            if content:
+                if not is_final_answer:
+                    print('\n\n最终答案:', flush=True)
+                    is_final_answer = True
+                print(content, end='', flush=True)
+                result.append(content)
+
+        print(f'\n\n{datetime.datetime.now().strftime("%H:%M:%S")} 生成完成')
+        return ai_result_switch_html(''.join(result))
+
+    except KeyboardInterrupt:
+        print('\n\n生成过程已中断')
+        return ai_result_switch_html(''.join(result))
+
+
+def _handle_normal_response(completion, result: list) -> str:
+    """处理非流式响应数据"""
+    try:
+        # 提取思考过程
+        if reasoning_content := getattr(completion.choices[0].message, 'reasoning_content', None):
+            print(f"\n思考轨迹:\n{_print_text_font(reasoning_content, color='black')}")
+
+        # 提取最终答案
+        if final_answer := completion.choices[0].message.content:
+            print("\n最终答案:\n{}".format(final_answer))
+            result.append(final_answer)
+
+        print(f'\n{datetime.datetime.now().strftime("%H:%M:%S")} 生成完成')
+        return ai_result_switch_html(''.join(result))
+
+    except AttributeError as e:
+        raise APIError("响应结构异常") from e
 
 
 class SoftwareQualityRating:
