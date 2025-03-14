@@ -1,71 +1,77 @@
-import math
-def calculation_plot_y_max_height(max_number: float) -> tuple[int, int]:
-    """
-    计算Y轴刻度最大值和间隔，保证range_max > max_number且输出为整数
+import re
+from datetime import datetime
 
-    参数规则:
-        - 当max_number <= 1时：固定返回 (2, 1)
-        - 当max_number > 1时：确保range_max > max_number
-        - 输出列表长度<=8：len(range(0, range_max+1, y_interval)) <=8
+
+def date_time_to_date(date_time_str: str) -> str:
+    """
+    将多种日期时间格式统一转换为标准日期字符串
+
+    功能增强：
+    1. 支持多种输入格式
+    2. 增强容错处理
+    3. 完善类型提示
+    4. 优化性能
+    5. 添加详细文档
 
     参数:
-        max_number (float): 输入数据最大值，必须为非负数
+        date_time_str (str): 日期时间字符串，支持格式：
+            - 带时分秒：'2024-10-12 20:52:30'
+            - 带时分：'2024-10-12 20:52'
+            - 短横线分隔：'2024-10-12'
+            - 无分隔符：'20241012'
+            - 中文日期：'2024年10月12日'
 
     返回:
-        tuple[int, int]: (range_max, y_interval)
+        str: 标准化日期字符串'YYYY-MM-DD'
 
     异常:
-        ValueError: 输入为负数或非数值时抛出
-
-    测试示例:
-        >>> calculation_plot_y_max_height(10)
-        (12, 2)  # 生成列表长度7: [0,2,4,6,8,10,12]
-        >>> calculation_plot_y_max_height(1)
-        (2, 1)    # 列表长度3: [0,1,2]
-        >>> calculation_plot_y_max_height(7)
-        (8, 1)    # 列表长度9会触发调整→(8,2)→列表长度5: [0,2,4,6,8]
+        ValueError: 当输入无法解析为有效日期时抛出
+        TypeError: 当输入不是字符串类型时抛出
     """
-    # =====================
-    # 输入验证
-    # =====================
-    if not isinstance(max_number, (int, float)):
-        raise TypeError("输入必须为数值类型")
-    if max_number < 0:
-        raise ValueError("输入值不能为负数")
+    # ======================================================================
+    # 输入验证阶段
+    # ======================================================================
+    if not isinstance(date_time_str, str):
+        raise TypeError(f"输入必须为字符串类型，当前类型：{type(date_time_str).__name__}")
 
-    # =====================
-    # 处理max_number <=1
-    # =====================
-    if max_number <= 1:
-        return 2, 1  # 强制返回固定值
+    # ======================================================================
+    # 预处理阶段
+    # ======================================================================
+    # 统一全角字符为半角
+    normalized_str = date_time_str.translate(
+        str.maketrans('０１２３４５６７８９', '0123456789')
+    ).strip()
 
-    # =====================
-    # 主计算逻辑
-    # =====================
-    max_number = math.ceil(max_number)  # 确保输入转换为整数处理
+    # ======================================================================
+    # 格式匹配阶段（按处理优先级排序）
+    # ======================================================================
+    format_patterns = [
+        # 带时间部分格式
+        (r'\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{1,2}', '%Y-%m-%d %H:%M'),  # 2024-10-12 20:52
+        (r'\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{1,2}:\d{1,2}', '%Y-%m-%d %H:%M:%S'),  # 2024-10-12 20:52:54
+        # 纯日期格式
+        (r'\d{4}年\d{1,2}月\d{1,2}日', '%Y年%m月%d日'),  # 中文格式
+        (r'\d{4}/\d{1,2}/\d{1,2}', '%Y/%m/%d'),  # 斜杠格式
+        (r'\d{4}-\d{1,2}-\d{1,2}', '%Y-%m-%d'),  # 标准短横线格式
+        (r'\d{8}', '%Y%m%d'),  # 紧凑格式
+    ]
 
-    # 候选间隔基数 (1,2,5的倍数)
-    base_intervals = [1, 2, 5]
-    magnitude = 10 ** (len(str(int(max_number))) - 1)  # 数量级计算
+    # ======================================================================
+    # 解析阶段
+    # ======================================================================
+    for pattern, date_format in format_patterns:
+        try:
+            # 使用正则预过滤提高效率
+            if re.fullmatch(pattern, normalized_str):
+                dt_obj = datetime.strptime(normalized_str, date_format)
+                return dt_obj.strftime('%Y-%m-%d')
+        except ValueError:
+            continue
 
-    # 寻找最优解
-    for interval in base_intervals:
-        y_interval = interval * magnitude // 10  # 保证间隔为整数
-        if y_interval == 0:
-            y_interval = 1
-
-        # 计算range_max必须大于max_number
-        range_max = ((max_number // y_interval) + 1) * y_interval
-        tick_count = (range_max // y_interval) + 1  # 包含0点的数量
-
-        # 满足刻度数量<=8时立即返回
-        if tick_count <= 8:
-            return range_max, y_interval
-
-    # 未找到合适解时降级处理（理论上不会执行到这里）
-    return max_number + 1, 1
-
+    # ======================================================================
+    # 异常处理阶段
+    # ======================================================================
+    raise ValueError(f"无法解析日期字符串：{date_time_str} (支持格式：YYYY-MM-DD[ HH:MM]、YYYY年MM月DD日等)")
 
 if __name__ == '__main__':
-    range_max, y_interval, = calculation_plot_y_max_height(9)
-    print(list(range(0, range_max + 1, y_interval)))
+    print(date_time_to_date("2024-10-12 20:52:53"))
