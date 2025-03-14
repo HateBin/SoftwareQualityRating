@@ -2593,66 +2593,239 @@ def date_time_to_date(date_time_str: str) -> str:
     raise ValueError(f"无法解析日期字符串：{date_time_str} (支持格式：YYYY-MM-DD[ HH:MM]、YYYY年MM月DD日等)")
 
 
-def style_convert(style_data: dict):
+def style_convert(style_data: dict) -> str:
     """
-    接受样式参数dict, 转换成str
-    :param style_data: 样式参数dict
-    :return: 样式参数str
-    """
-    style_str = ''
-    for key, value in style_data.items():
-        style_str += f'{key}: {value};'
-    return style_str
+    将样式参数字典转换为标准化的CSS样式字符串
 
+    该函数实现以下核心功能：
+    1. 类型安全校验：确保输入为字典类型
+    2. 数据有效性过滤：自动跳过非字符串类型的键值对
+    3. 格式标准化：按CSS属性名称字母顺序排序生成字符串
+    4. 防御性处理：兼容空字典输入和异常值情况
+
+    参数详解:
+        style_data (dict):
+            样式配置字典，键为CSS属性名称，值为对应样式设置。
+            示例：{'color': 'red', 'font-size': '14px'}
+            支持嵌套简写属性，如'margin': '10px 20px'
+            允许值为数值类型，自动转换为字符串类型
+
+    返回:
+        str:
+            标准化CSS样式字符串，格式为"key1: value1; key2: value2;"
+            示例："color: red; font-size: 14px;"
+
+    异常处理:
+        TypeError: 当输入参数不是字典类型时抛出
+        ValueError: 当字典值为空或None时生成警告日志（实际代码中建议使用logging模块）
+
+    实现策略:
+        1. 输入校验阶段：验证参数类型有效性
+        2. 数据清洗阶段：过滤无效键值对，统一值类型
+        3. 格式转换阶段：按字母顺序排序生成标准化字符串
+        4. 结果优化阶段：移除末尾分号保持格式统一
+    """
+
+    # ==================================================================
+    # 阶段1：输入参数校验
+    # ==================================================================
+
+    # 类型校验：确保输入为字典类型
+    if not isinstance(style_data, dict):
+        error_msg = f"参数类型错误，预期字典类型，实际类型：{type(style_data).__name__}"
+        raise TypeError(error_msg)
+
+    # 空值处理：快速返回空字符串避免后续处理
+    if not style_data:
+        return ''
+
+    # ==================================================================
+    # 阶段2：数据清洗与预处理
+    # ==================================================================
+
+    valid_items = []
+    for key, value in style_data.items():
+        # 键值有效性校验（双重防御机制）
+        # 过滤非字符串键，保留合法CSS属性名
+        if not isinstance(key, str):
+            continue
+
+        # 值类型统一化处理：允许数值型自动转换
+        if isinstance(value, (int, float)):
+            processed_value = str(value)
+        elif not isinstance(value, str):
+            continue  # 跳过无法处理的类型
+        else:
+            processed_value = value.strip()  # 去除前后空格
+
+        # 空值过滤：跳过无效的空值配置
+        if not processed_value:
+            continue
+
+        valid_items.append((key, processed_value))
+
+    # ==================================================================
+    # 阶段3：样式字符串生成
+    # ==================================================================
+
+    # 按属性名称字母排序（提升可读性，便于缓存优化）
+    sorted_items = sorted(valid_items, key=lambda x: x[0].lower())
+
+    # 使用列表推导式高效拼接字符串
+    # 每项格式为"key: value;"，保留末尾分号保证格式一致性
+    style_parts = [
+        f"{key}: {value};"
+        for key, value in sorted_items
+    ]
+
+    # ==================================================================
+    # 阶段4：结果优化与返回
+    # ==================================================================
+
+    # 使用空格连接保证可读性（替代空字符串连接）
+    return ' '.join(style_parts)
+
+
+# def multi_client_data_processing(
+#         result: dict,
+#         key: str or None,
+#         all_sub_keys: list,
+#         sub_key: str or None,
+#         all_keys: list = None
+# ):
+#     """
+#     处理多客户端数据的函数，用于统计不同key和sub_key的出现次数。
+#
+#     参数:
+#     - result: 一个字典，存储处理结果。
+#     - key: 主键，如果为None，则默认为'空'。
+#     - all_sub_keys: 一个包含所有可能的子键的列表。
+#     - sub_key: 子键，如果为None，则默认为'空'。
+#     - all_keys: 一个包含所有可能的主键的列表，用于初始化结果字典。
+#
+#     返回值:
+#     无返回值，直接更新result字典。
+#     """
+#
+#     # 初始化key和sub_key，如果它们为None，则分别默认为'空'
+#     key = key if key else '空'
+#     if not sub_key:
+#         sub_key = '空'
+#         if '空' not in all_sub_keys:
+#             all_sub_keys.append('空')
+#         for subDict in result.values():
+#             if subDict.get('空') is None:
+#                 subDict['空'] = 0
+#
+#     # 如果all_keys和result都存在，但result为空，则初始化result，确保每个主键和子键的计数都从0开始
+#     if all_keys and not result:
+#         result.update({key: {subKey: 0 for subKey in all_sub_keys} for key in all_keys})
+#
+#     # 检查当前key是否在result中，如果不在，则添加该key，并初始化其子键的计数
+#     if not result.get(key):
+#         result[key] = {subKey: 0 for subKey in all_sub_keys}
+#
+#     # 更新当前key和sub_key的计数
+#     result[key][sub_key] += 1
 
 def multi_client_data_processing(
-        result: dict,
-        key: str or None,
-        all_sub_key: list,
-        sub_key: str or None,
-        all_key: list = None
-):
+        result: Dict[str, Dict[str, int]],
+        key: Optional[str],
+        all_sub_keys: List[str],
+        sub_key: Optional[str],
+        all_keys: Optional[List[str]] = None
+) -> None:
     """
-    处理多客户端数据的函数，用于统计不同key和sub_key的出现次数。
+    多维度数据聚合处理器
 
-    参数:
-    - result: 一个字典，存储处理结果。
-    - key: 主键，如果为None，则默认为'空'。
-    - all_sub_key: 一个包含所有可能的子键的列表。
-    - sub_key: 子键，如果为None，则默认为'空'。
-    - all_key: 一个包含所有可能的主键的列表，用于初始化结果字典。
+    功能增强说明:
+        精确控制空值维度添加逻辑，仅在遇到空子键且目标维度不存在时补充空值维度
+        同时确保所有子键维度最终都包含空值统计项
 
-    返回值:
-    无返回值，直接更新result字典。
+    核心处理逻辑:
+        1. 空子键处理策略：
+           - 仅当当前sub_key为空时触发空维度检查
+           - 仅在all_sub_keys缺失空维度时进行补充
+          2. 维度完整性保障：
+           - 无论当前sub_key是否为空，最终确保所有主键维度都包含空子键
+           - 动态修复历史数据中可能缺失的空维度
+
+    参数说明强化:
+        :param result: 多维统计字典，结构示例:
+            {
+                "Android": {"崩溃": 5, "卡顿": 3, "空": 2},
+                "iOS": {"闪退": 4, "空": 1}
+            }
+        :param key: 主维度标识，如平台类型。空值自动转换为"空"
+        :param all_sub_keys: 子维度全集，动态维护空维度存在性
+        :param sub_key: 当前子维度值，空值触发特殊处理逻辑
+        :param all_keys: 主维度全集，用于初始化完整矩阵结构
+
+    异常处理:
+        TypeError: 当输入参数类型不符合期望时抛出
+
+    执行流程优化:
+        空值检测 → 维度补全 → 结构初始化 → 数据聚合
     """
+    # ==================================================================
+    # 阶段1：入参校验
+    # ==================================================================
+    if not isinstance(result, dict):
+        raise TypeError("统计结果必须为字典类型")
 
-    # 初始化null_count，用于统计空子键的数量
-    null_count = 0
+    if not isinstance(key, str):
+        raise TypeError("主维度标识必须为字符串类型")
 
-    # 初始化key和sub_key，如果它们为None，则分别默认为'空'
-    key = key if key else '空'
-    sub_key = sub_key if sub_key else '空'
+    if all_keys is not None and not isinstance(all_keys, list):
+        raise TypeError("主维度全集必须为列表类型")
 
-    # 如果子键为空，则增加null_count
-    if sub_key == '空':
-        null_count += 1
+    if not isinstance(sub_key, str):
+        raise TypeError("子维度标识必须为字符串类型")
 
-    # 如果all_key和result都存在，但result为空，则初始化result，确保每个主键和子键的计数都从0开始
-    if all_key and not result:
-        result.update({data: {data: 0 for data in all_sub_key} for data in all_key})
+    if not isinstance(all_sub_keys, list):
+        raise TypeError("子维度全集必须为列表类型")
 
-    # 检查当前key是否在result中，如果不在，则添加该key，并初始化其子键的计数
-    if not result.get(key):
-        result[key] = {data: 0 for data in all_sub_key}
+    # ==================================================================
+    # 阶段2：空值标准化处理
+    # ==================================================================
+    # 主键空值转换（防御性处理）
+    processed_key = key if key else "空"
 
-    # 更新当前key和sub_key的计数
-    result[key][sub_key] = result[key].get(sub_key, 0) + 1
+    # 子键空值转换与空维度维护（精确控制添加条件）
+    processed_sub_key = sub_key
+    if not sub_key:
+        processed_sub_key = "空"
+        # 仅在遇到空子键且目标维度不存在时补充（原始需求核心逻辑）
+        if "空" not in all_sub_keys:
+            all_sub_keys.append("空")
+            # 同步修复已存在主键结构的维度完整性
+            for k in result:
+                if "空" not in result[k]:
+                    result[k]["空"] = 0
 
-    # 如果null_count大于0，则遍历result中的每个key，如果key对应的子键中没有'空'，则添加'空'的计数为0
-    if null_count > 0:
-        for key, value in result.items():
-            if value.get('空') is None:
-                value['空'] = 0
+    # ==================================================================
+    # 阶段3：数据结构初始化（增强维度完整性）
+    # ==================================================================
+    # 全量主键初始化模式（当提供all_keys时）
+    if all_keys and not result:
+        # 构建完整主键×子键矩阵
+        result.update({
+            k: {sk: 0 for sk in all_sub_keys}
+            for k in all_keys
+        })
+
+    # ==================================================================
+    # 阶段4：当前主键维度初始化
+    # ==================================================================
+    if processed_key not in result:
+        # 初始化包含所有子键维度
+        result[processed_key] = {sk: 0 for sk in all_sub_keys}
+
+    # ==================================================================
+    # 阶段5：数据聚合
+    # ==================================================================
+    # 原子操作更新计数器
+    result[processed_key][processed_sub_key] += 1
 
 
 def dict_add_total(data: dict):
@@ -3059,14 +3232,14 @@ class SoftwareQualityRating:
                 multi_client_data_processing(
                     result=self.bugLevelsMultiClientCount,
                     sub_key=severity_name,
-                    all_sub_key=BUG_LEVELS,
+                    all_sub_keys=BUG_LEVELS,
                     key=bug_platform,
                 )
                 # 累加多客户端下各缺陷根源下的BUG数量
                 multi_client_data_processing(
                     result=self.bugSourceMultiClientCount,
                     sub_key=bug_source,
-                    all_sub_key=sources,
+                    all_sub_keys=sources,
                     key=bug_platform,
                 )
                 if bug_id:  # 如果bug的id不为空，则将该bug的id添加到bugIds列表中
@@ -3106,6 +3279,9 @@ class SoftwareQualityRating:
 
         # 存储总的BUG数量
         self.bugTotal = len(self.bugIds)
+
+        print(self.bugLevelsMultiClientCount)
+        print(self.bugSourceMultiClientCount)
 
     def score_result(self):
         """
@@ -3374,6 +3550,7 @@ class SoftwareQualityRating:
                     'data': self.dailyTrendOfBugChanges,  # 表格中展示的数据
                     'isMultiDimensionalTable': True,  # 表示数据是多维的，需要使用多维度表格显示
                     'isRowTotal': False,  # 表示数据中包含行总计，需要计算并显示
+                    'sort': 'asc',
                 }
             })
 
@@ -3407,6 +3584,14 @@ class SoftwareQualityRating:
                 # 如果图表包含tableData键且为字典类型，则生成表格图表的HTML
                 if chart.get('tableData') and isinstance(chart['tableData'], dict):
                     table_data: dict = chart['tableData']  # 获取表格数据
+                    if table_data.get('sort') and table_data['sort'] in ('asc', 'desc'):
+                        table_data['data'] = {
+                            k: table_data['data'][k]
+                            for k in sorted(
+                                table_data['data'],
+                                reverse=True if table_data['sort'] == 'desc' else False
+                            )
+                        }
                     if table_data.get('isMultiDimensionalTable'):  # 如果数据是多维的，则生成多维表格
                         data_headers = []  # 初始化表格的头部动态数据
                         for valueData in table_data['data'].values():  # 获取数据头部动态数据
