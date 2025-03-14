@@ -263,17 +263,18 @@ def create_plot(func):
             # Y轴刻度配置
             # ==================================================================
 
+            print(max_bar_height)
             # 计算合适的Y轴范围及刻度间隔
-            range_max, y_interval = calculation_plot_y_max_height(max_bar_height)
+            y_intervals = calculation_plot_y_max_height(max_bar_height)
 
             # 设置Y轴刻度位置及标签
             plt.yticks(
-                range(0, range_max + 1, y_interval),  # 生成等间隔刻度位置
-                labels=[str(x) for x in range(0, range_max + 1, y_interval)]  # 生成纯数字标签
+                y_intervals,  # 生成等间隔刻度位置
+                labels=[str(x) for x in y_intervals]  # 生成纯数字标签
             )
 
             # 设置y轴的最大值
-            max_height = range_max
+            max_height = max(y_intervals)
 
             # 设置Y轴显示范围（扩展10%的上方空间）
             ax.set_ylim(0, max_height * 1.1)
@@ -1932,115 +1933,116 @@ def encrypt_password_zero_padding(password: str) -> Dict[str, str]:
     }
 
 
-def switch_numpy_data(data: Dict[str, Union[Dict[str, float], float]]) -> Tuple[List[str], np.ndarray]:
+def switch_numpy_data(data: dict) -> tuple:
     """
-    通用数据转换方法，支持多层级字典结构处理
+    将给定的字典数据转换为NumPy数组，同时提取并生成对应的标签。
+
+    该方法处理多层嵌套字典结构，将同一子键下的数值按行排列，形成二维NumPy数组。
+    支持处理包含数值类型（int/float）的直接键值对，自动归类到特殊键'_'对应的行。
 
     参数:
-        data: 支持两种数据结构：
-            1. 多层结构：{样本名: {特征名: 值}}
-            2. 单层结构：{样本名: 数值}
+        data (dict): 输入数据字典，结构示例：
+            {
+                '分类1': {'子键A': 10, '子键B': 20},
+                '分类2': {'子键A': 30, '子键B': 40},
+                '分类3': 50  # 直接数值将归入特殊键'_'
+            }
 
     返回:
-        Tuple[List[str], np.ndarray]:
-            - 特征标签列表（多层结构返回特征名，单层结构返回空列表）
-            - 数据矩阵（多层结构形状为(特征数, 样本数)，单层结构为(1, 样本数))
+        tuple[list[str], numpy.ndarray]:
+            - labels (list[str]): 子键名称列表，按首次出现顺序排列
+            - np_data (numpy.ndarray): 二维数组，行对应子键，列对应原始数据键
 
-    实现策略:
-        1. 智能数据结构检测
-        2. 多层结构特征顺序保留
-        3. 自动维度对齐
-        4. 空值安全处理
+    异常:
+        TypeError: 当输入值既不是字典也不是数值时抛出
+        ValueError: 当数据结构不一致时（如子键长度不一致）抛出
+
+    实现流程:
+        1. 数据解构与标签收集：遍历输入数据，识别所有子键并收集数值
+        2. 数据对齐与验证：确保每个子键对应的数值列表长度一致
+        3. 数组转换：将重组后的数据转换为NumPy数组，保留原始数据类型
     """
-    # ==================================================================
-    # 阶段1：数据结构分析与校验
-    # ==================================================================
-    if not data:
-        return [], np.array([], dtype=np.float64)
-
-    # 检测数据结构类型
-    is_multilayer = isinstance(next(iter(data.values())), dict)
-
-    # 统一格式校验
-    if is_multilayer:
-        for v in data.values():
-            if not isinstance(v, dict):
-                raise TypeError("混合数据结构：包含字典和非字典值")
+    labels = []
+    new_data = {}
 
     # ==================================================================
-    # 阶段2：特征标签处理
+    # 阶段1：数据解构与标签收集
     # ==================================================================
-    if is_multilayer:
-        # 保持第一个样本的特征顺序
-        feature_labels = list(next(iter(data.values())).keys())
-        # 验证所有样本特征一致性
-        for sample in data.values():
-            if list(sample.keys()) != feature_labels:
-                missing = set(feature_labels) - set(sample.keys())
-                extra = set(sample.keys()) - set(feature_labels)
-                raise ValueError(f"特征不一致，缺失：{missing}, 多余：{extra}")
-    else:
-        feature_labels = []
+    try:
+        for outer_key, value in data.items():
+            if isinstance(value, dict):
+                # 处理嵌套字典结构，提取子键和对应值
+                for sub_key, sub_value in value.items():
+                    # 维护唯一且有序的子键列表（按首次出现顺序）
+                    if sub_key not in labels:
+                        labels.append(sub_key)
+                    # 初始化子键对应的数据列表（如果不存在）
+                    if sub_key not in new_data:
+                        new_data[sub_key] = []
+                    # 添加当前外层键对应的子键数值，保持原始数据类型
+                    new_data[sub_key].append(sub_value)
+            elif isinstance(value, (int, float)):
+                # 处理直接数值类型，使用'_'作为特殊键归类
+                if '_' not in new_data:
+                    new_data['_'] = []
+                new_data['_'].append(value)
+            else:
+                # 非字典或数值类型触发异常
+                raise TypeError(
+                    f"值类型必须为dict或数值，当前类型: {type(value).__name__}"
+                )
+    except KeyError as e:
+        raise ValueError("输入数据结构异常，子键缺失") from e
 
     # ==================================================================
-    # 阶段3：数据矩阵构建
+    # 阶段2：数据对齐与验证
     # ==================================================================
-    sample_names = list(data.keys())
-    num_samples = len(sample_names)
+    # 计算外层键数量作为预期数据长度
+    expected_length = len(data)
+    # 检查每个子键的数据列表长度是否一致
+    for sub_key, values in new_data.items():
+        if len(values) != expected_length:
+            raise ValueError(
+                f"数据长度不一致，子键'{sub_key}'应有{expected_length}个值，实际{len(values)}个"
+            )
 
-    if is_multilayer:
-        num_features = len(feature_labels)
-        matrix = np.zeros((num_features, num_samples), dtype=np.float64)
+    # ==================================================================
+    # 阶段3：数组转换
+    # ==================================================================
+    try:
+        # 将字典值转换为二维数组，NumPy自动推断数据类型（int/float）
+        np_data = np.array(list(new_data.values()))
+    except Exception as e:
+        raise ValueError("NumPy数组转换失败") from e
 
-        for col_idx, sample in enumerate(data.values()):
-            for row_idx, label in enumerate(feature_labels):
-                matrix[row_idx, col_idx] = sample.get(label, 0.0)
-    else:
-        matrix = np.array([list(data.values())], dtype=np.float64)
-
-    return feature_labels, matrix
+    return labels, np_data
 
 
-def calculation_plot_y_max_height(max_number: int):
-    """
-    根据提供的最大数字计算图表的Y轴最大高度和Y轴间隔。
+def calculation_plot_y_max_height(max_number: int or float, max_y_interval_count: int = 7):
+    if not isinstance(max_number, (int, float)):
+        raise TypeError("输入必须为数值类型")
+    if max_number < 0:
+        raise ValueError("输入值不能为负数")
 
-    该函数的目的是为了合理设置图表的Y轴刻度间隔和最大高度，使得图表既不过于拥挤也不过于稀疏。
-    参数:
-    - max_number (int): 图表中最大的数字。
+    base_intervals = tuple(range(1, 6))
 
-    返回:
-    - range_max (float): 计算出的Y轴最大高度。
-    - y_interval (int): 计算出的Y轴刻度间隔。
-    """
-    # 处理max_number为None或0的情况，设置默认值和初始Y轴间隔
-    if not max_number:
-        max_number = 1
-        y_interval = 1
-    # 根据max_number的值选择合适的Y轴间隔
-    elif max_number < 5:
-        y_interval = 1
-    elif max_number < 9:
-        y_interval = 2
-    elif max_number < 15:
-        y_interval = 3
-    else:
-        y_interval = 5
+    if max_number <= 1:
+        return tuple(range(0, 3, 1))
 
-    # 循环计算合适的Y轴最大高度和间隔
+    max_number = math.ceil(max_number)
+
+    for interval in base_intervals:
+        if max_number // interval < max_y_interval_count:
+            return tuple(range(0, max_number + interval + 1, interval))
+
+    max_interval = max(base_intervals)
     while True:
-        # 计算初步的Y轴最大高度
-        range_max = math.ceil(max_number / y_interval) * y_interval
-        # 如果初步计算的高度等于max_number，增加一个间隔以避免最大值重合
-        if range_max == max_number:
-            range_max += y_interval
-        # 检查Y轴刻度数是否超过7，如果超过则加大间隔
-        if range_max // y_interval > 7:
-            y_interval *= 2
-        else:
-            break
+        if max_number // max_interval < max_y_interval_count:
+             break
+        max_interval *= 2
+
     # 返回计算出的Y轴最大高度和间隔
-    return range_max, y_interval
+    return tuple(range(0, max_number + max_interval + 1, max_interval))
 
 
 def calculate_plot_width(keys: list, fig: plt.Figure, bar_width: float = 0.073):
@@ -2166,7 +2168,7 @@ def create_bar_plot(title, data: dict):
         'desiredWidthData': desired_width_data,
         'labels': labels,
         'title': title,
-        'maxBarHeight': int(max(total_heights)),
+        'maxBarHeight': math.ceil(max(total_heights)),
         'ax': ax,
     }
 
@@ -2236,7 +2238,7 @@ def create_broken_line_plot(title, data: dict):
         'desiredWidthData': desired_width_data,
         'labels': labels,
         'title': title,
-        'maxBarHeight': np.max(np_data),
+        'maxBarHeight': math.ceil(np.max(np_data)),
         'ax': ax,
     }
 

@@ -1,79 +1,45 @@
-import numpy as np
-def switch_numpy_data(data: dict) -> tuple:
+import math
+def calculation_plot_y_max_height(max_number: int):
     """
-    将给定的字典数据转换为NumPy数组，同时提取并生成对应的标签。
+    根据提供的最大数字计算图表的Y轴最大高度和Y轴间隔。
 
+    该函数的目的是为了合理设置图表的Y轴刻度间隔和最大高度，使得图表既不过于拥挤也不过于稀疏。
     参数:
-    data: dict - 包含数据的字典，其中值可以是字典或数字。
+    - max_number (int): 图表中最大的数字。
 
     返回:
-    tuple - 包含标签列表和转换后的NumPy数组的元组。
+    - range_max (float): 计算出的Y轴最大高度。
+    - y_interval (int): 计算出的Y轴刻度间隔。
     """
-    print(data)
-    # 初始化标签列表
-    labels: list[str] = []
-    # 初始化新的数据字典，用于存储转换后的数据
-    new_data: dict[str, list[int or float]] = {}
+    # 处理max_number为None或0的情况，设置默认值和初始Y轴间隔
+    if not max_number:
+        max_number = 1
+        y_interval = 1
+    # 根据max_number的值选择合适的Y轴间隔
+    elif max_number < 5:
+        y_interval = 1
+    elif max_number < 9:
+        y_interval = 2
+    elif max_number < 15:
+        y_interval = 3
+    else:
+        y_interval = 5
 
-    # 遍历原始数据字典的值
-    for value in data.values():
-        # 如果值是一个字典，则进一步处理
-        if isinstance(value, dict):
-            # 遍历子字典的键值对
-            for subKey, subValue in value.items():
-                # 如果子键不在标签列表中，则添加到列表中
-                if subKey not in labels:
-                    labels.append(subKey)
-                # 如果当前子键对应的列表不存在，则初始化
-                if not new_data.get(subKey):
-                    new_data[subKey] = []
-                # 将子值添加到对应子键的列表中
-                new_data[subKey].append(subValue)
-        # 如果值是一个整数或浮点数，则将其添加到特殊键'_'对应的列表中
-        elif isinstance(value, int) or isinstance(value, float):
-            # 如果特殊键'_'对应的列表不存在，则初始化
-            if not new_data.get('_'):
-                new_data['_'] = []
-            # 将值添加到特殊键'_'对应的列表中
-            new_data['_'].append(value)
-    # 将新数据字典的值转换为NumPy数组
-    np_data = np.array(list(new_data.values()))
-    # 返回标签列表和转换后的NumPy数组
-    return labels, np_data
-
+    # 循环计算合适的Y轴最大高度和间隔
+    while True:
+        # 计算初步的Y轴最大高度
+        range_max = math.ceil(max_number / y_interval) * y_interval
+        # 如果初步计算的高度等于max_number，增加一个间隔以避免最大值重合
+        if range_max == max_number:
+            range_max += y_interval
+        # 检查Y轴刻度数是否超过7，如果超过则加大间隔
+        if range_max // y_interval > 7:
+            y_interval *= 2
+        else:
+            break
+    # 返回计算出的Y轴最大高度和间隔
+    return range_max, y_interval, list(range(0, range_max + 1, y_interval))
 
 if __name__ == '__main__':
-    data = {'H5': {'实现与文档不符': 3, '需求缺陷': 0, '技术方案考虑不足': 2, '环境问题': 2, '历史遗留缺陷': 1,
-                   '第三方依赖': 0, '兼容性': 9, '性能问题': 0, '安全问题': 0, 'Bugfix 引入': 0, '无效缺陷': 2},
-            'API': {'实现与文档不符': 2, '需求缺陷': 0, '技术方案考虑不足': 4, '环境问题': 1, '历史遗留缺陷': 0,
-                    '第三方依赖': 0, '兼容性': 0, '性能问题': 0, '安全问题': 0, 'Bugfix 引入': 0, '无效缺陷': 0},
-            'PC': {'实现与文档不符': 2, '需求缺陷': 1, '技术方案考虑不足': 7, '环境问题': 2, '历史遗留缺陷': 1,
-                   '第三方依赖': 1, '兼容性': 1, '性能问题': 0, '安全问题': 0, 'Bugfix 引入': 0, '无效缺陷': 0},
-            'IOS': {'实现与文档不符': 0, '需求缺陷': 1, '技术方案考虑不足': 2, '环境问题': 0, '历史遗留缺陷': 0,
-                    '第三方依赖': 0, '兼容性': 1, '性能问题': 0, '安全问题': 0, 'Bugfix 引入': 0, '无效缺陷': 0},
-            'Flutter': {'实现与文档不符': 3, '需求缺陷': 0, '技术方案考虑不足': 2, '环境问题': 0, '历史遗留缺陷': 0,
-                        '第三方依赖': 0, '兼容性': 1, '性能问题': 0, '安全问题': 0, 'Bugfix 引入': 0, '无效缺陷': 0},
-            '空': {'实现与文档不符': 0, '需求缺陷': 0, '技术方案考虑不足': 1, '环境问题': 0, '历史遗留缺陷': 0,
-                   '第三方依赖': 0, '兼容性': 0, '性能问题': 0, '安全问题': 0, 'Bugfix 引入': 0, '无效缺陷': 0}}
-    """以上data期望返回的是: 
-    (['实现与文档不符', '需求缺陷', '技术方案考虑不足', '环境问题', '历史遗留缺陷', '第三方依赖', '兼容性', '性能问题', '安全问题', 'Bugfix 引入', '无效缺陷'], array([[3, 2, 2, 0, 3, 0],
-       [0, 0, 1, 1, 0, 0],
-       [2, 4, 7, 2, 2, 1],
-       [2, 1, 2, 0, 0, 0],
-       [1, 0, 1, 0, 0, 0],
-       [0, 0, 1, 0, 0, 0],
-       [9, 0, 1, 1, 1, 0],
-       [0, 0, 0, 0, 0, 0],
-       [0, 0, 0, 0, 0, 0],
-       [0, 0, 0, 0, 0, 0],
-       [2, 0, 0, 0, 0, 0]]))
-    """
-    data1 = {'林洵锋': 103.0, '王镇': 120.0, '龚进': 163.5, '陈育林': 90.0, '韦江': 100.5, '汪勇奇': 47.0}
-    """以上data期望返回的是: 
-    ([], array([[103. , 120. , 163.5,  90. , 100.5,  47. ]]))
-    """
-    data2 = {'T5龚进': 25, 'T5林洵锋': 4, 'T5王镇': 4, 'T5韦江': 11, 'T5汪勇奇': 5, 'T5陈育林': 3}
-    """以上data期望返回的是: 
-    ([], array([[25,  4,  4, 11,  5,  3]]))
-    """
-    print(switch_numpy_data(data2))
+    range_max, y_interval, = calculation_plot_y_max_height(10)
+    print(list(range(0, range_max + 1, y_interval)))

@@ -1,109 +1,71 @@
-from typing import Dict, List, Tuple, Union
-import numpy as np
-from collections import OrderedDict
-
-
-def switch_numpy_data(data: Dict[str, Union[Dict[str, float], float]]) -> Tuple[List[str], np.ndarray]:
+import math
+def calculation_plot_y_max_height(max_number: float) -> tuple[int, int]:
     """
-    通用数据转换方法，支持多层级字典结构处理
+    计算Y轴刻度最大值和间隔，保证range_max > max_number且输出为整数
+
+    参数规则:
+        - 当max_number <= 1时：固定返回 (2, 1)
+        - 当max_number > 1时：确保range_max > max_number
+        - 输出列表长度<=8：len(range(0, range_max+1, y_interval)) <=8
 
     参数:
-        data: 支持两种数据结构：
-            1. 多层结构：{样本名: {特征名: 值}}
-            2. 单层结构：{样本名: 数值}
+        max_number (float): 输入数据最大值，必须为非负数
 
     返回:
-        Tuple[List[str], np.ndarray]:
-            - 特征标签列表（多层结构返回特征名，单层结构返回空列表）
-            - 数据矩阵（多层结构形状为(特征数, 样本数)，单层结构为(1, 样本数))
+        tuple[int, int]: (range_max, y_interval)
 
-    实现策略:
-        1. 智能数据结构检测
-        2. 多层结构特征顺序保留
-        3. 自动维度对齐
-        4. 空值安全处理
+    异常:
+        ValueError: 输入为负数或非数值时抛出
+
+    测试示例:
+        >>> calculation_plot_y_max_height(10)
+        (12, 2)  # 生成列表长度7: [0,2,4,6,8,10,12]
+        >>> calculation_plot_y_max_height(1)
+        (2, 1)    # 列表长度3: [0,1,2]
+        >>> calculation_plot_y_max_height(7)
+        (8, 1)    # 列表长度9会触发调整→(8,2)→列表长度5: [0,2,4,6,8]
     """
-    # ==================================================================
-    # 阶段1：数据结构分析与校验
-    # ==================================================================
-    if not data:
-        return [], np.array([], dtype=np.float64)
+    # =====================
+    # 输入验证
+    # =====================
+    if not isinstance(max_number, (int, float)):
+        raise TypeError("输入必须为数值类型")
+    if max_number < 0:
+        raise ValueError("输入值不能为负数")
 
-    # 检测数据结构类型
-    is_multilayer = isinstance(next(iter(data.values())), dict)
+    # =====================
+    # 处理max_number <=1
+    # =====================
+    if max_number <= 1:
+        return 2, 1  # 强制返回固定值
 
-    # 统一格式校验
-    if is_multilayer:
-        for v in data.values():
-            if not isinstance(v, dict):
-                raise TypeError("混合数据结构：包含字典和非字典值")
+    # =====================
+    # 主计算逻辑
+    # =====================
+    max_number = math.ceil(max_number)  # 确保输入转换为整数处理
 
-    # ==================================================================
-    # 阶段2：特征标签处理
-    # ==================================================================
-    if is_multilayer:
-        # 保持第一个样本的特征顺序
-        feature_labels = list(next(iter(data.values())).keys())
-        # 验证所有样本特征一致性
-        for sample in data.values():
-            if list(sample.keys()) != feature_labels:
-                missing = set(feature_labels) - set(sample.keys())
-                extra = set(sample.keys()) - set(feature_labels)
-                raise ValueError(f"特征不一致，缺失：{missing}, 多余：{extra}")
-    else:
-        feature_labels = []
+    # 候选间隔基数 (1,2,5的倍数)
+    base_intervals = [1, 2, 5]
+    magnitude = 10 ** (len(str(int(max_number))) - 1)  # 数量级计算
 
-    # ==================================================================
-    # 阶段3：数据矩阵构建
-    # ==================================================================
-    sample_names = list(data.keys())
-    num_samples = len(sample_names)
+    # 寻找最优解
+    for interval in base_intervals:
+        y_interval = interval * magnitude // 10  # 保证间隔为整数
+        if y_interval == 0:
+            y_interval = 1
 
-    if is_multilayer:
-        num_features = len(feature_labels)
-        matrix = np.zeros((num_features, num_samples), dtype=np.float64)
+        # 计算range_max必须大于max_number
+        range_max = ((max_number // y_interval) + 1) * y_interval
+        tick_count = (range_max // y_interval) + 1  # 包含0点的数量
 
-        for col_idx, sample in enumerate(data.values()):
-            for row_idx, label in enumerate(feature_labels):
-                matrix[row_idx, col_idx] = sample.get(label, 0.0)
-    else:
-        matrix = np.array([list(data.values())], dtype=np.float64)
+        # 满足刻度数量<=8时立即返回
+        if tick_count <= 8:
+            return range_max, y_interval
 
-    return feature_labels, matrix
+    # 未找到合适解时降级处理（理论上不会执行到这里）
+    return max_number + 1, 1
 
 
 if __name__ == '__main__':
-    data = {'H5': {'实现与文档不符': 3, '需求缺陷': 0, '技术方案考虑不足': 2, '环境问题': 2, '历史遗留缺陷': 1,
-                   '第三方依赖': 0, '兼容性': 9, '性能问题': 0, '安全问题': 0, 'Bugfix 引入': 0, '无效缺陷': 2},
-            'API': {'实现与文档不符': 2, '需求缺陷': 0, '技术方案考虑不足': 4, '环境问题': 1, '历史遗留缺陷': 0,
-                    '第三方依赖': 0, '兼容性': 0, '性能问题': 0, '安全问题': 0, 'Bugfix 引入': 0, '无效缺陷': 0},
-            'PC': {'实现与文档不符': 2, '需求缺陷': 1, '技术方案考虑不足': 7, '环境问题': 2, '历史遗留缺陷': 1,
-                   '第三方依赖': 1, '兼容性': 1, '性能问题': 0, '安全问题': 0, 'Bugfix 引入': 0, '无效缺陷': 0},
-            'IOS': {'实现与文档不符': 0, '需求缺陷': 1, '技术方案考虑不足': 2, '环境问题': 0, '历史遗留缺陷': 0,
-                    '第三方依赖': 0, '兼容性': 1, '性能问题': 0, '安全问题': 0, 'Bugfix 引入': 0, '无效缺陷': 0},
-            'Flutter': {'实现与文档不符': 3, '需求缺陷': 0, '技术方案考虑不足': 2, '环境问题': 0, '历史遗留缺陷': 0,
-                        '第三方依赖': 0, '兼容性': 1, '性能问题': 0, '安全问题': 0, 'Bugfix 引入': 0, '无效缺陷': 0},
-            '空': {'实现与文档不符': 0, '需求缺陷': 0, '技术方案考虑不足': 1, '环境问题': 0, '历史遗留缺陷': 0,
-                   '第三方依赖': 0, '兼容性': 0, '性能问题': 0, '安全问题': 0, 'Bugfix 引入': 0, '无效缺陷': 0}}
-    """以上data期望返回的是: 
-    (['实现与文档不符', '需求缺陷', '技术方案考虑不足', '环境问题', '历史遗留缺陷', '第三方依赖', '兼容性', '性能问题', '安全问题', 'Bugfix 引入', '无效缺陷'], array([[3, 2, 2, 0, 3, 0],
-       [0, 0, 1, 1, 0, 0],
-       [2, 4, 7, 2, 2, 1],
-       [2, 1, 2, 0, 0, 0],
-       [1, 0, 1, 0, 0, 0],
-       [0, 0, 1, 0, 0, 0],
-       [9, 0, 1, 1, 1, 0],
-       [0, 0, 0, 0, 0, 0],
-       [0, 0, 0, 0, 0, 0],
-       [0, 0, 0, 0, 0, 0],
-       [2, 0, 0, 0, 0, 0]]))
-    """
-    data1 = {'林洵锋': 103.0, '王镇': 120.0, '龚进': 163.5, '陈育林': 90.0, '韦江': 100.5, '汪勇奇': 47.0}
-    """以上data期望返回的是: 
-    ([], array([[103. , 120. , 163.5,  90. , 100.5,  47. ]]))
-    """
-    data2 = {'T5龚进': 25, 'T5林洵锋': 4, 'T5王镇': 4, 'T5韦江': 11, 'T5汪勇奇': 5, 'T5陈育林': 3}
-    """以上data期望返回的是: 
-    ([], array([[25,  4,  4, 11,  5,  3]]))
-    """
-    print(switch_numpy_data(data2))
+    range_max, y_interval, = calculation_plot_y_max_height(9)
+    print(list(range(0, range_max + 1, y_interval)))

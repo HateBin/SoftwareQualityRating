@@ -11,7 +11,7 @@
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, Optional, TypeVar, List, Union
+from typing import Any, Dict, Optional, TypeVar, List, Union, Tuple
 from io import BytesIO
 from openai import OpenAI, APIConnectionError, APIStatusError, APIError
 import matplotlib.pyplot as plt
@@ -1936,41 +1936,84 @@ def switch_numpy_data(data: dict) -> tuple:
     """
     将给定的字典数据转换为NumPy数组，同时提取并生成对应的标签。
 
+    该方法处理多层嵌套字典结构，将同一子键下的数值按行排列，形成二维NumPy数组。
+    支持处理包含数值类型（int/float）的直接键值对，自动归类到特殊键'_'对应的行。
+
     参数:
-    data: dict - 包含数据的字典，其中值可以是字典或数字。
+        data (dict): 输入数据字典，结构示例：
+            {
+                '分类1': {'子键A': 10, '子键B': 20},
+                '分类2': {'子键A': 30, '子键B': 40},
+                '分类3': 50  # 直接数值将归入特殊键'_'
+            }
 
     返回:
-    tuple - 包含标签列表和转换后的NumPy数组的元组。
-    """
-    # 初始化标签列表
-    labels: list[str] = []
-    # 初始化新的数据字典，用于存储转换后的数据
-    new_data: dict[str, list[int or float]] = {}
+        tuple[list[str], numpy.ndarray]:
+            - labels (list[str]): 子键名称列表，按首次出现顺序排列
+            - np_data (numpy.ndarray): 二维数组，行对应子键，列对应原始数据键
 
-    # 遍历原始数据字典的值
-    for value in data.values():
-        # 如果值是一个字典，则进一步处理
-        if isinstance(value, dict):
-            # 遍历子字典的键值对
-            for subKey, subValue in value.items():
-                # 如果子键不在标签列表中，则添加到列表中
-                if subKey not in labels:
-                    labels.append(subKey)
-                # 如果当前子键对应的列表不存在，则初始化
-                if not new_data.get(subKey):
-                    new_data[subKey] = []
-                # 将子值添加到对应子键的列表中
-                new_data[subKey].append(subValue)
-        # 如果值是一个整数或浮点数，则将其添加到特殊键'_'对应的列表中
-        elif isinstance(value, int) or isinstance(value, float):
-            # 如果特殊键'_'对应的列表不存在，则初始化
-            if not new_data.get('_'):
-                new_data['_'] = []
-            # 将值添加到特殊键'_'对应的列表中
-            new_data['_'].append(value)
-    # 将新数据字典的值转换为NumPy数组
-    np_data = np.array(list(new_data.values()))
-    # 返回标签列表和转换后的NumPy数组
+    异常:
+        TypeError: 当输入值既不是字典也不是数值时抛出
+        ValueError: 当数据结构不一致时（如子键长度不一致）抛出
+
+    实现流程:
+        1. 数据解构与标签收集：遍历输入数据，识别所有子键并收集数值
+        2. 数据对齐与验证：确保每个子键对应的数值列表长度一致
+        3. 数组转换：将重组后的数据转换为NumPy数组，保留原始数据类型
+    """
+    labels = []
+    new_data = {}
+
+    # ==================================================================
+    # 阶段1：数据解构与标签收集
+    # ==================================================================
+    try:
+        for outer_key, value in data.items():
+            if isinstance(value, dict):
+                # 处理嵌套字典结构，提取子键和对应值
+                for sub_key, sub_value in value.items():
+                    # 维护唯一且有序的子键列表（按首次出现顺序）
+                    if sub_key not in labels:
+                        labels.append(sub_key)
+                    # 初始化子键对应的数据列表（如果不存在）
+                    if sub_key not in new_data:
+                        new_data[sub_key] = []
+                    # 添加当前外层键对应的子键数值，保持原始数据类型
+                    new_data[sub_key].append(sub_value)
+            elif isinstance(value, (int, float)):
+                # 处理直接数值类型，使用'_'作为特殊键归类
+                if '_' not in new_data:
+                    new_data['_'] = []
+                new_data['_'].append(value)
+            else:
+                # 非字典或数值类型触发异常
+                raise TypeError(
+                    f"值类型必须为dict或数值，当前类型: {type(value).__name__}"
+                )
+    except KeyError as e:
+        raise ValueError("输入数据结构异常，子键缺失") from e
+
+    # ==================================================================
+    # 阶段2：数据对齐与验证
+    # ==================================================================
+    # 计算外层键数量作为预期数据长度
+    expected_length = len(data)
+    # 检查每个子键的数据列表长度是否一致
+    for sub_key, values in new_data.items():
+        if len(values) != expected_length:
+            raise ValueError(
+                f"数据长度不一致，子键'{sub_key}'应有{expected_length}个值，实际{len(values)}个"
+            )
+
+    # ==================================================================
+    # 阶段3：数组转换
+    # ==================================================================
+    try:
+        # 将字典值转换为二维数组，NumPy自动推断数据类型（int/float）
+        np_data = np.array(list(new_data.values()))
+    except Exception as e:
+        raise ValueError("NumPy数组转换失败") from e
+
     return labels, np_data
 
 
