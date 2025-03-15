@@ -1,104 +1,186 @@
-def multi_client_data_processing(
-        result: Dict[str, Dict[str, int]],
-        key: Optional[str],
-        all_sub_keys: List[str],
-        sub_key: Optional[str],
-        all_keys: Optional[List[str]] = None
-) -> None:
+def requirement_task_statistics(self):
     """
-    多维度数据聚合处理器
+    统计需求关联的子任务数据，计算开发工时并识别关键时间节点
 
-    功能增强说明:
-        精确控制空值维度添加逻辑，仅在遇到空子键且目标维度不存在时补充空值维度
-        同时确保所有子键维度最终都包含空值统计项
+    核心功能：
+    1. 遍历所有子任务，分离开发任务和测试任务
+    2. 计算开发者总工时和每日工时分布
+    3. 记录项目关键时间节点（最早/最晚任务日期、上线日期）
+    4. 维护测试相关数据（测试负责人、收件人列表）
 
-    核心处理逻辑:
-        1. 空子键处理策略：
-           - 仅当当前sub_key为空时触发空维度检查
-           - 仅在all_sub_keys缺失空维度时进行补充
-          2. 维度完整性保障：
-           - 无论当前sub_key是否为空，最终确保所有主键维度都包含空子键
-           - 动态修复历史数据中可能缺失的空维度
-
-    参数说明强化:
-        :param result: 多维统计字典，结构示例:
-            {
-                "Android": {"崩溃": 5, "卡顿": 3, "空": 2},
-                "iOS": {"闪退": 4, "空": 1}
-            }
-        :param key: 主维度标识，如平台类型。空值自动转换为"空"
-        :param all_sub_keys: 子维度全集，动态维护空维度存在性
-        :param sub_key: 当前子维度值，空值触发特殊处理逻辑
-        :param all_keys: 主维度全集，用于初始化完整矩阵结构
-
-    异常处理:
-        TypeError: 当输入参数类型不符合期望时抛出
-
-    执行流程优化:
-        空值检测 → 维度补全 → 结构初始化 → 数据聚合
+    优化点：
+    - 使用 defaultdict 简化字典操作
+    - 分离开发/测试任务处理逻辑
+    - 增加数据校验和异常处理
+    - 优化日期比较逻辑
+    - 减少嵌套层次提升可读性
     """
-    # ==================================================================
-    # 阶段1：入参校验
-    # ==================================================================
-    if not isinstance(result, dict):
-        raise TypeError("统计结果必须为字典类型")
-
-    if not isinstance(key, str):
-        raise TypeError("主维度标识必须为字符串类型")
-
-    if all_keys is not None and not isinstance(all_keys, list):
-        raise TypeError("主维度全集必须为列表类型")
-
-    if not isinstance(sub_key, str):
-        raise TypeError("子维度标识必须为字符串类型")
-
-    if not isinstance(all_sub_keys, list):
-        raise TypeError("子维度全集必须为列表类型")
 
     # ==================================================================
-    # 阶段2：空值标准化处理
+    # 阶段1：数据准备
     # ==================================================================
-    # 主键空值转换（防御性处理）
-    processed_key = key if key else "空"
+    from collections import defaultdict
 
-    # 子键空值转换与空维度维护（精确控制添加条件）
-    processed_sub_key = sub_key
-    if sub_key:
-        processed_sub_key = "空"
-        # 仅在遇到空子键且目标维度不存在时补充（原始需求核心逻辑）
-        if "空" not in all_sub_keys:
-            all_sub_keys.append("空")
-            # 同步修复已存在主键结构的维度完整性
-            for k in result:
-                if "空" not in result[k]:
-                    result[k]["空"] = 0
+    # 使用 defaultdict 自动初始化数据结构
+    self.workHours = defaultdict(float)
+    self.dailyWorkingHoursOfEachDeveloper = defaultdict(lambda: defaultdict(float))
+
+    # 获取子任务数据（已处理分页逻辑）
+    requirement_tasks = ger_requirement_tasks()
+    if not requirement_tasks:
+        print("警告：未获取到任何子任务数据")
+        return
 
     # ==================================================================
-    # 阶段3：数据结构初始化（增强维度完整性）
+    # 阶段2：遍历处理每个子任务
     # ==================================================================
-    # 全量主键初始化模式（当提供all_keys时）
-    if all_keys and not result:
-        # 构建完整主键×子键矩阵
-        result.update({
-            k: {sk: 0 for sk in all_sub_keys}
-            for k in all_keys
-        })
+    for child in requirement_tasks:
+        try:
+            # 数据校验：确保必需字段存在
+            if not all(key in child for key in ('owner', 'begin', 'due', 'effort_completed')):
+                print(f"无效任务数据，缺失关键字段：{child.get('id', '未知ID')}")
+                continue
+
+            # 数据清洗：去除部门前缀
+            raw_owner = child['owner'].replace(";", "")
+            processing_personnel = extract_matching(r"{}(.*?)$", raw_owner)[0]
+
+            # 转换数据类型
+            effort_completed = self._parse_effort(child.get('effort_completed', 0))
+            begin_date = self._parse_date(child['begin'])
+            due_date = self._parse_date(child['due'])
+
+        except (ValueError, TypeError) as e:
+            print(f"数据处理失败，任务ID：{child.get('id', '未知ID')} - {str(e)}")
+            continue
+
+        # ==================================================================
+        # 阶段3：任务分类处理
+        # ==================================================================
+        # 开发者任务处理
+        if processing_personnel not in TESTERS:
+            self._process_developer_task(
+                developer=processing_personnel,
+                effort=effort_completed,
+                begin=begin_date,
+                due=due_date,
+                child_data=child
+            )
+        # 测试任务处理
+        else:
+            self._process_tester_task(
+                due_date=due_date,
+                begin_date=begin_date,
+                owner=raw_owner
+            )
 
     # ==================================================================
-    # 阶段4：当前主键维度初始化
+    # 阶段4：后期校验
     # ==================================================================
-    if processed_key not in result:
-        # 初始化包含所有子键维度
-        result[processed_key] = {sk: 0 for sk in all_sub_keys}
+    if not self.earliestTaskDate or not self.lastTaskDate:
+        print("警告：未能识别有效任务时间范围")
+    if not self.onlineDate:
+        print("警告：未识别到上线日期")
 
-    # ==================================================================
-    # 阶段5：数据聚合（防御性计数）
-    # ==================================================================
+
+def _parse_effort(self, value) -> float:
+    """解析工时数据并校验有效性"""
     try:
-        # 原子操作更新计数器
-        result[processed_key][processed_sub_key] += 1
-    except KeyError as e:
-        # 异常处理策略（根据需求可选）：
-        # 方案1：忽略未定义维度（当前实现）
-        # 方案2：动态扩展维度（需评估业务需求）
-        print(f"未定义子维度 {e}，该数据未被统计")
+        effort = float(value)
+        if effort < 0:
+            raise ValueError("工时不能为负数")
+        return effort
+    except (TypeError, ValueError):
+        print(f"无效工时数据：{value}，已重置为0")
+        return 0.0
+
+
+def _parse_date(self, date_str) -> datetime.date:
+    """日期解析与标准化"""
+    try:
+        return datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        raise ValueError(f"无效日期格式：{date_str}")
+
+
+def _process_developer_task(self, developer: str, effort: float, begin: datetime.date,
+                            due: datetime.date, child_data: dict):
+    """
+    处理开发者任务逻辑
+    - 累加工时
+    - 记录任务时间范围
+    - 保存详细工时分布
+    """
+    # 累加总工时
+    self.workHours[developer] += effort
+
+    # 更新任务时间范围
+    self._update_date_range(begin, due)
+
+    # 保存子任务引用（用于后续分析）
+    child_data['developerName'] = developer
+
+    # 记录每日工时分布（如果存在有效时间）
+    if begin and due:
+        self._record_daily_hours(developer, effort, begin, due)
+
+
+def _process_tester_task(self, due_date: datetime.date, begin_date: datetime.date, owner: str):
+    """
+    处理测试任务逻辑
+    - 标记测试任务存在
+    - 更新上线日期
+    - 维护测试联系人列表
+    """
+    # 首次遇到测试任务时标记
+    if not self.isExistTestTask:
+        self.isExistTestTask = True
+
+    # 更新最晚任务日期（使用安全的日期比较）
+    if due_date and (not self.lastTaskDate or due_date > self.lastTaskDate):
+        self.lastTaskDate = due_date
+
+    # 更新上线日期逻辑优化
+    if begin_date and (not self.onlineDate or begin_date > self.onlineDate):
+        self.onlineDate = begin_date
+
+    # 维护测试收件人列表（去重处理）
+    if owner not in self.testRecipient:
+        self.testRecipient.append(owner)
+
+
+def _update_date_range(self, begin: datetime.date, due: datetime.date):
+    """更新项目时间范围记录"""
+    # 最早任务日期
+    if begin:
+        if not self.earliestTaskDate or begin < self.earliestTaskDate:
+            self.earliestTaskDate = begin
+
+    # 最晚任务日期（开发者任务维度）
+    if due:
+        if not self.lastTaskDate or due > self.lastTaskDate:
+            self.lastTaskDate = due
+
+
+def _record_daily_hours(self, developer: str, effort: float,
+                        begin: datetime.date, due: datetime.date):
+    """
+    记录开发者每日工时分布
+    算法优化：使用工作日历计算日期范围
+    """
+    # 获取有效工作日范围
+    try:
+        work_days = get_days(str(begin), str(due), is_workday=True)
+    except ValueError as e:
+        print(f"无效日期范围[{begin}-{due}]：{str(e)}")
+        return
+
+    if not work_days:
+        return
+
+    # 计算日均工时
+    daily_effort = effort / len(work_days)
+
+    # 记录到每日工时
+    for day in work_days:
+        self.dailyWorkingHoursOfEachDeveloper[developer][day] += daily_effort

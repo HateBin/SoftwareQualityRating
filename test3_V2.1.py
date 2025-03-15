@@ -1220,6 +1220,86 @@ def get_user_detail() -> dict:
         raise RuntimeError("获取用户信息失败") from orig_err
 
 
+def ger_requirement_tasks() -> list:
+    page: int = 1
+    page_size: int = 100
+    requirement_tasks: list = []
+    # ------------------------------
+    # 阶段1：请求参数构造
+    # ------------------------------
+    # 拼接完整API端点URL（HOST取自全局常量）
+    api_path = "/api/entity/stories/get_children_stories"
+    url = f"{HOST}{api_path}"  # 示例：https://www.tapd.cn/api/entity/...
+
+    # 构造查询参数：
+    # - workspace_id : 项目空间ID（取自全局PROJECT_ID）
+    # - program_id   : 项目集ID（当前项目未使用，置空字符串）
+    # - entity_type  : 实体类型透传
+    # - entity_id    : 实体ID强制转换为字符串类型
+    params = {
+        "workspace_id": PROJECT_ID,
+        "story_id": REQUIREMENT_ID,
+        "page": page,
+        "per_page": page_size,
+        "sort_name": "due",
+        "order": "asc",
+    }
+
+    while True:
+        # ------------------------------
+        # 阶段2：发送API请求
+        # ------------------------------
+        # 通过封装后的fetch_data方法发送GET请求
+        # 该方法已内置重试机制和Cookie管理
+        response = fetch_data(
+            url=url,
+            params=params,
+            method="GET"
+        )
+
+        try:
+            # ------------------------------
+            # 阶段3：响应数据处理
+            # ------------------------------
+            # 将响应内容解析为JSON格式
+            # 可能抛出JSONDecodeError（继承自ValueError）
+            response_json = response.json()
+
+            # 数据完整性校验：
+            # 检查顶层data字段是否存在（TAPD标准响应结构）
+            if "data" not in response_json:
+                raise KeyError("API响应缺少'data'字段")
+
+            if "children_list" not in response_json['data']:
+                raise KeyError("响应数据缺少children_list字段")
+
+            # 提取业务数据主体
+            requirement_datas: list = response_json["data"]['children_list']
+
+            if not isinstance(requirement_datas, list):
+                raise ValueError(
+                    f"预期列表类型状态数据，实际获取类型：{type(requirement_datas)}"
+                )
+
+            if not requirement_datas:
+                break
+
+            requirement_tasks.extend(requirement_datas)
+
+            if len(requirement_datas) < page_size:
+                return requirement_tasks
+            else:
+                params['page'] += 1
+
+        except requests.JSONDecodeError as json_err:
+            # 捕获JSON解析异常并附加上下文信息
+            error_msg = f"响应内容非JSON格式，原始内容：{response.text[:200]}..."
+            raise ValueError(error_msg) from json_err
+        except KeyError as key_err:
+            # 细化键缺失异常信息
+            raise KeyError(f"响应数据缺失关键字段：{str(key_err)}") from key_err
+
+
 def fetch_data(
         url: str,
         params: Optional[Dict[str, Any]] = None,
@@ -2687,76 +2767,161 @@ def style_convert(style_data: dict) -> str:
 
 
 def multi_client_data_processing(
-        result: dict,
-        key: str or None,
-        all_sub_keys: list,
-        sub_key: str or None,
-        all_keys: list = None
-):
+        result: Dict[str, Dict[str, int]],
+        key: Optional[str],
+        all_sub_keys: List[str],
+        sub_key: Optional[str],
+        all_keys: Optional[List[str]] = None
+) -> None:
     """
-    处理多客户端数据的函数，用于统计不同key和sub_key的出现次数。
+    多维度数据聚合处理器
 
-    参数:
-    - result: 一个字典，存储处理结果。
-    - key: 主键，如果为None，则默认为'空'。
-    - all_sub_keys: 一个包含所有可能的子键的列表。
-    - sub_key: 子键，如果为None，则默认为'空'。
-    - all_keys: 一个包含所有可能的主键的列表，用于初始化结果字典。
+    功能增强说明:
+        精确控制空值维度添加逻辑，仅在遇到空子键且目标维度不存在时补充空值维度
+        同时确保所有子键维度最终都包含空值统计项
 
-    返回值:
-    无返回值，直接更新result字典。
+    核心处理逻辑:
+        1. 空子键处理策略：
+           - 仅当当前sub_key为空时触发空维度检查
+           - 仅在all_sub_keys缺失空维度时进行补充
+          2. 维度完整性保障：
+           - 无论当前sub_key是否为空，最终确保所有主键维度都包含空子键
+           - 动态修复历史数据中可能缺失的空维度
+
+    参数说明强化:
+        :param result: 多维统计字典，结构示例:
+            {
+                "Android": {"崩溃": 5, "卡顿": 3, "空": 2},
+                "iOS": {"闪退": 4, "空": 1}
+            }
+        :param key: 主维度标识，如平台类型。空值自动转换为"空"
+        :param all_sub_keys: 子维度全集，动态维护空维度存在性
+        :param sub_key: 当前子维度值，空值触发特殊处理逻辑
+        :param all_keys: 主维度全集，用于初始化完整矩阵结构
+
+    异常处理:
+        TypeError: 当输入参数类型不符合期望时抛出
+
+    执行流程优化:
+        空值检测 → 维度补全 → 结构初始化 → 数据聚合
     """
+    # ==================================================================
+    # 阶段1：入参校验
+    # ==================================================================
+    if not isinstance(result, dict):
+        raise TypeError("统计结果必须为字典类型")
 
-    # 初始化key和sub_key，如果它们为None，则分别默认为'空'
-    key = key if key else '空'
+    if not isinstance(key, str):
+        raise TypeError("主维度标识必须为字符串类型")
+
+    if all_keys is not None and not isinstance(all_keys, list):
+        raise TypeError("主维度全集必须为列表类型")
+
+    if not isinstance(sub_key, str):
+        raise TypeError("子维度标识必须为字符串类型")
+
+    if not isinstance(all_sub_keys, list):
+        raise TypeError("子维度全集必须为列表类型")
+
+    # ==================================================================
+    # 阶段2：空值标准化处理
+    # ==================================================================
+    # 主键空值转换（防御性处理）
+    processed_key = key if key else "空"
+
+    # 子键空值转换与空维度维护（精确控制添加条件）
+    processed_sub_key = sub_key
     if not sub_key:
-        sub_key = '空'
-        if '空' not in all_sub_keys:
-            all_sub_keys.append('空')
-        for subDict in result.values():
-            if subDict.get('空') is None:
-                subDict['空'] = 0
+        processed_sub_key = "空"
+        # 仅在遇到空子键且目标维度不存在时补充（原始需求核心逻辑）
+        if "空" not in all_sub_keys:
+            all_sub_keys.append("空")
+            # 同步修复已存在主键结构的维度完整性
+            for k in result:
+                if "空" not in result[k]:
+                    result[k]["空"] = 0
 
-    # 如果all_keys和result都存在，但result为空，则初始化result，确保每个主键和子键的计数都从0开始
+    # ==================================================================
+    # 阶段3：数据结构初始化（增强维度完整性）
+    # ==================================================================
+    # 全量主键初始化模式（当提供all_keys时）
     if all_keys and not result:
-        result.update({key: {subKey: 0 for subKey in all_sub_keys} for key in all_keys})
+        # 构建完整主键×子键矩阵
+        result.update({
+            k: {sk: 0 for sk in all_sub_keys}
+            for k in all_keys
+        })
 
-    # 检查当前key是否在result中，如果不在，则添加该key，并初始化其子键的计数
-    if not result.get(key):
-        result[key] = {subKey: 0 for subKey in all_sub_keys}
+    # ==================================================================
+    # 阶段4：当前主键维度初始化
+    # ==================================================================
+    if processed_key not in result:
+        # 初始化包含所有子键维度
+        result[processed_key] = {sk: 0 for sk in all_sub_keys}
 
-    # 更新当前key和sub_key的计数
-    result[key][sub_key] += 1
+    # ==================================================================
+    # 阶段5：数据聚合
+    # ==================================================================
+    # 原子操作更新计数器
+    result[processed_key][processed_sub_key] += 1
 
 
-def dict_add_total(data: dict):
+def get_system_name() -> str:
     """
-    接受字典, 添加总数字段
-    :param data: 字典
-    :return: 添加总数后的字典
+    获取标准化系统名称
+
+    该方法通过平台检测和映射转换，提供统一的系统标识符。
+    支持主流桌面操作系统识别，确保跨平台兼容性。
+
+    返回:
+        str: 标准化系统标识符，取值范围：
+            - 'macOS' : Apple macOS系统
+            - 'windows' : Microsoft Windows系统
+
+    异常:
+        ValueError: 检测到非支持操作系统时抛出
+        RuntimeError: 平台检测失败时抛出
+
+    实现策略:
+        1. 调用底层平台接口获取原始系统标识
+        2. 执行系统标识到标准名称的映射转换
+        3. 防御性校验确保返回值有效性
     """
-    new_data = data.copy()
-    new_data['总数'] = sum(data.values())
-    return new_data
+    # ==================================================================
+    # 阶段1：原始系统标识获取
+    # ==================================================================
+    try:
+        # 调用platform模块获取基础系统信息
+        # 注意：WSL等特殊环境可能需要额外处理
+        raw_system = platform.system()
+    except Exception as e:
+        # 封装原始异常，添加诊断上下文
+        raise RuntimeError("系统检测失败，platform.system()执行异常") from e
 
+    # ==================================================================
+    # 阶段2：系统标识标准化处理
+    # ==================================================================
+    # 定义操作系统映射关系(键: platform返回值，值: 标准化名称)
+    system_mapping = {
+        'Darwin': 'macOS',  # macOS系统标识
+        'Windows': 'windows'  # Windows系统标识
+    }
 
-def get_system_name():
-    """
-    获取当前系统的名称。
+    # 执行标识转换
+    normalized_system = system_mapping.get(raw_system)
 
-    该函数通过调用platform.system()方法来获取当前系统的名称，
-    并根据返回值判断是macOS系统还是Windows系统。
+    # ==================================================================
+    # 阶段3：结果校验与返回
+    # ==================================================================
+    if not normalized_system:
+        # 生成详细的错误报告
+        error_msg = (
+            f"不支持的平台类型: {raw_system}。"
+            f"当前支持: {', '.join(system_mapping.values())}"
+        )
+        raise ValueError(error_msg)
 
-    Returns:
-        str: 系统的名称，可能为'macOS'或'windows'。
-    """
-    # 获取当前系统的名称
-    system_name = platform.system()
-    # 判断系统名称并返回对应的系统标识
-    if system_name == 'Darwin':
-        return 'macOS'
-    elif system_name == 'Windows':
-        return 'windows'
+    return normalized_system
 
 
 def _handle_stream_response(completion, result: list) -> str:
@@ -2819,136 +2984,236 @@ def _handle_normal_response(completion, result: list) -> str:
 class SoftwareQualityRating:
     def __init__(self):
         """
-        初始化项目管理器类的构造方法。
+        软件质量评分系统初始化方法
 
-        设置初始值和空数据结构，用于后续的项目管理操作。
+        本方法初始化软件质量评分系统所需的所有数据结构，包括：
+        - 项目基本信息
+        - 缺陷统计相关数据
+        - 评分结果存储
+        - 报告生成相关配置
+
+        数据结构说明:
+            1. 基础信息:
+                - requirementName: 需求名称
+                - PM: 产品经理
+                - testRecipient: 测试报告接收人列表
+                - testersStr: 测试人员字符串表示
+                - developers: 开发人员列表
+
+            2. 时间相关:
+                - earliestTaskDate: 最早任务日期
+                - lastTaskDate: 最晚任务日期
+                - onlineDate: 上线日期
+
+            3. 缺陷统计:
+                - bugLevelsCount: 缺陷级别统计
+                - bugLevelsMultiClientCount: 多端缺陷级别统计
+                - bugSourceCount: 缺陷根源统计
+                - bugSourceMultiClientCount: 多端缺陷根源统计
+                - bugTotal: 缺陷总数
+                - bugInputTotal: 手动输入缺陷总数
+                - bugIds: 缺陷ID列表
+                - reopenBugsData: 重新打开缺陷数据
+                - unrepairedBugsData: 未修复缺陷数据
+                - fixers: 缺陷修复人统计
+
+            4. 评分系统:
+                - score: 各项评分结果
+                - scoreContents: 评分详细内容
+                - bugCountScoreMsg: 缺陷数量评分说明
+                - bugRepairScoreMsg: 缺陷修复评分说明
+                - bugReopenScoreMsg: 缺陷重开评分说明
+
+            5. 报告生成:
+                - testReportHtml: 测试报告HTML内容
+                - chartHtml: 图表HTML内容
+                - reportSummary: 报告总结内容
+
+            6. 配置信息:
+                - oldBugListConfigs: 原始缺陷列表配置
+                - oldSubTaskListConfigs: 原始子任务列表配置
         """
-        # 初始化项目需求名称为空字符串
-        self.requirementName = ''
-        # 初始化产品经理为空字符串
-        self.PM = ''
-        # 初始化测试收件人员列表为空列表(用于在测试报告中填写的测试收件人员)
-        self.testRecipient = []
-        # 初始化测试人员列表为空字符串(用于在测试报告概要中填写的测试人员)
-        self.testersStr = ''
-        # 初始化开发人员列表为空列表
-        self.developers = []
-        # 初始化是否存在测试任务标志为False
-        self.isExistTestTask = False
-        # 初始化最早任务时间为None
-        self.earliestTaskDate = None
-        # 初始化最晚任务时间为None
-        self.lastTaskDate = None
-        # 初始化上线时间为None
-        self.onlineDate = None
-        # 初始化工作小时数的字典，用于记录各个开发者工作小时数
-        self.workHours = {}
-        # 初始化开发总小时数为0
-        self.devTotalHours = 0
-        # 初始化缺陷级别数量为空字典
-        self.bugLevelsCount = {}
-        # 初始化缺陷级别多端数量为空字典
-        self.bugLevelsMultiClientCount = {}
-        # 初始化缺陷根源数量为空字典
-        self.bugSourceCount = {}
-        # 初始化缺陷根源多端数量为空字典
-        self.bugSourceMultiClientCount = {}
-        # 初始化缺陷总数为0
-        self.bugTotal = 0
-        # 初始化缺陷输入总数为0
-        self.bugInputTotal = 0
-        # 初始化缺陷ID列表为空列表
-        self.bugIds = []
-        # 初始化重新打开的缺陷列表为空字典
-        self.reopenBugsData = {}
-        # 初始化未修复的缺陷列表为空字典
-        self.unrepairedBugsData = {}
-        # 初始化开发者数量为0
-        self.developerCount = 0
-        # 初始化每个开发者的工作小时为空字典
-        self.dailyWorkingHoursOfEachDeveloper = {}
-        # 初始化开发周期为0
-        self.developmentCycle = 0
-        # 初始化缺陷修复者信息为空字典
-        self.fixers = {}
-        # 初始化原的缺陷列表配置为空字符串
-        self.oldBugListConfigs = ''
-        # 初始化原的子任务列表配置为空字符串
-        self.oldSubTaskListConfigs = ''
-        # 初始化缺陷修复趋势为空字典
-        self.dailyTrendOfBugChanges = {}
-        # 初始化未修复的缺陷列表为空字典
+        # ==================================================================
+        # 阶段1：基础信息初始化
+        # ==================================================================
+        self.requirementName = ''  # 需求名称
+        self.PM = ''  # 产品经理
+        self.testRecipient = []  # 测试报告接收人列表
+        self.testersStr = ''  # 测试人员字符串表示
+        self.developers = []  # 开发人员列表
+
+        # ==================================================================
+        # 阶段2：时间相关初始化
+        # ==================================================================
+        self.isExistTestTask = False  # 是否存在测试任务标志
+        self.earliestTaskDate = None  # 最早任务日期
+        self.lastTaskDate = None  # 最晚任务日期
+        self.onlineDate = None  # 上线日期
+
+        # ==================================================================
+        # 阶段3：缺陷统计初始化
+        # ==================================================================
+        self.workHours = {}  # 开发人员工时统计
+        self.devTotalHours = 0  # 开发总工时
+        self.developerCount = 0  # 开发人员数量
+        self.dailyWorkingHoursOfEachDeveloper = {}  # 每日开发人员工时
+        self.developmentCycle = 0  # 开发周期
+
+        self.bugLevelsCount = {}  # 缺陷级别统计
+        self.bugLevelsMultiClientCount = {}  # 多端缺陷级别统计
+        self.bugSourceCount = {}  # 缺陷根源统计
+        self.bugSourceMultiClientCount = {}  # 多端缺陷根源统计
+        self.bugTotal = 0  # 缺陷总数
+        self.bugInputTotal = 0  # 手动输入缺陷总数
+        self.bugIds = []  # 缺陷ID列表
+        self.reopenBugsData = {}  # 重新打开缺陷数据
+        self.unrepairedBugsData = {}  # 未修复缺陷数据
+        self.fixers = {}  # 缺陷修复人统计
+
+        # ==================================================================
+        # 阶段4：评分系统初始化
+        # ==================================================================
+        self.score = {
+            "positiveIntegrityScore": 0,  # 配合积极性/文档完成性评分
+            "smokeTestingScore": 0,  # 冒烟测试评分
+            "bugCountScore": 0,  # 缺陷数量评分
+            "bugRepairScore": 0,  # 缺陷修复评分
+            "bugReopenScore": 0,  # 缺陷重开评分
+        }
+        self.scoreContents = []  # 评分详细内容
+        self.bugCountScoreMsg = ''  # 缺陷数量评分说明
+        self.bugRepairScoreMsg = ''  # 缺陷修复评分说明
+        self.bugReopenScoreMsg = ''  # 缺陷重开评分说明
+
+        # ==================================================================
+        # 阶段5：报告生成初始化
+        # ==================================================================
+        self.testReportHtml = ''  # 测试报告HTML内容
+        self.chartHtml = ''  # 图表HTML内容
+        self.reportSummary = ''  # 报告总结内容
+
+        # ==================================================================
+        # 阶段6：配置信息初始化
+        # ==================================================================
+        self.oldBugListConfigs = ''  # 原始缺陷列表配置
+        self.oldSubTaskListConfigs = ''  # 原始子任务列表配置
+
+        # ==================================================================
+        # 阶段7：未修复缺陷数据结构初始化
+        # ==================================================================
         self.unrepairedBugs = {
             # 部署正式环境当天未修复的缺陷
             "deployProdDayUnrepaired": {
                 "P0P1": [],  # 致命或严重缺陷
                 "P2": [],  # 一般或其他缺陷
             },
-            #  创建当天未修复的缺陷
+            # 创建当天未修复的缺陷
             "onThatDayUnrepaired": {
                 "P0": [],  # 致命缺陷
                 "P1": [],  # 严重缺陷
                 "P2": [],  # 一般或其他缺陷
             }
         }
-        # 初始化评分结果
-        self.score = {
-            "positiveIntegrityScore": 0,
-            "smokeTestingScore": 0,
-            "bugCountScore": 0,
-            "bugRepairScore": 0,
-            "bugReopenScore": 0,
+
+        # ==================================================================
+        # 阶段8：缺陷每日变化趋势初始化
+        # ==================================================================
+        self.dailyTrendOfBugChanges = {}  # 缺陷每日变化趋势
+
+    def get_requirement_detail(self) -> None:
+        """
+        获取需求详细信息并初始化相关属性
+
+        本方法通过TAPD API获取指定需求的详细信息，包括：
+        - 需求名称
+        - 产品经理
+        - 开发人员列表
+        - 其他相关属性
+
+        流程说明:
+            1. 构造API请求参数
+            2. 发送API请求获取需求数据
+            3. 解析响应数据并初始化类属性
+            4. 处理开发人员列表
+            5. 异常处理和状态验证
+
+        异常处理:
+            ValueError: 当无法获取需求数据或数据结构异常时抛出
+            requests.RequestException: 当API请求失败时抛出
+            KeyError: 当响应数据缺失关键字段时抛出
+
+        实现策略:
+            1. 使用封装后的fetch_data方法进行API调用
+            2. 多层数据校验确保数据完整性
+            3. 防御性编程处理可能的异常情况
+            4. 结构化数据处理提高可读性
+        """
+        # ==================================================================
+        # 阶段1：API请求准备
+        # ==================================================================
+        api_url = HOST + "/api/aggregation/story_aggregation/get_story_transition_info"
+        request_params = {
+            "workspace_id": PROJECT_ID,
+            "story_id": REQUIREMENT_ID,
         }
-        # 初始化评分结果内容
-        self.scoreContents = []
-        # 测试报告html
-        self.testReportHtml = ''
-        # 图表html
-        self.chartHtml = ''
-        # 缺陷数量分数描述
-        self.bugCountScoreMsg = ''
-        # 缺陷修复分数描述
-        self.bugRepairScoreMsg = ''
-        # 缺陷重新打开分数描述
-        self.bugReopenScoreMsg = ''
-        # 初始化报告总结内容为空字符串
-        self.reportSummary = ''
 
-    def get_requirement_detail(self):
-        """
-        获取需求的名称。
+        try:
+            # ==================================================================
+            # 阶段2：API请求执行
+            # ==================================================================
+            response = fetch_data(
+                url=api_url,
+                json=request_params,
+                method='GET'
+            ).json()
 
-        本函数通过调用fetch_data函数，从指定的URL中以POST方法获取需求数据。
-        需要传递项目ID和需求ID等参数来定位具体的需求信息。
+            # ==================================================================
+            # 阶段3：响应数据校验
+            # ==================================================================
+            # 检查响应数据是否存在且包含必要字段
+            if not response or not response.get('data', {}):
+                raise ValueError("需求数据获取失败，响应数据为空或格式异常")
 
-        Raises:
-            ValueError: 当没有成功获取到需求数据时抛出异常。
-        """
-        # 调用fetch_data函数获取需求数据。
-        response = fetch_data(
-            url=HOST + "/api/aggregation/story_aggregation/get_story_transition_info",
-            json={
-                "workspace_id": PROJECT_ID,
-                "story_id": REQUIREMENT_ID,
-            },
-            method='GET'
-        ).json()
+            # 提取需求详细信息
+            response_detail = response['data']['get_workflow_by_story']['data']['current_story']['Story']
 
-        # 检查response是否为空，如果为空则抛出ValueError异常。
-        if not response and response.get('data', {}):
-            raise ValueError("需求数据获取失败")
+            # ==================================================================
+            # 阶段4：属性初始化
+            # ==================================================================
+            # 设置需求名称
+            self.requirementName = response_detail.get('name', '')
 
-        response_detail = response['data']['get_workflow_by_story']['data']['current_story']['Story']  # 获取需求详细信息
-        self.requirementName = response_detail['name']  # 获取需求名称
-        if response_detail.get('developer'):  # 如果开发者不为空，则将开发者列表添加到self.developers中
-            if ';' in response_detail['developer']:  # 如果开发者列表中包含';'，则将开发者列表拆分为列表
-                self.developers = response_detail['developer'].split(';')  # 将开发者列表拆分为列表
-                del self.developers[-1]  # 删除列表中的最后一个空字符元素
-            else:  # 如果开发者列表中不包含';'，则将开发者列表添加到self.developers中
-                self.developers.append(response_detail['developer'])  # 将开发者列表添加到self.developers中
-        self.PM = response_detail['creator'] if response_detail.get('creator') else ''  # 获取产品经理
+            # 设置产品经理
+            self.PM = response_detail.get('creator', '')
 
-    def ger_requirement_task(self):
+            # ==================================================================
+            # 阶段5：开发人员列表处理
+            # ==================================================================
+            developer_str = response_detail.get('developer', '')
+            if developer_str:
+                # 处理分号分隔的开发人员字符串
+                self.developers = [dev.strip() for dev in developer_str.split(';') if dev.strip()]
+
+                # 移除最后一个空字符串（如果存在）
+                if self.developers and not self.developers[-1]:
+                    self.developers.pop()
+
+        except requests.RequestException as e:
+            # 捕获网络请求异常
+            error_msg = f"API请求失败: {str(e)}"
+            raise requests.RequestException(error_msg) from e
+
+        except KeyError as e:
+            # 捕获关键字段缺失异常
+            error_msg = f"响应数据缺失关键字段: {str(e)}"
+            raise KeyError(error_msg) from e
+
+        except Exception as e:
+            # 捕获其他未预料异常
+            error_msg = f"获取需求详情失败: {str(e)}"
+            raise RuntimeError(error_msg) from e
+
+    def requirement_task_statistics(self):
         """
         获取开发任务信息并计算每个开发者的工时及开发周期。
 
@@ -2956,74 +3221,46 @@ class SoftwareQualityRating:
         并确定整个项目的开发周期（开始日期到结束日期）。
         """
 
-        # 初始化页码和每页大小
-        page = 1
-        page_size = 100
+        requirement_tasks = ger_requirement_tasks()
 
-        # 循环获取所有子任务
-        while True:
-            # 调用fetch_data函数获取子任务数据
-            data = fetch_data(
-                HOST + "/api/entity/stories/get_children_stories",
-                {
-                    "workspace_id": PROJECT_ID,
-                    "story_id": REQUIREMENT_ID,
-                    "page": page,
-                    "per_page": page_size,
-                    "sort_name": "due",
-                    "order": "asc",
-                }
-            ).json()
+        # 遍历子任务列表，获取每个任务的开发人员名称和工时
+        for child in requirement_tasks:
+            # 获取开发人员名称(带有部门名称)
+            owner = child['owner'].replace(";", "")
+            # 获取开发人员名称和工时
+            processing_personnel = extract_matching(r"\d(.*?)$", owner)[0]
+            # 获取完成的工时
+            worked_hours = float(child.get('effort_completed', 0))
 
-            # 如果没有获取到数据或没有子任务数据，则打印错误信息并退出循环
-            if not data or not data.get('data') or not data['data'].get('children_list'):
-                print("数据获取失败或没有更多数据")
-                break
+            # 获取任务的开始日期、结束日期
+            begin = child.get('begin')
+            due = child.get('due')
 
-            # 遍历子任务列表，获取每个任务的开发人员名称和工时
-            for child in data['data']['children_list']:
-                # 获取开发人员名称(带有部门名称)
-                owner = child['owner'].replace(";", "")
-                # 获取开发人员名称和工时
-                processing_personnel = extract_matching(r"\d(.*?)$", owner)[0]
-                # 获取完成的工时
-                worked_hours = float(child.get('effort_completed', 0))
+            # 如果处理人不在测试人员名单中，累加工时
+            if processing_personnel and processing_personnel not in TESTERS:
+                # 将开发人员名称和工时保存到字典中
+                child['developerName'] = processing_personnel
+                # 将工时累加到字典中
+                self.workHours[processing_personnel] = self.workHours.get(processing_personnel, 0) + worked_hours
+                # 如果任务有开始日期、结束日期, 记录项目任务的最早日期和最晚日期
+                if begin and due:
+                    if not self.earliestTaskDate or begin < self.earliestTaskDate:  # 如果当前任务的开始日期小于最早任务日期，则更新最早任务日期
+                        self.earliestTaskDate = begin  # 更新最早任务日期
+                    # 如果任务有开始日期、结束日期和完成工时，则保存到字典中
+                    if child.get('effort_completed'):
+                        # 调用_save_task_hours方法保存任务工时信息
+                        self._save_task_hours(child)
 
-                # 获取任务的开始日期、结束日期
-                begin = child.get('begin')
-                due = child.get('due')
-
-                # 如果处理人不在测试人员名单中，累加工时
-                if processing_personnel and processing_personnel not in TESTERS:
-                    # 将开发人员名称和工时保存到字典中
-                    child['developerName'] = processing_personnel
-                    # 将工时累加到字典中
-                    self.workHours[processing_personnel] = self.workHours.get(processing_personnel, 0) + worked_hours
-                    # 如果任务有开始日期、结束日期, 记录项目任务的最早日期和最晚日期
-                    if begin and due:
-                        if not self.earliestTaskDate or begin < self.earliestTaskDate:  # 如果当前任务的开始日期小于最早任务日期，则更新最早任务日期
-                            self.earliestTaskDate = begin  # 更新最早任务日期
-                        # 如果任务有开始日期、结束日期和完成工时，则保存到字典中
-                        if child.get('effort_completed'):
-                            # 调用_save_task_hours方法保存任务工时信息
-                            self._save_task_hours(child)
-
-                if processing_personnel in TESTERS:  # 如果处理人是测试人员，则更新开发周期
-                    # 如果是第一次遇到测试任务，更新为存在测试任务标志
-                    if not self.isExistTestTask:
-                        self.isExistTestTask = True
-                    if not self.lastTaskDate or due > self.lastTaskDate:  # 如果当前任务的结束日期大于最晚任务日期，则更新最晚任务日期
-                        self.lastTaskDate = due  # 更新最晚任务日期
-                    if not self.onlineDate or begin > self.onlineDate:  # 如果当前任务的开始日期大于上线日期，则更新上线日期
-                        self.onlineDate = begin  # 更新上线日期
-                    if owner not in self.testRecipient:  # 如果测试人员不在测试人员名单中，则添加到测试人员名单中
-                        self.testRecipient.append(owner)  # 添加到测试人员名单中
-            # 如果子任务列表的长度小于每页大小，则说明已经获取到了所有子任务，退出循环
-            if len(data['data']['children_list']) < page_size:
-                break
-
-            # 增加页码
-            page += 1
+            if processing_personnel in TESTERS:  # 如果处理人是测试人员，则更新开发周期
+                # 如果是第一次遇到测试任务，更新为存在测试任务标志
+                if not self.isExistTestTask:
+                    self.isExistTestTask = True
+                if not self.lastTaskDate or due > self.lastTaskDate:  # 如果当前任务的结束日期大于最晚任务日期，则更新最晚任务日期
+                    self.lastTaskDate = due  # 更新最晚任务日期
+                if not self.onlineDate or begin > self.onlineDate:  # 如果当前任务的开始日期大于上线日期，则更新上线日期
+                    self.onlineDate = begin  # 更新上线日期
+                if owner not in self.testRecipient:  # 如果测试人员不在测试人员名单中，则添加到测试人员名单中
+                    self.testRecipient.append(owner)  # 添加到测试人员名单中
 
     def print_summary(self):
         """
@@ -4239,7 +4476,7 @@ BUG未修复数为：{_print_text_font(unrepaired_bug_count, color="green")}'''
                 raise ValueError("需求名称获取失败, 请检查需求ID是否正确")
 
             # 汇总开发人员工时
-            self.ger_requirement_task()
+            self.requirement_task_statistics()
 
             # 检查测试任务是否存在
             if not self.isExistTestTask:
