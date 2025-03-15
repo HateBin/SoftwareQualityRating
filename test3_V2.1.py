@@ -3132,6 +3132,7 @@ class SoftwareQualityRating:
         # ==================================================================
         # 阶段6：配置信息初始化
         # ==================================================================
+        self.isInitialListConfig = False  # 是否初始化列表配置标志
         self.oldBugListConfigs = ''  # 原始缺陷列表配置
         self.oldSubTaskListConfigs = ''  # 原始子任务列表配置
 
@@ -3334,8 +3335,7 @@ class SoftwareQualityRating:
             for unfinishedTask in unfinished_tasks:
                 count += 1
                 unfinished_tasks_str += f"\n{count}. {unfinishedTask}"
-            print(_print_text_font(f"存在未完成任务, 请及时处理:{unfinished_tasks_str}"))
-            sys.exit(1)
+            self.print_error(f"存在未完成任务, 请及时处理:{unfinished_tasks_str}")
         if not self.earliestTaskDate or not self.lastTaskDate:
             print("警告：未能识别有效任务时间范围")
         if not self.onlineDate:
@@ -4070,6 +4070,14 @@ class SoftwareQualityRating:
         except Exception as e:
             traceback.format_exc()
             raise e
+        else:
+            self.isInitialListConfig = True
+
+    def print_error(self, error_text):
+        print(_print_text_font(error_text, color='red'))
+        if not self.isInitialListConfig:
+            self.restore_list_config()
+        sys.exit(1)
 
     def get_reopen_bug_detail(self):
         """
