@@ -1,4 +1,7 @@
-a = {'2024-01-11': 'aaaaa', '2024-01-01': 'bbbbb', '2023-04-20': 'aaacs', '2023-04-21': 'aaacs', '空': 'b'}
+import datetime
 
-a.setdefault('空', 'aa')
-print(a)
+date_str = '2024-01-01 23:32'
+try:
+    datetime.datetime.strptime(date_str, "%Y-%m-%d")
+except ValueError:
+    print("Invalid date format")
