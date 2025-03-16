@@ -32,11 +32,8 @@ import time
 IS_CREATE_REPORT = False  # 是否创建报告
 IS_CREATE_AI_SUMMARY = False  # 是否创建AI总结
 IS_SUPPORT_RETRY_CREATE_AI_SUMMARY = True  # 是否支持重试创建AI总结, 生成完成后可input进行重新生成
-OPEN_AI_MODEL = '百炼r1'  # deepseek模型名称，目前支持：v3、r1、百炼r1、百炼v3
-# OPEN_AI_KEY = 'sk-00987978d24e445a88f1f5a57944818b'  # OpenAI密钥  deepseek官方
-# OPEN_AI_URL = 'https://api.deepseek.com/v1'  # OpenAI的URL  deepseek官方
-OPEN_AI_KEY = 'sk-a5ae4633515d448e9bbbe03770712d4e'  # OpenAI密钥  百炼
-OPEN_AI_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'  # OpenAI的URL  百炼r1
+OPEN_AI_MODEL = 'r1'  # deepseek模型名称，目前支持：v3、r1、百炼r1、百炼v3
+
 OPEN_AI_IS_STREAM_RESPONSE = True  # 是否支持流式响应
 
 # 定义常量和全局变量
@@ -44,12 +41,12 @@ ACCOUNT = 'wuchong@addcn.com'  # 账号
 PASSWORD = 'WUchong_1008'  # 密码
 PROJECT_ID = "63835346"  # 项目ID
 # REQUIREMENT_ID = "1163835346001078047"  # 需求ID 无BUG
-# REQUIREMENT_ID = "1163835346001071668"  # 需求ID
+REQUIREMENT_ID = "1163835346001071668"  # 需求ID
 # REQUIREMENT_ID = "1163835346001033609"  # 需求ID 中规中矩  TypeError: '<=' not supported between instances of 'str' and 'NoneType'
 # REQUIREMENT_ID = "1163835346001051222"  # 需求ID 较差的质量
 # REQUIREMENT_ID = "1163835346001049795"  # 需求ID 较差的质量  开发周期也是很多小数点尾数
 # REQUIREMENT_ID = "1163835346001055792"  # 需求ID 较差的质量
-REQUIREMENT_ID = "1163835346001118124"  # 需求ID
+# REQUIREMENT_ID = "1163835346001118124"  # 需求ID
 REQUIREMENT_LIST_ID = '1000000000000000417'  # 需求列表ID, 用于查询或者编辑列表展示字段的配置
 
 DEPARTMENT = 'T5'  # 部门名称
@@ -79,11 +76,27 @@ PLT_FONT = {
 }
 
 # AI的模型映射
-MODEL_MAPPING = {
-    'v3': 'deepseek-chat',
-    'r1': 'deepseek-reasoner',
-    '百炼r1': 'deepseek-r1',
-    '百炼v3': 'deepseek-v3'
+AI_CONFIG_MAPPING = {
+    'v3': {'model': 'deepseek-chat', 'name': 'deepseek', 'msg': '源生deepseek-V3模型'},
+    'r1': {'model': 'deepseek-reasoner', 'name': 'deepseek', 'msg': '源生deepseek-R1模型'},
+    '百炼r1': {'model': 'deepseek-r1', 'name': 'tongyi', 'msg': '通义千问deepseek-V3模型'},
+    '百炼v3': {'model': 'deepseek-v3', 'name': 'tongyi', 'msg': '通义千问deepseek-R1模型'},
+}
+
+# OPEN_AI_KEY = 'sk-00987978d24e445a88f1f5a57944818b'  # OpenAI密钥  deepseek官方
+# OPEN_AI_URL = 'https://api.deepseek.com/v1'  # OpenAI的URL  deepseek官方
+# OPEN_AI_KEY = 'sk-a5ae4633515d448e9bbbe03770712d4e'  # OpenAI密钥  百炼
+# OPEN_AI_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'  # OpenAI的URL  百炼r1
+
+AI_URL_AND_KEY = {
+    'deepseek': {
+        'url': 'https://api.deepseek.com/v1',
+        'key': 'sk-00987978d24e445a88f1f5a57944818b',
+    },
+    'tongyi': {
+        'url': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        'key': 'sk-a5ae4633515d448e9bbbe03770712d4e',
+    },
 }
 
 # 创建一个CloudScraper实例，用于模拟浏览器请求
@@ -1730,22 +1743,23 @@ def deepseek_chat(
 
     # 防御性配置校验
     open_ai_model = OPEN_AI_MODEL.lower()
-    if open_ai_model not in MODEL_MAPPING:
-        raise ValueError(f'模型配置错误，支持: {", ".join(MODEL_MAPPING.keys())}')
+    if open_ai_model not in AI_CONFIG_MAPPING:
+        raise ValueError(f'模型配置错误，支持: {", ".join(AI_CONFIG_MAPPING.keys())}')
 
-    model = MODEL_MAPPING[open_ai_model]
+    model = AI_CONFIG_MAPPING[open_ai_model]['model']
+    open_ai_config_data = AI_URL_AND_KEY[AI_CONFIG_MAPPING[open_ai_model]['name']]
 
     # ==================================================================
     # API交互核心逻辑
     # ==================================================================
     client = OpenAI(
-        api_key=OPEN_AI_KEY,
-        base_url=OPEN_AI_URL,
+        api_key=open_ai_config_data['key'],
+        base_url=open_ai_config_data['url'],
         timeout=60.0  # 统一超时设置
     )
 
     for attempt in range(retries):
-        print(f'{model}执行中，请稍等...')
+        print(f"{AI_CONFIG_MAPPING[open_ai_model]['msg']}执行中，请稍等...")
         try:
             # 创建聊天补全请求
             completion = client.chat.completions.create(

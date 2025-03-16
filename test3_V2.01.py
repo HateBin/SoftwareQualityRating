@@ -32,11 +32,8 @@ import time
 IS_CREATE_REPORT = False  # 是否创建报告
 IS_CREATE_AI_SUMMARY = False  # 是否创建AI总结
 IS_SUPPORT_RETRY_CREATE_AI_SUMMARY = True  # 是否支持重试创建AI总结, 生成完成后可input进行重新生成
-OPEN_AI_MODEL = '百炼r1'  # deepseek模型名称，目前支持：v3、r1、百炼r1、百炼v3
-# OPEN_AI_KEY = 'sk-00987978d24e445a88f1f5a57944818b'  # OpenAI密钥  deepseek官方
-# OPEN_AI_URL = 'https://api.deepseek.com/v1'  # OpenAI的URL  deepseek官方
-OPEN_AI_KEY = 'sk-a5ae4633515d448e9bbbe03770712d4e'  # OpenAI密钥  百炼
-OPEN_AI_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'  # OpenAI的URL  百炼r1
+OPEN_AI_MODEL = 'r1'  # deepseek模型名称，目前支持：v3、r1、百炼r1、百炼v3
+
 OPEN_AI_IS_STREAM_RESPONSE = True  # 是否支持流式响应
 
 # 定义常量和全局变量
@@ -44,12 +41,12 @@ ACCOUNT = 'wuchong@addcn.com'  # 账号
 PASSWORD = 'WUchong_1008'  # 密码
 PROJECT_ID = "63835346"  # 项目ID
 # REQUIREMENT_ID = "1163835346001078047"  # 需求ID 无BUG
-# REQUIREMENT_ID = "1163835346001071668"  # 需求ID
+REQUIREMENT_ID = "1163835346001071668"  # 需求ID
 # REQUIREMENT_ID = "1163835346001033609"  # 需求ID 中规中矩  TypeError: '<=' not supported between instances of 'str' and 'NoneType'
 # REQUIREMENT_ID = "1163835346001051222"  # 需求ID 较差的质量
 # REQUIREMENT_ID = "1163835346001049795"  # 需求ID 较差的质量  开发周期也是很多小数点尾数
 # REQUIREMENT_ID = "1163835346001055792"  # 需求ID 较差的质量
-REQUIREMENT_ID = "1163835346001118124"  # 需求ID
+# REQUIREMENT_ID = "1163835346001118124"  # 需求ID
 REQUIREMENT_LIST_ID = '1000000000000000417'  # 需求列表ID, 用于查询或者编辑列表展示字段的配置
 
 DEPARTMENT = 'T5'  # 部门名称
@@ -79,11 +76,27 @@ PLT_FONT = {
 }
 
 # AI的模型映射
-MODEL_MAPPING = {
-    'v3': 'deepseek-chat',
-    'r1': 'deepseek-reasoner',
-    '百炼r1': 'deepseek-r1',
-    '百炼v3': 'deepseek-v3'
+AI_CONFIG_MAPPING = {
+    'v3': {'model': 'deepseek-chat', 'name': 'deepseek', 'msg': '源生deepseek-V3模型'},
+    'r1': {'model': 'deepseek-reasoner', 'name': 'deepseek', 'msg': '源生deepseek-R1模型'},
+    '百炼r1': {'model': 'deepseek-r1', 'name': 'tongyi', 'msg': '通义千问deepseek-V3模型'},
+    '百炼v3': {'model': 'deepseek-v3', 'name': 'tongyi', 'msg': '通义千问deepseek-R1模型'},
+}
+
+# OPEN_AI_KEY = 'sk-00987978d24e445a88f1f5a57944818b'  # OpenAI密钥  deepseek官方
+# OPEN_AI_URL = 'https://api.deepseek.com/v1'  # OpenAI的URL  deepseek官方
+# OPEN_AI_KEY = 'sk-a5ae4633515d448e9bbbe03770712d4e'  # OpenAI密钥  百炼
+# OPEN_AI_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'  # OpenAI的URL  百炼r1
+
+AI_URL_AND_KEY = {
+    'deepseek': {
+        'url': 'https://api.deepseek.com/v1',
+        'key': 'sk-00987978d24e445a88f1f5a57944818b',
+    },
+    'tongyi': {
+        'url': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        'key': 'sk-a5ae4633515d448e9bbbe03770712d4e',
+    },
 }
 
 # 创建一个CloudScraper实例，用于模拟浏览器请求
@@ -1730,22 +1743,23 @@ def deepseek_chat(
 
     # 防御性配置校验
     open_ai_model = OPEN_AI_MODEL.lower()
-    if open_ai_model not in MODEL_MAPPING:
-        raise ValueError(f'模型配置错误，支持: {", ".join(MODEL_MAPPING.keys())}')
+    if open_ai_model not in AI_CONFIG_MAPPING:
+        raise ValueError(f'模型配置错误，支持: {", ".join(AI_CONFIG_MAPPING.keys())}')
 
-    model = MODEL_MAPPING[open_ai_model]
+    model = AI_CONFIG_MAPPING[open_ai_model]['model']
+    open_ai_config_data = AI_URL_AND_KEY[AI_CONFIG_MAPPING[open_ai_model]['name']]
 
     # ==================================================================
     # API交互核心逻辑
     # ==================================================================
     client = OpenAI(
-        api_key=OPEN_AI_KEY,
-        base_url=OPEN_AI_URL,
+        api_key=open_ai_config_data['key'],
+        base_url=open_ai_config_data['url'],
         timeout=60.0  # 统一超时设置
     )
 
     for attempt in range(retries):
-        print(f'{model}执行中，请稍等...')
+        print(f"{AI_CONFIG_MAPPING[open_ai_model]['msg']}执行中，请稍等...")
         try:
             # 创建聊天补全请求
             completion = client.chat.completions.create(
@@ -3341,25 +3355,68 @@ class SoftwareQualityRating:
         if not self.onlineDate:
             print("警告：未识别到上线日期")
 
-    def print_development_hours(self):
+    def print_development_hours(self) -> None:
         """
-        打印项目工时摘要。
+        输出项目开发工时统计摘要
 
-        本函数计算并打印特定需求的所有开发人员的工时合计及每个开发人员的工时。
-        它首先计算总工时和开发人员数量，然后打印出每个开发人员的工时及总工时。
+        本方法实现开发工时数据的汇总展示功能，主要包含以下处理流程：
+        1. 计算开发总工时与参与人数
+        2. 格式化输出需求基本信息
+        3. 逐项展示开发者个人工时
+        4. 显示工时合计数据
+
+        输出要素：
+            - 需求标识信息
+            - 开发者名称与对应工时的键值对
+            - 工时总计数值
+            - 标准化分隔线增强可读性
+
+        返回:
+            None: 本方法仅执行控制台输出操作
+
+        异常:
+            AttributeError: 当workHours属性未正确初始化时可能抛出
+            KeyError: 当全局常量REQUIREMENT_ID未定义时抛出
+
+        实现策略:
+            1. 基于workHours字典进行聚合计算
+            2. 使用LINE_LENGTH常量控制输出格式
+            3. 遍历字典实现明细数据输出
         """
-        # 计算所有开发人员的总工时
+        # ==================================================================
+        # 阶段1：工时数据聚合计算
+        # ==================================================================
+
+        # 计算开发团队总工时：对workHours字典所有值求和
         self.devTotalHours = sum(self.workHours.values())
-        # 计算开发人员的数量
+
+        # 统计开发人员数量：获取字典键的数量
         self.developerCount = len(self.workHours)
-        # 打印分隔线，用于区分不同的摘要信息
+
+        # ==================================================================
+        # 阶段2：控制台格式化输出
+        # ==================================================================
+
+        # 生成分隔线：使用LINE_LENGTH常量控制横线长度
         print('-' * LINE_LENGTH)
-        # 打印需求ID和该需求下所有开发人员的工时信息
+
+        # 输出需求标题行：包含需求ID和需求名称
         print(f"需求 {REQUIREMENT_ID}: {self.requirementName} 各开发人员花费的工时：")
-        # 遍历字典，打印每个开发人员的工时
+
+        # ==================================================================
+        # 阶段3：明细数据遍历输出
+        # ==================================================================
+
+        # 遍历工时字典项：developer为开发者名称，hours为对应工时数值
         for developer, hours in self.workHours.items():
+            # 格式化输出单开发者工时信息：姓名+小时数
             print(f"{developer}: {hours} 小时")
-        # 打印总工时
+
+        # ==================================================================
+        # 阶段4：合计数据输出
+        # ==================================================================
+
+        # 输出工时总计：显示计算得到的总工时
         print(f"工时合计：{self.devTotalHours} 小时")
 
     def bug_list_detail(self):
