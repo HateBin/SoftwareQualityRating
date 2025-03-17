@@ -83,11 +83,6 @@ AI_CONFIG_MAPPING = {
     '百炼v3': {'model': 'deepseek-v3', 'name': 'tongyi', 'msg': '通义千问deepseek-R1模型'},
 }
 
-# OPEN_AI_KEY = 'sk-00987978d24e445a88f1f5a57944818b'  # OpenAI密钥  deepseek官方
-# OPEN_AI_URL = 'https://api.deepseek.com/v1'  # OpenAI的URL  deepseek官方
-# OPEN_AI_KEY = 'sk-a5ae4633515d448e9bbbe03770712d4e'  # OpenAI密钥  百炼
-# OPEN_AI_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'  # OpenAI的URL  百炼r1
-
 AI_URL_AND_KEY = {
     'deepseek': {
         'url': 'https://api.deepseek.com/v1',
@@ -1231,7 +1226,7 @@ def get_user_detail() -> dict:
         raise RuntimeError("获取用户信息失败") from orig_err
 
 
-def ger_requirement_tasks() -> list:
+def get_requirement_tasks() -> List[Dict[str, Any]] | None:
     """
     获取指定需求的所有子任务信息
 
@@ -1345,6 +1340,133 @@ def ger_requirement_tasks() -> list:
         except KeyError as key_err:
             # 细化键缺失异常信息
             raise KeyError(f"响应数据缺失关键字段：{str(key_err)}") from key_err
+
+
+def get_bug_list(requirement_name: str) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
+    """
+    获取指定需求关联的缺陷列表及其分类信息
+
+    通过TAPD搜索接口分页获取指定需求的所有缺陷数据，同时提取平台和根源的分类选项信息。
+    支持分页请求和动态字段配置，确保获取完整的缺陷数据集。
+
+    参数:
+        requirement_name (str): 需求名称，用于构建缺陷搜索条件
+
+    返回:
+        Tuple[List[str], List[str], List[Dict]]: 包含三个元素的元组：
+            - 平台分类选项列表
+            - 根源分类选项列表
+            - 缺陷数据字典列表
+
+    异常:
+        ValueError: 当响应数据格式异常或关键字段缺失时抛出
+        KeyError: 当接口返回数据结构不符合预期时抛出
+
+    实现逻辑:
+        1. 初始化分页参数和存储结构
+        2. 构建动态查询条件并发送搜索请求
+        3. 提取平台和根源的分类元数据
+        4. 处理分页数据并合并结果集
+        5. 校验数据结构完整性并返回标准化结果
+    """
+    # 初始化页码和每页大小
+    page: int = 1  # 当前请求页码
+    page_size: int = 100  # 每页数据量上限
+    bugs: List[Dict] = []  # 存储缺陷数据的列表
+    platforms: List[str] = []  # 存储平台分类选项
+    sources: List[str] = []  # 存储根源分类选项
+
+    # 构建API端点路径
+    api_path = "/api/search_filter/search_filter/search"
+    url = f"{HOST}{api_path}"  # 完整接口地址
+
+    # 构造动态查询条件（JSON格式）
+    search_condition = json.dumps({
+        "data": [{
+            "id": "5",
+            "fieldLabel": "关联需求",
+            "fieldOption": "like",
+            "fieldType": "input",
+            "fieldSystemName": "BugStoryRelation_relative_id",
+            "value": requirement_name,
+            "fieldIsSystem": "1",
+            "entity": "bug"
+        }],
+        "optionType": "AND",
+        "needInit": "1"
+    })
+
+    # 初始化请求参数模板
+    request_data = {
+        "workspace_ids": PROJECT_ID,  # 项目空间ID
+        "search_data": search_condition,  # 序列化的搜索条件
+        "obj_type": "bug",  # 查询对象类型为缺陷
+        "hide_not_match_condition_node": "0",  # 显示不匹配条件节点
+        "hide_not_match_condition_sub_node": "1",  # 隐藏不匹配子节点
+        "page": page,  # 当前页码
+        "perpage": str(page_size),  # 每页数据量（字符串类型）
+        "order_field": "created",  # 按创建时间排序
+    }
+
+    # 分页请求循环
+    while True:
+        # 发送POST请求获取缺陷数据
+        response = fetch_data(
+            url=url,
+            json=request_data,
+            method="POST"
+        )
+
+        try:
+            # 解析响应数据为JSON格式
+            response_json = response.json()
+
+            # 数据完整性校验：检查顶层data字段
+            if "data" not in response_json:
+                raise KeyError("API响应缺少'data'字段")
+
+            # 首次请求时提取分类元数据
+            if not platforms or not sources:
+                # 校验项目特殊字段结构
+                if "project_special_fields" not in response_json["data"]:
+                    raise KeyError("响应数据缺少'project_special_fields'字段")
+
+                # 获取当前项目的分类配置
+                project_fields = response_json["data"]["project_special_fields"].get(PROJECT_ID, {})
+
+                # 提取平台分类选项
+                if not platforms and "platform" in project_fields:
+                    platforms = [item["value"] for item in project_fields["platform"]]
+
+                # 提取根源分类选项
+                if not sources and "source" in project_fields:
+                    sources = [item["value"] for item in project_fields["source"]]
+
+            # 校验列表数据字段
+            if "list" not in response_json["data"]:
+                raise KeyError("响应数据缺少'list'字段")
+
+            current_bugs = response_json["data"]["list"]  # 当前页缺陷数据
+
+            # 数据类型校验
+            if not isinstance(current_bugs, list):
+                raise ValueError(f"缺陷数据格式异常，预期列表类型，实际类型：{type(current_bugs)}")
+
+            # 合并数据到总列表
+            bugs.extend(current_bugs)
+
+            # 分页终止条件判断
+            if len(current_bugs) < page_size:
+                return platforms, sources, bugs  # 返回最终结果
+
+            # 更新页码参数
+            request_data["page"] += 1
+
+        except requests.JSONDecodeError as e:
+            # 处理JSON解析异常
+            error_detail = f"响应内容非JSON格式，原始内容：{response.text[:200]}..." if hasattr(response,
+                                                                                              'text') else "响应内容为空"
+            raise ValueError(error_detail) from e
 
 
 def fetch_data(
@@ -3110,15 +3232,15 @@ class SoftwareQualityRating:
         self.dailyWorkingHoursOfEachDeveloper = defaultdict(lambda: defaultdict(float))  # 每日开发人员工时
         self.developmentCycle = 0  # 开发周期
 
-        self.bugLevelsCount = {}  # 缺陷级别统计
+        self.bugLevelsCount = defaultdict(int, {level: 0 for level in BUG_LEVELS})  # 缺陷级别统计
         self.bugLevelsMultiClientCount = {}  # 多端缺陷级别统计
-        self.bugSourceCount = {}  # 缺陷根源统计
+        self.bugSourceCount = defaultdict(int)  # 缺陷根源统计
         self.bugSourceMultiClientCount = {}  # 多端缺陷根源统计
         self.bugTotal = 0  # 缺陷总数
         self.bugInputTotal = 0  # 手动输入缺陷总数
         self.bugIds = []  # 缺陷ID列表
         self.reopenBugsData = {}  # 重新打开缺陷数据
-        self.unrepairedBugsData = {}  # 未修复缺陷数据
+        self.unrepairedBugsData = defaultdict(int)  # 未修复缺陷数据
         self.fixers = {}  # 缺陷修复人统计
 
         # ==================================================================
@@ -3288,7 +3410,7 @@ class SoftwareQualityRating:
         # 未完成的任务列表
         unfinished_tasks: list = []
         # 获取子任务数据（已处理分页逻辑）
-        requirement_tasks = ger_requirement_tasks()
+        requirement_tasks = get_requirement_tasks()
         if not requirement_tasks:
             print("警告：未获取到任何子任务数据")
             return
@@ -3430,50 +3552,10 @@ class SoftwareQualityRating:
             page_size (int): 每页数据量。
             bugs (list): 用于存储所有BUG数据的列表。
         """
-        # 初始化页码和每页大小，初始化bugs列表
-        page = 1
-        page_size = 100
-        bugs = []
-        platforms = []
-        sources = []
-        # 循环获取所有BUG数据
-        while True:
-            # 调用fetch_data函数获取BUG数据
-            response = fetch_data(
-                url=HOST + "/api/search_filter/search_filter/search",
-                json={
-                    "workspace_ids": PROJECT_ID,
-                    "search_data": "{\"data\":[{\"id\":\"5\",\"fieldLabel\":\"关联需求\",\"fieldOption\":\"like\",\"fieldType\":\"input\",\"fieldSystemName\":\"BugStoryRelation_relative_id\",\"value\":\"" + self.requirementName + "\",\"fieldIsSystem\":\"1\",\"entity\":\"bug\"}],\"optionType\":\"AND\",\"needInit\":\"1\"}",
-                    "obj_type": "bug",
-                    "hide_not_match_condition_node": "0",
-                    "hide_not_match_condition_sub_node": "1",
-                    "page": page,
-                    "perpage": str(page_size),
-                    "order_field": "created",
-                },
-                method='POST'
-            ).json()
-
-            # 检查数据是否成功获取
-            if not response.get('data', {}):
-                print("BUG数据获取失败")
-                # 退出循环
-                return
-            else:
-                project_special_fields_dict = response.get('data').get('project_special_fields', {}).get(PROJECT_ID, {})
-                if not platforms:
-                    platforms = [platform['value'] for platform in project_special_fields_dict.get('platform', [])]
-                if not sources:
-                    sources = [platform['value'] for platform in project_special_fields_dict.get('source', [])]
-                # 将获取到的BUG数据添加到bugs列表中
-                bugs += response.get('data', {}).get('list', [])
-                # 判断是否达到最后一页
-                if len(response.get('data', {}).get('list', [])) < page_size:
-                    # 退出循环
-                    break
-                else:
-                    # 增加页码
-                    page += 1
+        platforms, sources, bugs = get_bug_list(self.requirementName)
+        platforms: list[str]
+        sources: list[str]
+        bugs: list[dict]
 
         print('-' * LINE_LENGTH)
 
@@ -3482,25 +3564,21 @@ class SoftwareQualityRating:
             print('未获取BUG数量')
             return
 
-        self.bugLevelsCount = {level: 0 for level in BUG_LEVELS}  # 初始化一个字典，用于存储每个严重等级下的BUG数量
         for bug in bugs:  # 遍历每个BUG
             bug_status = bug.get('status')
             if bug_status != 'rejected':  # 如果BUG的状态不是"已拒绝"
                 bug_id = bug.get('id')  # 获取BUG的ID
-                severity_name = bug.get('custom_field_严重等级')  # 获取BUG的严重等级名称
+                severity_name: str = bug.get('custom_field_严重等级')  # 获取BUG的严重等级名称
                 bug_source = bug.get('source')  # 获取BUG的缺陷根源信息
                 bug_field_level = bug.get('custom_field_Bug等级')  # 获取BUG的BUG等级
                 bug_platform = bug['platform'] if bug.get('platform') else '空'  # 获取BUG的软件平台, 如果为空，则设置为'空'
                 fixer = bug['fixer'] if bug.get('fixer') else '空'
-                if severity_name:  # 如果严重等级名称不为空，则累加该严重等级下的BUG数量
-                    severity_name = severity_name[:2]
-                    self.bugLevelsCount[severity_name] += 1
-                else:  # 如果严重等级名称为空，则累加空严重等级下的BUG数量
-                    self.bugLevelsCount['空'] = self.bugLevelsCount.get('空', 0) + 1
-                if bug_source:  # 如果缺陷根源不为空，则累加该缺陷根源下的BUG数量
-                    self.bugSourceCount[bug_source] = self.bugSourceCount.get(bug_source, 0) + 1
-                else:  # 如果缺陷根源为空，则累加空缺陷根源下的BUG数量
-                    self.bugSourceCount['空'] = self.bugSourceCount.get('空', 0) + 1
+
+                if severity_name:
+                    severity_name = severity_name.split('-')[0]
+
+                self._statistics_bug_severity_level(severity_name)
+                self._statistics_bug_source(bug_source)
                 self._daily_trend_of_bug_changes_count(bug)
                 # 累加多客户端下各严重等级下的BUG数量
                 multi_client_data_processing(
@@ -3519,32 +3597,17 @@ class SoftwareQualityRating:
                 if bug_id:  # 如果bug的id不为空，则将该bug的id添加到bugIds列表中
                     self.bugIds.append(bug_id)  # 将bug的id添加到bugIds列表中
                     created_date = date_time_to_date(bug.get('created'))
-                    if bug_status == 'closed':  # 如果bug的状态是"已关闭"
-                        resolved_date = date_time_to_date(bug.get('resolved'))  # 获取bug的解决日期
-                        # 如果解决日期大于等于最晚任务日期，则为上线当天存在的BUG, 如果没有记录上线时间, 则为False
-                        is_deploy_prod_day_unrepaired_bug = resolved_date >= self.onlineDate if self.onlineDate else False
-                        is_on_that_day_unrepaired_bug = created_date != resolved_date  # 如果创建日期不等于解决日期，则为当天未修复的bug
-                    else:  # 如果bug的状态不是"已关闭", 则将该BUG算为上线当天存在的BUG和当天未修复的bug
-                        is_on_that_day_unrepaired_bug = True
-                        is_deploy_prod_day_unrepaired_bug = True
+                    resolved_date = date_time_to_date(bug['resolved']) if bug.get('resolved') else None
                     # 如果bug的Bug等级为"顽固（180 天）"，则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
                     if bug_field_level and bug_field_level == '顽固（180 天）':
-                        self.unrepairedBugsData[bug_id] = self.unrepairedBugsData.get(bug_id, 0) + 1
-                    # 如果上线当天未修复的BUG并且严重等级为("P1"或者"P2"), 则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
-                    if is_deploy_prod_day_unrepaired_bug and severity_name in BUG_LEVELS[0: 2]:
-                        self.unrepairedBugs['deployProdDayUnrepaired']['P0P1'].append(bug_id)
-                    # 如果上线当天未修复得BUG并且严重等级为"P2", 则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
-                    elif is_deploy_prod_day_unrepaired_bug and severity_name not in BUG_LEVELS[0: 2]:
-                        self.unrepairedBugs['deployProdDayUnrepaired']['P2'].append(bug_id)
+                        self.unrepairedBugsData[bug_id] += 1
+                    self._statistics_deploy_prod_day_unrepaired_bug(
+                        bug_status, bug_id, severity_name, resolved_date
+                    )
                     # 如果bug不是当天修复并且严重等级为"P0"，则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
-                    if is_on_that_day_unrepaired_bug and severity_name == BUG_LEVELS[0]:
-                        self.unrepairedBugs['onThatDayUnrepaired']['P0'].append(bug_id)
-                    # 如果bug不是当天修复并且严重等级为"P1"，则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
-                    elif is_on_that_day_unrepaired_bug and severity_name == BUG_LEVELS[1]:
-                        self.unrepairedBugs['onThatDayUnrepaired']['P1'].append(bug_id)
-                    # 如果bug不是当天修复并且严重等级不为"P0"或"P1"，则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
-                    elif is_on_that_day_unrepaired_bug and severity_name not in BUG_LEVELS[0: 2]:
-                        self.unrepairedBugs['onThatDayUnrepaired']['P2'].append(bug_id)
+                    self._statistics_on_that_day_unrepaired_bug(
+                        bug_status, bug_id, severity_name, created_date, resolved_date
+                    )
                 self.fixers[fixer] = self.fixers.get(fixer, 0) + 1  # 将fixer添加到fixers字典中，并累加其数量
 
         # 输出各严重等级的BUG数量
@@ -4284,6 +4347,54 @@ class SoftwareQualityRating:
         if due:
             if not self.lastTaskDate or due > self.lastTaskDate:
                 self.lastTaskDate = due
+
+    def _statistics_bug_severity_level(self, severity_level: str):
+        if not severity_level:
+            severity_level = '空'
+        self.bugLevelsCount[severity_level] += 1
+
+    def _statistics_bug_source(self, bug_source: str):
+        if not bug_source:
+            bug_source = '空'
+        self.bugSourceCount[bug_source] += 1
+
+    def _statistics_deploy_prod_day_unrepaired_bug(
+            self,
+            bug_status: str,
+            bug_id: str,
+            severity_name: str,
+            resolved_date: str = None
+    ):
+        is_deploy_prod_day_unrepaired_bug = True
+        if bug_status == 'closed' and resolved_date:
+            if resolved_date < self.onlineDate:
+                is_deploy_prod_day_unrepaired_bug = False
+        if is_deploy_prod_day_unrepaired_bug and severity_name in BUG_LEVELS[0: 2]:
+            self.unrepairedBugs['deployProdDayUnrepaired']['P0P1'].append(bug_id)
+        # 如果上线当天未修复得BUG并且严重等级为"P2", 则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
+        elif is_deploy_prod_day_unrepaired_bug and severity_name not in BUG_LEVELS[0: 2]:
+            self.unrepairedBugs['deployProdDayUnrepaired']['P2'].append(bug_id)
+
+    def _statistics_on_that_day_unrepaired_bug(
+            self,
+            bug_status: str,
+            bug_id: str,
+            severity_name: str,
+            created_date: str,
+            resolved_date: str = None
+    ):
+        is_on_that_day_unrepaired_bug = True
+        if bug_status == 'closed' and resolved_date:
+            if created_date == resolved_date:
+                is_on_that_day_unrepaired_bug = False
+        if is_on_that_day_unrepaired_bug and severity_name == BUG_LEVELS[0]:
+            self.unrepairedBugs['onThatDayUnrepaired']['P0'].append(bug_id)
+        # 如果bug不是当天修复并且严重等级为"P1"，则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
+        elif is_on_that_day_unrepaired_bug and severity_name == BUG_LEVELS[1]:
+            self.unrepairedBugs['onThatDayUnrepaired']['P1'].append(bug_id)
+        # 如果bug不是当天修复并且严重等级不为"P0"或"P1"，则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
+        elif is_on_that_day_unrepaired_bug and severity_name not in BUG_LEVELS[0: 2]:
+            self.unrepairedBugs['onThatDayUnrepaired']['P2'].append(bug_id)
 
     def _positive_integrity_score(self):
         """
