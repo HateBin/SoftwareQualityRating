@@ -1226,7 +1226,7 @@ def get_user_detail() -> dict:
         raise RuntimeError("获取用户信息失败") from orig_err
 
 
-def get_requirement_tasks() -> List[Dict[str, Any]] | None:
+def get_requirement_tasks() -> List[Dict[str, Any]]:
     """
     获取指定需求的所有子任务信息
 

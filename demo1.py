@@ -1,110 +1,167 @@
 def bug_list_detail(self) -> None:
     """
-    获取指定需求关联的缺陷列表及其分类信息
+    获取指定需求关联的缺陷列表并执行多维度统计分析
 
-    通过TAPD搜索接口分页获取指定需求的所有缺陷数据，同时提取平台和根源的分类选项信息。
-    支持分页请求和动态字段配置，确保获取完整的缺陷数据集。
+    核心功能：
+    1. 通过API接口分页获取指定需求的全部缺陷数据
+    2. 提取关键字段并进行数据清洗
+    3. 执行多维度统计（严重等级、根源分类、平台分布等）
+    4. 跟踪缺陷生命周期状态变化
+    5. 维护数据完整性校验
 
-    功能说明:
-        1. 获取缺陷列表基础数据及分类元数据
-        2. 遍历缺陷数据进行多维统计
-        3. 记录缺陷生命周期关键时间节点
-        4. 维护未修复缺陷状态信息
+    处理流程：
+        1. 初始化统计数据结构
+        2. 调用分页接口获取原始数据
+        3. 遍历缺陷记录进行数据清洗
+        4. 执行字段级校验和空值处理
+        5. 更新各维度统计计数器
+        6. 记录缺陷状态流转轨迹
 
-    异常处理:
-        ValueError: 当无法获取缺陷数据或数据结构异常时抛出
-        KeyError: 当接口返回数据缺失关键字段时抛出
-
-    实现逻辑:
-        1. 调用统一接口获取缺陷数据
-        2. 初始化统计数据结构
-        3. 遍历缺陷记录进行字段解析
-        4. 执行多维度数据聚合
-        5. 输出基础统计结果
+    关联方法：
+        get_bug_list()：基础数据获取接口
+        multi_client_data_processing()：多维数据聚合处理器
+        date_time_to_date()：日期格式标准化
     """
-    # 调用API接口获取缺陷基础数据及分类元数据
-    platforms, sources, bugs = get_bug_list(self.requirementName)
-    platforms: list[str]  # 平台分类选项列表（如iOS/Android）
-    sources: list[str]    # 缺陷根源分类选项列表（如代码问题/需求问题）
-    bugs: list[dict]      # 缺陷数据字典列表
+    # ==================================================================
+    # 阶段1：数据获取与初始化
+    # ==================================================================
 
-    # 打印分隔线标识统计区块开始
+    # 调用API接口获取缺陷基础数据（分页逻辑封装在get_bug_list中）
+    # 返回三元组：平台列表、根源分类列表、缺陷数据字典列表
+    platforms, sources, bugs = get_bug_list(self.requirementName)
+    platforms: list[str]
+    sources: list[str]
+    bugs: list[dict]
+
+    # 输出数据分割线（控制台可视化）
     print('-' * LINE_LENGTH)
 
-    # 检查缺陷数据获取结果
-    if not bugs:  # 无缺陷数据时的处理
-        print('未获取BUG数量')
+    # ==================================================================
+    # 阶段2：缺陷数据遍历处理
+    # ==================================================================
+
+    # 处理空数据场景（防御性编程）
+    if not bugs:
+        print('未获取到有效缺陷数据')
         return
 
-    # 遍历每个缺陷记录进行详细处理
+    # 遍历原始缺陷记录（每个缺陷为字典结构）
     for bug in bugs:
-        # 提取缺陷状态信息，过滤已拒绝状态
-        bug_status = bug.get('status')
-        if bug_status != 'rejected':  # 仅处理非拒绝状态的缺陷
-            # 解析缺陷核心字段
+        try:
+            # ==================================================================
+            # 阶段2.1：基础字段提取与清洗
+            # ==================================================================
+
+            # 获取缺陷状态并过滤已拒绝的缺陷
+            bug_status = bug.get('status', '')
+            if bug_status == 'rejected':
+                continue
+
+            # 提取关键字段（防御性get方法避免KeyError）
             bug_id = bug.get('id')  # 缺陷唯一标识符
-            severity_name: str = bug.get('custom_field_严重等级')  # 严重等级字段值
-            bug_source = bug.get('source')  # 缺陷根源分类值
-            bug_field_level = bug.get('custom_field_Bug等级')  # BUG等级分类值
-            bug_platform = bug['platform'] if bug.get('platform') else '空'  # 平台信息空值处理
-            fixer = bug['fixer'] if bug.get('fixer') else '空'  # 修复人信息空值处理
+            severity_name = bug.get('custom_field_严重等级', '')  # 原始严重等级
+            bug_source = bug.get('source', '')  # 缺陷根源分类
+            bug_platform = bug.get('platform')  # 客户端平台标识
 
-            # 处理严重等级字段格式（去除后缀编号）
-            if severity_name:
-                severity_name = severity_name.split('-')[0]
+            # ==================================================================
+            # 阶段2.2：数据标准化处理
+            # ==================================================================
 
-            # 统计各严重等级的缺陷数量
-            self._statistics_bug_severity_level(severity_name)
+            # 严重等级格式处理（示例值："P1-严重" → "P1"）
+            if severity_name and '-' in severity_name:
+                severity_name = severity_name.split('-')[0].strip()
 
-            # 统计各缺陷根源的数量
-            self._statistics_bug_source(bug_source)
+            # 空值处理与默认值设置
+            severity_name = severity_name if severity_name else '空'
+            bug_source = bug_source if bug_source else '空'
+            bug_platform = bug_platform if bug_platform else '空'
 
-            # 记录缺陷状态变化趋势数据
-            self._daily_trend_of_bug_changes_count(bug)
+            # ==================================================================
+            # 阶段2.3：核心统计逻辑
+            # ==================================================================
 
-            # 多维度统计：各平台下的缺陷等级分布
+            # 更新严重等级全局计数器
+            self.bugLevelsCount[severity_name] += 1
+
+            # 更新根源分类全局计数器
+            self.bugSourceCount[bug_source] += 1
+
+            # 执行多维度统计（平台×严重等级）
             multi_client_data_processing(
                 result=self.bugLevelsMultiClientCount,
-                sub_key=severity_name,  # 当前缺陷的严重等级
-                all_sub_keys=BUG_LEVELS,  # 所有可能的缺陷等级
-                key=bug_platform,  # 当前缺陷所属平台
+                key=bug_platform,
+                all_sub_keys=BUG_LEVELS,
+                sub_key=severity_name
             )
 
-            # 多维度统计：各平台下的缺陷根源分布
+            # 执行多维度统计（平台×缺陷根源）
             multi_client_data_processing(
                 result=self.bugSourceMultiClientCount,
-                sub_key=bug_source,  # 当前缺陷的根源分类
-                all_sub_keys=sources,  # 所有可能的根源分类
-                key=bug_platform,  # 当前缺陷所属平台
+                key=bug_platform,
+                all_sub_keys=sources,
+                sub_key=bug_source
             )
 
-            # 处理有效缺陷ID记录
-            if bug_id:
-                self.bugIds.append(bug_id)  # 添加到全局缺陷ID列表
-                # 转换日期字段格式
-                created_date = date_time_to_date(bug.get('created'))  # 缺陷创建日期
-                resolved_date = date_time_to_date(bug['resolved']) if bug.get('resolved') else None  # 解决日期
+            # ==================================================================
+            # 阶段2.4：生命周期跟踪
+            # ==================================================================
 
-                # 统计顽固型缺陷（180天未修复）
-                if bug_field_level and bug_field_level == '顽固（180 天）':
-                    self.unrepairedBugsData[bug_id] += 1  # 计数器递增
+            if bug_id:  # 有效缺陷ID处理
+                # 记录缺陷ID（用于后续详细跟踪）
+                self.bugIds.append(bug_id)
 
-                # 统计上线当天未修复的缺陷
+                # 标准化日期字段（处理多种输入格式）
+                created_date = date_time_to_date(bug.get('created', ''))
+                resolved_date = date_time_to_date(bug['resolved']) if bug.get('resolved') else None
+
+                # 顽固缺陷检测逻辑（特定标签处理）
+                if bug.get('custom_field_Bug等级') == '顽固（180 天）':
+                    self.unrepairedBugsData[bug_id] += 1
+
+                # 上线未修复缺陷检测
                 self._statistics_deploy_prod_day_unrepaired_bug(
-                    bug_status, bug_id, severity_name, resolved_date
+                    bug_status=bug_status,
+                    bug_id=bug_id,
+                    severity_name=severity_name,
+                    resolved_date=resolved_date
                 )
 
-                # 统计创建当天未修复的缺陷
+                # 创建日未修复缺陷检测
                 self._statistics_on_that_day_unrepaired_bug(
-                    bug_status, bug_id, severity_name, created_date, resolved_date
+                    bug_status=bug_status,
+                    bug_id=bug_id,
+                    severity_name=severity_name,
+                    created_date=created_date,
+                    resolved_date=resolved_date
                 )
 
-            # 统计缺陷修复人信息
-            self.fixers[fixer] = self.fixers.get(fixer, 0) + 1  # 修复人计数器递增
+                # 更新修复人统计（空值处理）
+                fixer = bug['fixer'] if bug.get('fixer') else '空'
+                self.fixers[fixer] += 1
 
-    # 输出各严重等级的缺陷数量统计结果
-    for severityName, count in self.bugLevelsCount.items():
-        print(f"{severityName}BUG数量：{count}")
+            # ==================================================================
+            # 阶段2.5：时序数据分析
+            # ==================================================================
 
-    # 记录缺陷总数到类属性
+            # 更新每日缺陷趋势（创建/解决/关闭状态跟踪）
+            self._daily_trend_of_bug_changes_count(bug)
+
+        except KeyError as e:
+            # 处理字段缺失异常（记录日志并跳过当前缺陷）
+            print(f"缺陷数据缺失关键字段 {str(e)}，缺陷ID: {bug_id}")
+            continue
+        except ValueError as e:
+            # 处理数据格式异常（记录日志并跳过当前缺陷）
+            print(f"数据格式异常 {str(e)}，缺陷ID: {bug_id}")
+            continue
+
+    # ==================================================================
+    # 阶段3：后处理与结果输出
+    # ==================================================================
+
+    # 计算缺陷总数（有效缺陷ID数量）
     self.bugTotal = len(self.bugIds)
+
+    # 控制台输出统计摘要
+    for level, count in self.bugLevelsCount.items():
+        print(f"{level}级别缺陷数量：{count}")
