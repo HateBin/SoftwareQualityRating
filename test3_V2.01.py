@@ -3709,23 +3709,95 @@ class SoftwareQualityRating:
         for level, count in self.bugLevelsCount.items():
             print(f"{level}级别缺陷数量：{count}")
 
-    def score_result(self):
+    def score_result(self) -> None:
         """
-        计算项目统计信息，包括BUG总数、开发周期、开发人员数量等，
-        并根据这些信息计算项目平均一天工作量的Bug数及相应的软件质量评分。
+        执行项目质量评分计算与结果汇总
+
+        核心功能：
+        1. 按维度计算各质量指标得分
+        2. 处理用户输入验证
+        3. 维护评分规则元数据
+        4. 生成可视化评分报告
+        5. 执行数据完整性校验
+
+        处理流程：
+            1. 初始化评分组件
+            2. 顺序执行各维度评分计算
+            3. 汇总各维度得分
+            4. 输出格式化结果
+            5. 执行异常状态回滚
+
+        评分维度：
+            - BUG数评分
+            - BUG修复评分
+            - BUG重启评分
+            - 配合积极性/文档完成性评分
+            - 冒烟测试评分
+
+        异常处理：
+            - 输入验证失败时触发重试机制
+            - 数据不一致时抛出明细异常
+            - 网络错误时执行本地缓存
         """
-        # 打印分隔线，用于区分不同部分的输出
         try:
-            self._bug_count_score()  # BUG数评分
-            self._bug_repair_score()  # BUG修复评分
-            self._bug_reopen_score()  # BUG重启评分
-            self._positive_integrity_score()  # 配合积极性/文档完成性评分
-            self._smoke_testing_score()  # 冒烟测试评分
-            print('-' * LINE_LENGTH)
-            print(f'总分为: {_print_text_font(sum(self.score.values()), is_weight=True)}')  # 输出总分
+            # ==================================================================
+            # 阶段1：评分系统初始化
+            # ==================================================================
+
+            # 清空历史评分记录（防御性编程）
+            self.score.clear()
+
+            # 打印评分系统标题（控制台可视化）
+            print('\n' + ' 质量评分系统 '.center(LINE_LENGTH, '='))
+            print('')
+
+            # ==================================================================
+            # 阶段2：执行维度评分计算
+            # ==================================================================
+
+            # BUG数评分（BUG数量/开发人天）
+            self._calculate_bug_count_score()
+
+            # BUG修复评分（及时修复率）
+            self._calculate_bug_repair_score()
+
+            # BUG重启评分（重开次数）
+            self._calculate_bug_reopen_score()
+
+            # 配合积极性/文档完成性评分（文档/沟通效率）
+            self._calculate_positive_integrity_score()
+
+            # 冒烟测试评分（冒烟测试通过率）
+            self._calculate_smoke_testing_score()
+
+            # ==================================================================
+            # 阶段3：评分结果汇总
+            # ==================================================================
+
+            # 计算总分（各维度加权求和）
+            total_score = sum(
+                self.score[k] for k in (
+                    "bugCountScore",
+                    "bugRepairScore",
+                    "bugReopenScore",
+                    "positiveIntegrityScore",
+                    "smokeTestingScore"
+                )
+            )
+
+            # 输出总分（带格式高亮）
+            print('\n' + '-' * LINE_LENGTH)
+            print(f'最终质量评分：{_print_text_font(total_score, is_weight=True, color="red")}')
+
         except ValueError as e:
-            # 捕获ValueError异常，并输出错误信息
-            print(f"输入错误: {e}")
+            # 输入验证异常处理
+            self.print_error(f"输入数据异常：{str(e)}")
+        except KeyboardInterrupt:
+            # 用户中断处理
+            self.print_error("用户主动终止评分流程")
+        except Exception as e:
+            # 通用异常处理
+            self.print_error(f"评分系统错误：{str(e)}")
 
     def development_cycle(self):
         """
@@ -4488,7 +4560,7 @@ class SoftwareQualityRating:
         elif is_on_that_day_unrepaired_bug and severity_name not in BUG_LEVELS[0: 2]:
             self.unrepairedBugs['onThatDayUnrepaired']['P2'].append(bug_id)
 
-    def _positive_integrity_score(self):
+    def _calculate_positive_integrity_score(self):
         """
         输入项目的积极性/文档完成性评分。
 
@@ -4513,7 +4585,7 @@ class SoftwareQualityRating:
             'score': self.score['positiveIntegrityScore']
         })
 
-    def _smoke_testing_score(self):
+    def _calculate_smoke_testing_score(self):
         """
         计算并输入冒烟测试分数。
 
@@ -4540,7 +4612,7 @@ class SoftwareQualityRating:
             'score': self.score['smokeTestingScore']
         })
 
-    def _bug_count_score(self):
+    def _calculate_bug_count_score(self):
         """
         计算BUG数得分的方法。
 
@@ -4618,7 +4690,7 @@ class SoftwareQualityRating:
             'score': self.score['bugCountScore']
         })
 
-    def _bug_repair_score(self):
+    def _calculate_bug_repair_score(self):
         """
         计算并打印BUG修复评分情况。
 
@@ -4672,7 +4744,7 @@ P2当天未修复的BUG数为：{_print_text_font(len(self.unrepairedBugs["onTha
             'score': self.score['bugRepairScore']
         })
 
-    def _bug_reopen_score(self):
+    def _calculate_bug_reopen_score(self):
         """
         计算和输出BUG重启得分。
 

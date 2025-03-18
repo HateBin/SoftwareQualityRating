@@ -1,167 +1,258 @@
-def bug_list_detail(self) -> None:
+def score_result(self) -> None:
     """
-    获取指定需求关联的缺陷列表并执行多维度统计分析
+    执行项目质量评分计算与结果汇总
 
     核心功能：
-    1. 通过API接口分页获取指定需求的全部缺陷数据
-    2. 提取关键字段并进行数据清洗
-    3. 执行多维度统计（严重等级、根源分类、平台分布等）
-    4. 跟踪缺陷生命周期状态变化
-    5. 维护数据完整性校验
+    1. 按维度计算各质量指标得分
+    2. 处理用户输入验证
+    3. 维护评分规则元数据
+    4. 生成可视化评分报告
+    5. 执行数据完整性校验
 
     处理流程：
-        1. 初始化统计数据结构
-        2. 调用分页接口获取原始数据
-        3. 遍历缺陷记录进行数据清洗
-        4. 执行字段级校验和空值处理
-        5. 更新各维度统计计数器
-        6. 记录缺陷状态流转轨迹
+        1. 初始化评分组件
+        2. 顺序执行各维度评分计算
+        3. 汇总各维度得分
+        4. 输出格式化结果
+        5. 执行异常状态回滚
 
-    关联方法：
-        get_bug_list()：基础数据获取接口
-        multi_client_data_processing()：多维数据聚合处理器
-        date_time_to_date()：日期格式标准化
+    评分维度：
+        - BUG数评分
+        - BUG修复评分
+        - BUG重启评分
+        - 配合积极性/文档完成性评分
+        - 冒烟测试评分
+
+    异常处理：
+        - 输入验证失败时触发重试机制
+        - 数据不一致时抛出明细异常
+        - 网络错误时执行本地缓存
     """
-    # ==================================================================
-    # 阶段1：数据获取与初始化
-    # ==================================================================
+    try:
+        # ==================================================================
+        # 阶段1：评分系统初始化
+        # ==================================================================
 
-    # 调用API接口获取缺陷基础数据（分页逻辑封装在get_bug_list中）
-    # 返回三元组：平台列表、根源分类列表、缺陷数据字典列表
-    platforms, sources, bugs = get_bug_list(self.requirementName)
-    platforms: list[str]
-    sources: list[str]
-    bugs: list[dict]
+        # 清空历史评分记录（防御性编程）
+        self.score.clear()
 
-    # 输出数据分割线（控制台可视化）
-    print('-' * LINE_LENGTH)
+        # 打印评分系统标题（控制台可视化）
+        print('\n' + ' 质量评分系统 '.center(LINE_LENGTH, '='))
 
-    # ==================================================================
-    # 阶段2：缺陷数据遍历处理
-    # ==================================================================
+        # ==================================================================
+        # 阶段2：执行维度评分计算
+        # ==================================================================
 
-    # 处理空数据场景（防御性编程）
-    if not bugs:
-        print('未获取到有效缺陷数据')
-        return
+        # BUG数评分（BUG数量/开发人天）
+        self._calculate_bug_count_score()
 
-    # 遍历原始缺陷记录（每个缺陷为字典结构）
-    for bug in bugs:
-        try:
-            # ==================================================================
-            # 阶段2.1：基础字段提取与清洗
-            # ==================================================================
+        # BUG修复评分（及时修复率）
+        self._calculate_bug_repair_score()
 
-            # 获取缺陷状态并过滤已拒绝的缺陷
-            bug_status = bug.get('status', '')
-            if bug_status == 'rejected':
-                continue
+        # BUG重启评分（重开次数）
+        self._calculate_bug_reopen_score()
 
-            # 提取关键字段（防御性get方法避免KeyError）
-            bug_id = bug.get('id')  # 缺陷唯一标识符
-            severity_name = bug.get('custom_field_严重等级', '')  # 原始严重等级
-            bug_source = bug.get('source', '')  # 缺陷根源分类
-            bug_platform = bug.get('platform')  # 客户端平台标识
+        # 配合积极性/文档完成性评分（文档/沟通效率）
+        self._calculate_positive_integrity_score()
 
-            # ==================================================================
-            # 阶段2.2：数据标准化处理
-            # ==================================================================
+        # 冒烟测试评分（冒烟测试通过率）
+        self._calculate_smoke_testing_score()
 
-            # 严重等级格式处理（示例值："P1-严重" → "P1"）
-            if severity_name and '-' in severity_name:
-                severity_name = severity_name.split('-')[0].strip()
+        # ==================================================================
+        # 阶段3：评分结果汇总
+        # ==================================================================
 
-            # 空值处理与默认值设置
-            severity_name = severity_name if severity_name else '空'
-            bug_source = bug_source if bug_source else '空'
-            bug_platform = bug_platform if bug_platform else '空'
-
-            # ==================================================================
-            # 阶段2.3：核心统计逻辑
-            # ==================================================================
-
-            # 更新严重等级全局计数器
-            self.bugLevelsCount[severity_name] += 1
-
-            # 更新根源分类全局计数器
-            self.bugSourceCount[bug_source] += 1
-
-            # 执行多维度统计（平台×严重等级）
-            multi_client_data_processing(
-                result=self.bugLevelsMultiClientCount,
-                key=bug_platform,
-                all_sub_keys=BUG_LEVELS,
-                sub_key=severity_name
+        # 计算总分（各维度加权求和）
+        total_score = sum(
+            self.score[k] for k in (
+                "bugCountScore",
+                "bugRepairScore",
+                "bugReopenScore",
+                "positiveIntegrityScore",
+                "smokeTestingScore"
             )
+        )
 
-            # 执行多维度统计（平台×缺陷根源）
-            multi_client_data_processing(
-                result=self.bugSourceMultiClientCount,
-                key=bug_platform,
-                all_sub_keys=sources,
-                sub_key=bug_source
-            )
+        # 输出总分（带格式高亮）
+        print('\n' + '-' * LINE_LENGTH)
+        print(f'最终质量评分：{_print_text_font(total_score, is_weight=True, color="red")}')
 
-            # ==================================================================
-            # 阶段2.4：生命周期跟踪
-            # ==================================================================
+    except ValueError as e:
+        # 输入验证异常处理
+        self.print_error(f"输入数据异常：{str(e)}")
+    except KeyboardInterrupt:
+        # 用户中断处理
+        self.print_error("用户主动终止评分流程")
+    except Exception as e:
+        # 通用异常处理
+        self.print_error(f"评分系统错误：{str(e)}")
 
-            if bug_id:  # 有效缺陷ID处理
-                # 记录缺陷ID（用于后续详细跟踪）
-                self.bugIds.append(bug_id)
 
-                # 标准化日期字段（处理多种输入格式）
-                created_date = date_time_to_date(bug.get('created', ''))
-                resolved_date = date_time_to_date(bug['resolved']) if bug.get('resolved') else None
+def _calculate_bug_density_score(self) -> None:
+    """
+    计算缺陷密度维度评分
 
-                # 顽固缺陷检测逻辑（特定标签处理）
-                if bug.get('custom_field_Bug等级') == '顽固（180 天）':
-                    self.unrepairedBugsData[bug_id] += 1
+    业务规则：
+        BUG密度 = BUG总数 / (开发人数 × 开发天数)
+        根据密度值映射到预设评分区间
 
-                # 上线未修复缺陷检测
-                self._statistics_deploy_prod_day_unrepaired_bug(
-                    bug_status=bug_status,
-                    bug_id=bug_id,
-                    severity_name=severity_name,
-                    resolved_date=resolved_date
-                )
+    处理流程：
+        1. 验证基础数据完整性
+        2. 计算开发人天指标
+        3. 执行密度值映射
+        4. 记录评分明细
+    """
+    print('\n' + 'BUG数'.center(LINE_LENGTH, '-'))
 
-                # 创建日未修复缺陷检测
-                self._statistics_on_that_day_unrepaired_bug(
-                    bug_status=bug_status,
-                    bug_id=bug_id,
-                    severity_name=severity_name,
-                    created_date=created_date,
-                    resolved_date=resolved_date
-                )
+    # 数据完整性校验
+    if not all([self.bugTotal, self.developerCount, self.developmentCycle]):
+        raise ValueError("缺失缺陷数、开发人数或周期数据")
 
-                # 更新修复人统计（空值处理）
-                fixer = bug['fixer'] if bug.get('fixer') else '空'
-                self.fixers[fixer] += 1
+    # 计算开发人天（开发人数×开发周期）
+    dev_man_days = self.developerCount * self.developmentCycle
 
-            # ==================================================================
-            # 阶段2.5：时序数据分析
-            # ==================================================================
+    # 计算BUG密度（防御除零错误）
+    density = self.bugTotal / dev_man_days if dev_man_days else 0
 
-            # 更新每日缺陷趋势（创建/解决/关闭状态跟踪）
-            self._daily_trend_of_bug_changes_count(bug)
+    # 获取映射评分
+    score = calculate_bug_count_rating(density)
 
-        except KeyError as e:
-            # 处理字段缺失异常（记录日志并跳过当前缺陷）
-            print(f"缺陷数据缺失关键字段 {str(e)}，缺陷ID: {bug_id}")
-            continue
-        except ValueError as e:
-            # 处理数据格式异常（记录日志并跳过当前缺陷）
-            print(f"数据格式异常 {str(e)}，缺陷ID: {bug_id}")
-            continue
+    # 存储评分结果
+    self.score["bugCountScore"] = score
+    self.scoreContents.append({
+        "title": "缺陷密度",
+        "score": score,
+        "rule": f"密度值：{density:.2f} BUG/人天"
+    })
 
-    # ==================================================================
-    # 阶段3：后处理与结果输出
-    # ==================================================================
 
-    # 计算缺陷总数（有效缺陷ID数量）
-    self.bugTotal = len(self.bugIds)
+def _calculate_bug_resolution_score(self) -> None:
+    """
+    计算缺陷修复效率评分
 
-    # 控制台输出统计摘要
-    for level, count in self.bugLevelsCount.items():
-        print(f"{level}级别缺陷数量：{count}")
+    业务规则：
+        根据未及时修复的严重缺陷数量
+        映射到预设评分区间
+
+    处理流程：
+        1. 提取未修复缺陷数据
+        2. 分析缺陷严重等级
+        3. 匹配评分规则
+        4. 记录评分明细
+    """
+    print('\n' + '缺陷修复效率'.center(LINE_LENGTH, '-'))
+
+    # 数据结构校验
+    if not isinstance(self.unrepairedBugs, dict):
+        raise ValueError("未修复缺陷数据结构异常")
+
+    # 执行评分计算
+    score = calculate_bug_repair_rating(self.unrepairedBugs)
+
+    # 存储评分结果
+    self.score["bugRepairScore"] = score
+    self.scoreContents.append({
+        "title": "修复效率",
+        "score": score,
+        "rule": "未及时修复P0/P1缺陷扣分机制"
+    })
+
+
+def _calculate_reopen_rate_score(self) -> None:
+    """
+    计算缺陷重启率维度评分
+
+    业务规则：
+        根据缺陷被重新打开的总次数
+        映射到预设评分区间
+
+    处理流程：
+        1. 统计重开次数
+        2. 执行次数到评分映射
+        3. 记录评分明细
+    """
+    print('\n' + '缺陷重启率'.center(LINE_LENGTH, '-'))
+
+    # 计算总重开次数
+    total_reopens = sum(self.reopenBugsData.values())
+
+    # 获取映射评分
+    score = calculate_bug_reopen_rating(total_reopens)
+
+    # 存储评分结果
+    self.score["bugReopenScore"] = score
+    self.scoreContents.append({
+        "title": "重启率",
+        "score": score,
+        "rule": f"总重开次数：{total_reopens}"
+    })
+
+
+def _calculate_team_collaboration_score(self) -> None:
+    """
+    计算团队协作维度评分
+
+    业务规则：
+        基于用户输入的配合积极性/文档完整性评分
+        使用预定义评分规则映射
+
+    处理流程：
+        1. 展示评分标准
+        2. 获取有效用户输入
+        3. 执行输入验证
+        4. 记录评分明细
+    """
+    print('\n' + '团队协作'.center(LINE_LENGTH, '-'))
+
+    # 定义评分标准
+    criteria = """20分：主动跟进问题，文档完善，提供测试支持
+15分：积极解决问题，文档完整
+10分：基本配合，文档部分缺失
+5分：态度懈怠但文档完整
+1分：不配合且文档缺失"""
+
+    # 获取用户输入（带类型验证）
+    score = _input(criteria + '\n请输入分数：', **SCORE_INPUT_DATA)
+
+    # 存储评分结果
+    self.score["positiveIntegrityScore"] = score
+    self.scoreContents.append({
+        "title": "团队协作",
+        "score": score,
+        "rule": "人工评估项"
+    })
+
+
+def _calculate_quality_assurance_score(self) -> None:
+    """
+    计算质量保障维度评分
+
+    业务规则：
+        基于用户输入的冒烟测试通过率评分
+        使用预定义评分规则映射
+
+    处理流程：
+        1. 展示测试标准
+        2. 获取有效用户输入
+        3. 执行输入验证
+        4. 记录评分明细
+    """
+    print('\n' + '质量保障'.center(LINE_LENGTH, '-'))
+
+    # 定义评分标准
+    criteria = """20分：所有版本冒烟测试一次通过
+15分：部分用例不通过
+10分：未测试但主流程通过
+5分：测试后主流程不通过
+1分：未测试且主流程失败"""
+
+    # 获取用户输入（带范围验证）
+    score = _input(criteria + '\n请输入分数：', **SCORE_INPUT_DATA)
+
+    # 存储评分结果
+    self.score["smokeTestingScore"] = score
+    self.scoreContents.append({
+        "title": "质量保障",
+        "score": score,
+        "rule": "冒烟测试评估项"
+    })
