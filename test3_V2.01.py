@@ -3372,6 +3372,15 @@ class SoftwareQualityRating:
                 if self.developers and not self.developers[-1]:
                     self.developers.pop()
 
+            # ==================================================================
+            # 阶段6：防御性编程
+            # ==================================================================
+            if not self.requirementName:
+                self.print_error("需求名称获取失败，请检查需求ID是否正确")
+
+            if not self.PM:
+                self.print_error("产品经理获取失败，请检查需求创建人是否正确")
+
         except requests.RequestException as e:
             # 捕获网络请求异常
             error_msg = f"API请求失败: {str(e)}"
@@ -3465,6 +3474,9 @@ class SoftwareQualityRating:
         # ==================================================================
         # 阶段4：后期校验
         # ==================================================================
+        # 检查测试任务是否存在
+        if not self.isExistTestTask:
+            self.print_error(f'没有测试任务, 请检查"{self.requirementName}"需求是否有测试任务')
         if unfinished_tasks:
             count = 0
             unfinished_tasks_str: str = ''
@@ -3472,10 +3484,15 @@ class SoftwareQualityRating:
                 count += 1
                 unfinished_tasks_str += f"\n{count}. {unfinishedTask}"
             self.print_error(f"存在未完成任务, 请及时处理:{unfinished_tasks_str}")
-        if not self.earliestTaskDate or not self.lastTaskDate:
-            print("警告：未能识别有效任务时间范围")
+        if not self.earliestTaskDate:
+            self.print_error(
+                f"警告：未识别到最早任务日期，请检查{self.requirementName}需求的最早一个开发任务的预期开始时间是否正常")
+        if not self.lastTaskDate:
+            self.print_error(
+                f"警告：未识别到最晚任务日期，请检查{self.requirementName}需求的最后一个测试任务的预期结束时间是否正常")
         if not self.onlineDate:
-            print("警告：未识别到上线日期")
+            self.print_error(
+                f"警告：未识别到上线日期，请检查{self.requirementName}需求的最后一个测试任务的预期开始时间是否正常")
 
     def print_development_hours(self) -> None:
         """
@@ -3691,12 +3708,10 @@ class SoftwareQualityRating:
 
             except KeyError as e:
                 # 处理字段缺失异常（记录日志并跳过当前缺陷）
-                print(f"缺陷数据缺失关键字段 {str(e)}，缺陷ID: {bug_id}")
-                raise e
+                self.print_error(f"缺陷数据缺失关键字段 {str(e)}，缺陷ID: {bug_id}")
             except ValueError as e:
                 # 处理数据格式异常（记录日志并跳过当前缺陷）
-                print(f"数据格式异常 {str(e)}，缺陷ID: {bug_id}")
-                continue
+                self.print_error(f"数据格式异常 {str(e)}，缺陷ID: {bug_id}")
 
         # ==================================================================
         # 阶段3：后处理与结果输出
@@ -3801,220 +3816,311 @@ class SoftwareQualityRating:
 
     def development_cycle(self):
         """
-        计算每个开发者的工作小时数，以确定开发周期。
+        计算项目的开发周期，基于每个开发者的每日有效工时数据
 
-        遍历每个开发者的工作小时数，对于每个开发者在每个日期的工作小时数，
-        如果工作小时数大于或等于8小时，则将该日期标记为1个完整工作日。
-        如果工作小时数小于8小时，则计算该日期的工作小时数占一个完整工作日的比例，
-        并与该日期已有的工作小时数比较，取较大值。
+        本方法通过分析开发者的每日工作记录，计算累计有效工作日数。
+        核心逻辑为将每日工时转换为等效工作日数，避免简单累加导致的时间估算偏差
 
-        最后，将所有日期的工作小时数相加，得到总的开发周期。
+        处理流程：
+            1. 初始化有效工作日字典
+            2. 遍历所有开发者的每日工时记录
+            3. 计算单日有效工时对开发周期的贡献值
+            4. 累加所有日期的等效工作日数
+
+        实现策略：
+            - 单日工时>=8小时计为1个完整工作日
+            - 单日工时<8小时按比例折算（工时/8）
+            - 多人同日工作时取最大贡献值，避免重复计算
         """
-        # 检查是否有每个开发者的每日工作小时数
-        if self.dailyWorkingHoursOfEachDeveloper:
-            # 初始化一个字典来存储每个日期的开发工作小时数
-            development_days = {}
+        # ==================================================================
+        # 阶段1：数据校验与初始化
+        # ==================================================================
+        # 检查是否存在开发者工时数据
+        if not self.dailyWorkingHoursOfEachDeveloper:
+            self.print_error("警告：未获取到开发者每日工时数据")
 
-            # 遍历每个开发者的工作小时数
-            for developerName, taskHours in self.dailyWorkingHoursOfEachDeveloper.items():
-                # 检查该开发者的任务小时数是否已定义
-                if taskHours:
-                    # 遍历该开发者的每个日期的工作小时数
-                    for date, hours in taskHours.items():
-                        # 检查工作小时数是否已定义，并且该日期的工作小时数是否小于1
-                        if hours and development_days.get(date, 0) < 1:
-                            # 如果工作小时数大于或等于8小时，则将该日期标记为1个完整工作日
-                            if hours >= 8:
-                                development_days[date] = 1
-                            else:
-                                # 否则，计算该日期的工作小时数占一个完整工作日的比例
-                                daily_hours = round((hours / 8), 1)
-                                # 如果计算出的工作小时数大于该日期已有的工作小时数，则更新该日期的工作小时数
-                                if development_days.get(date, 0) < daily_hours:
-                                    development_days[date] = daily_hours
+        # 初始化开发周期统计字典
+        # 键：日期字符串（YYYY-MM-DD）
+        # 值：当日最大等效工作日数（0-1之间或1）
+        development_days = {}
 
-            # 检查是否有计算出的开发工作小时数
-            if development_days:
-                # 遍历每个日期的工作小时数，将其累加到总的开发周期中
-                for devHours in development_days.values():
-                    self.developmentCycle += devHours
+        # ==================================================================
+        # 阶段2：遍历开发者数据
+        # ==================================================================
+        # 遍历每个开发者的工时记录
+        # developer_name: 开发者姓名标识
+        # task_hours: 该开发者的日期-工时字典
+        for developer_name, task_hours in self.dailyWorkingHoursOfEachDeveloper.items():
+            # 跳过空数据记录
+            if not task_hours:
+                continue
 
-    def add_test_report(self):
+            # ==================================================================
+            # 阶段3：处理单开发者工时记录
+            # ==================================================================
+            # 遍历该开发者每个工作日的工时数据
+            # date: 日期字符串（YYYY-MM-DD）
+            # hours: 当日实际工作小时数（浮点型）
+            for date, hours in task_hours.items():
+                # 数据有效性检查
+                if not isinstance(hours, (int, float)) or hours < 0:
+                    print(f"无效工时数据：开发者[{developer_name}] 日期[{date}] 工时[{hours}]")
+                    continue
+
+                # ==================================================================
+                # 阶段4：计算单日贡献值
+                # ==================================================================
+                # 计算当前日期的等效工作日数
+                if hours >= 8:
+                    # 满8小时计为完整工作日
+                    daily_contribution = 1.0
+                else:
+                    # 不足8小时按比例折算
+                    daily_contribution = round(hours / 8, 1)
+
+                # ==================================================================
+                # 阶段5：更新全局统计
+                # ==================================================================
+                # 保留同一日期的最大贡献值（处理多人协作场景）
+                # 若当前计算值大于已记录值，则更新
+                if development_days.get(date, 0) < daily_contribution:
+                    development_days[date] = daily_contribution
+
+        # ==================================================================
+        # 阶段6：计算总开发周期
+        # ==================================================================
+        # 累加所有日期的等效工作日数
+        # 使用四舍五入保留1位小数，避免浮点精度问题
+        self.developmentCycle = round(sum(development_days.values()), 1)
+
+        # ==================================================================
+        # 阶段7：结果校验
+        # ==================================================================
+        # 检查计算结果有效性
+        if self.developmentCycle <= 0:
+            self.print_error("警告：开发周期计算结果为非正数，请检查输入数据有效性")
+
+    def add_test_report(self) -> None:
         """
-        添加测试报告。
+        生成并提交测试报告，包含测试结论、缺陷列表及可视化图表
 
-        该方法负责生成和提交测试报告。它首先移除当前用户，然后构造测试报告的HTML内容，
-        并根据条件调用AI生成总结或添加缺陷列表和图表。最后，根据配置决定是否提交测试报告。
+        本方法实现完整的测试报告生成流程，主要功能包括：
+        1. 构造测试结论的HTML结构
+        2. 处理测试报告接收人列表
+        3. 动态集成缺陷列表和图表数据
+        4. 调用AI生成总结内容（根据配置开关）
+        5. 提交测试报告到TAPD系统或打印调试信息
+
+        实现流程:
+            1. 初始化测试结论数据结构
+            2. 构建基础HTML报告框架
+            3. 动态添加缺陷列表和图表模块
+            4. 配置API请求参数
+            5. 执行报告提交或输出调试信息
+
+        异常处理:
+            requests.RequestException: 报告提交请求失败时抛出
+            KeyError: 响应数据结构异常时抛出
         """
-        # 测试人员列表中移除当前用户
+        # ==================================================================
+        # 阶段1：测试结论数据初始化
+        # ==================================================================
+        # 构建测试结论核心指标字典
+        test_conclusion: dict[str, str] = {
+            '测试执行进度': '',  # 预留字段，需后续补充
+            '用例个数': '',  # 预留字段，需后续补充
+            '发现BUG数': f'{self.bugTotal if self.bugTotal else self.bugInputTotal}个',  # 动态选择自动统计或手动输入的BUG数
+            # 组合各维度评分
+            '软件提测质量评分': f'{sum(self.score.values())}分（配合积极性/文档完整性{self.score["positiveIntegrityScore"]}分 + 冒烟测试{self.score["smokeTestingScore"]}分 + BUG数{self.score["bugCountScore"]}分 + BUG修复速度{self.score["bugRepairScore"]}分 + BUG重启率{self.score["bugReopenScore"]}分）',
+            '测试时间': '',  # 预留字段，需后续补充
+            '测试人员': self.testersStr,  # 格式化后的测试人员字符串
+            '开发人员': '、'.join(developer.replace(DEPARTMENT, '') for developer in self.developers),  # 去除部门前缀的开发人员列表
+            '产品经理': self.PM.replace(DEPARTMENT, ''),  # 去除部门前缀的产品经理
+            '测试范围': '',  # 预留字段，需后续补充
+            '测试平台': '',  # 预留字段，需后续补充
+        }
+
+        # ==================================================================
+        # 阶段2：HTML内容生成
+        # ==================================================================
+        # 将测试结论字典转换为HTML组件
+        test_conclusion_html = [
+            # 生成带样式的div组件，每个指标单独成行
+            f'''\n<div><span style="font-size: medium; background-color: rgb(255, 255, 255);">{title}：{value}</span></div>'''
+            for title, value in test_conclusion.items()
+        ]
+
+        # 从测试接收人列表中移除当前用户
         self._remove_current_user()
 
-        # 测试报告-概要的html内容
+        # 构建报告基础框架
         self.testReportHtml += f'''
             <span style="color: rgb(34, 34, 34); font-size: medium; background-color: rgb(255, 255, 255);">{datetime.datetime.now().strftime("%Y年%m月%d日")}，{self.requirementName + '&nbsp; &nbsp;' if self.requirementName else ''}項目已完成測試，達到上綫要求</span>
-            <div style="color: rgb(34, 34, 34);">
-                <span style="background-color: rgb(255, 255, 255);">
-                    <br  />
-                </span>
-            </div>
+            <br  />
             <div style="color: rgb(34, 34, 34);">
                 <div>
                     <span style="font-size: medium; background-color: rgb(255, 255, 255);">項目测试结论</span>
-                </div>
-                <div>
-                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">测试执行进度：</span>
-                </div>
-                <div>
-                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">用例个数：</span>
-                </div>
-                <div>
-                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">发现BUG数：{self.bugTotal if self.bugTotal else self.bugInputTotal}个</span>
-                </div>
-                <div>
-                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">软件提测质量评分：{sum(self.score.values())}分（配合积极性/文档完整性{self.score["positiveIntegrityScore"]}分 + 冒烟测试{self.score["smokeTestingScore"]}分 + BUG数{self.score["bugCountScore"]}分 + BUG修复速度{self.score["bugRepairScore"]}分 + BUG重启率{self.score["bugReopenScore"]}分）</span>
-                </div>
-                <div>
-                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">测试时间：</span>
-                </div>
-                <div>
-                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">测试人员：{self.testersStr}</span>
-                </div>
-                <div>
-                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">开发人员：{'、'.join(developer.replace(DEPARTMENT, '') for developer in self.developers)}</span>
-                </div>
-                <div>
-                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">产品经理：{self.PM.replace(DEPARTMENT, '')}</span>
-                </div>
-                <div>
-                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">测试范围：</span>
-                </div>
-                <div>
-                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">测试平台：</span>
-                </div>
-                <div>
-                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">
-                        <br  />
-                    </span>
-                </div>
+                </div>{''.join(test_conclusion_html)}
+                <br  />
                 <div>
                     <span style="font-size: medium; background-color: rgb(255, 255, 255);">总结：
                         <br  /><br  /> %(reportSummary)s
                     </span>
                 </div>
-                <div>
-                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">
-                        <br  />
-                    </span>
-                </div>
+                <br  />
             </div>'''
 
-        # 如果打开了AI生成总结内容开关, 则调用AI生成总结方法
+        # ==================================================================
+        # 阶段3：AI总结生成（根据全局配置开关）
+        # ==================================================================
         if IS_CREATE_AI_SUMMARY:
-            self._ai_generate_summary()  # 调用AI生成总结方法
+            self._ai_generate_summary()  # 调用深度生成方法
 
-        # 构造测试报告数据
+        # ==================================================================
+        # 阶段4：请求参数构造
+        # ==================================================================
+        # 配置API端点基础信息
         url = HOST + f"/{PROJECT_ID}/report/workspace_reports/submit/0/0/security"
         params = {
-            "report_type": "test",
-            "save_draft": "1",
+            "report_type": "test",  # 指定报告类型为测试报告
+            "save_draft": "1",  # 保存为草稿模式
         }
-        # 构建测试报告请求体
+
+        # 构建多层级表单数据结构
         data = {
-            "data[Template][id]": "1163835346001000040",
+            "data[Template][id]": "1163835346001000040",  # 报告模板ID
+            # 动态生成报告标题
             "data[WorkspaceReport][title]": f"{(self.requirementName + '_') if self.requirementName else DEPARTMENT}测试报告",
-            "data[WorkspaceReport][receiver]": f"{';'.join([self.PM] + self.developers + self.testRecipient)}",
-            "data[WorkspaceReport][receiver_organization_ids]": "",
-            "data[WorkspaceReport][cc]": f"{';'.join(TEST_REPORT_CC_RECIPIENTS)}",
-            "data[WorkspaceReport][cc_organization_ids]": "",
-            "workspace_name": "T5;T5 Engineering;",
-            "data[WorkspaceReport][workspace_list]": f"{PROJECT_ID}|51931447",
-            "data[detail][1][type]": "richeditor",
+            "data[WorkspaceReport][receiver]": f"{';'.join([self.PM] + self.developers + self.testRecipient)}",  # 接收人列表
+            "data[WorkspaceReport][receiver_organization_ids]": "",  # 组织机构ID保留字段
+            "data[WorkspaceReport][cc]": f"{';'.join(TEST_REPORT_CC_RECIPIENTS)}",  # 抄送人列表
+            "data[WorkspaceReport][cc_organization_ids]": "",  # 抄送组织机构ID保留字段
+            "workspace_name": "T5;T5 Engineering;",  # 项目空间名称
+            "data[WorkspaceReport][workspace_list]": f"{PROJECT_ID}|51931447",  # 项目空间ID列表
+            "data[detail][1][type]": "richeditor",  # 富文本组件类型
             "data[detail][1][default_value]": self.testReportHtml % {"reportSummary": self.reportSummary},
-            "data[detail][1][title]": "一、概述",
-            "data[detail][1][id]": 0,
-            "data[detail][2][type]": "story_list",
-            "data[detail][2][workitem_type]": "story",
+            # 插入动态生成的总结内容
+            "data[detail][1][title]": "一、概述",  # 第一部分标题
+            "data[detail][1][id]": 0,  # 组件ID
+            "data[detail][2][type]": "story_list",  # 需求列表组件类型
+            "data[detail][2][workitem_type]": "story",  # 工作项类型为需求
+            # 展示字段列表
             "data[detail][2][show_fields]": "name,status,business_value,priority,size,iteration_id,owner,begin,due",
-            "data[detail][2][title]": "二、需求",
-            "data[detail][2][id]": 0,
-            "data[detail][2][story_list_show_type]": "flat",
-            f"data[detail][2][workitem_ids][{PROJECT_ID}]": REQUIREMENT_ID,
-            f"data[detail][2][workitem_list_query_type][{PROJECT_ID}]": "list",
-            f"data[detail][2][workitem_list_view_id][{PROJECT_ID}]": 0,
-            f"data[detail][2][workitem_list_sys_view_id][{PROJECT_ID}]": 0,
-            f"data[detail][2][workitem_list_display_count][{PROJECT_ID}]": 10,
-            "data[detail][2][comment]": "",
-            "data[return_url]": "/workspace_reports/index",
-            "data[action_timestamp]": "",
-            "data[filter_id]": 0,
-            "data[model_name]": "",
-            "data[submit]": "保存草稿",
+            "data[detail][2][title]": "二、需求",  # 第二部分标题
+            "data[detail][2][id]": 0,  # 组件ID
+            "data[detail][2][story_list_show_type]": "flat",  # 平铺展示模式
+            f"data[detail][2][workitem_ids][{PROJECT_ID}]": REQUIREMENT_ID,  # 关联的需求ID
+            f"data[detail][2][workitem_list_query_type][{PROJECT_ID}]": "list",  # 列表查询类型
+            f"data[detail][2][workitem_list_view_id][{PROJECT_ID}]": 0,  # 列表视图ID
+            f"data[detail][2][workitem_list_sys_view_id][{PROJECT_ID}]": 0,  # 系统视图ID
+            f"data[detail][2][workitem_list_display_count][{PROJECT_ID}]": 10,  # 展示数量
+            "data[detail][2][comment]": "",  # 备注信息
+            "data[return_url]": "/workspace_reports/index",  # 回调地址
+            "data[action_timestamp]": "",  # 时间戳保留字段
+            "data[filter_id]": 0,  # 过滤器ID
+            "data[model_name]": "",  # 模型名称保留字段
+            "data[submit]": "保存草稿",  # 提交按钮文本
         }
-        # 如果存在BUG ID，则添加BUG列表
+
+        # ==================================================================
+        # 阶段5：动态模块添加
+        # ==================================================================
+        # 存在BUG时添加缺陷列表模块
         if self.bugIds:
             data.update({
-                "data[detail][3][type]": "bug_list",
-                "data[detail][3][workitem_type]": "bug",
+                "data[detail][3][type]": "bug_list",  # 缺陷列表组件类型
+                "data[detail][3][workitem_type]": "bug",  # 工作项类型为缺陷
+                # 展示字段列表
                 "data[detail][3][show_fields]": "title,version_report,priority,severity,status,current_owner,created",
-                "data[detail][3][title]": "三、缺陷列表",
-                "data[detail][3][id]": 0,
-                "data[detail][3][story_list_show_type]": "flat",
-                f"data[detail][3][workitem_ids][{PROJECT_ID}]": ','.join(self.bugIds),
-                f"data[detail][3][workitem_list_query_type][{PROJECT_ID}]": "list",
-                f"data[detail][3][workitem_list_view_id][{PROJECT_ID}]": 0,
-                f"data[detail][3][workitem_list_sys_view_id][{PROJECT_ID}]": 0,
-                f"data[detail][3][workitem_list_display_count][{PROJECT_ID}]": 10,
-                "data[detail][3][comment]": "",
+                "data[detail][3][title]": "三、缺陷列表",  # 第三部分标题
+                "data[detail][3][id]": 0,  # 组件ID
+                "data[detail][3][story_list_show_type]": "flat",  # 平铺展示模式
+                f"data[detail][3][workitem_ids][{PROJECT_ID}]": ','.join(self.bugIds),  # 关联的缺陷ID列表
+                f"data[detail][3][workitem_list_query_type][{PROJECT_ID}]": "list",  # 列表查询类型
+                f"data[detail][3][workitem_list_view_id][{PROJECT_ID}]": 0,  # 列表视图ID
+                f"data[detail][3][workitem_list_sys_view_id][{PROJECT_ID}]": 0,  # 系统视图ID
+                f"data[detail][3][workitem_list_display_count][{PROJECT_ID}]": 10,  # 展示数量
+                "data[detail][3][comment]": "",  # 备注信息
             })
-        # 如果存在图表数据，则添加图表
+
+        # 存在图表数据时添加可视化模块
         if self.chartHtml:
             data.update({
-                "data[detail][4][type]": "richeditor",
-                "data[detail][4][title]": "图表",
-                "data[detail][4][id]": 0,
-                "data[detail][4][default_value]": f"<div>{self.chartHtml}</div>",
+                "data[detail][4][type]": "richeditor",  # 富文本组件类型
+                "data[detail][4][title]": "图表",  # 第四部分标题
+                "data[detail][4][id]": 0,  # 组件ID
+                "data[detail][4][default_value]": f"<div>{self.chartHtml}</div>",  # 插入图表HTML代码
             })
-        # 如果打开了创建测试报告开关, 则提交测试报告请求
+
+        # ==================================================================
+        # 阶段6：报告提交处理
+        # ==================================================================
+        # 根据全局配置决定提交方式
         if IS_CREATE_REPORT:
-            fetch_data(url=url, params=params, data=data, method='POST')  # 提交测试报告请求
-        else:  # 如果关闭了创建测试报告开关, 则打印测试报告data
+            # 执行报告提交请求
+            fetch_data(url=url, params=params, data=data, method='POST')
+        else:
+            # 调试模式下打印请求数据结构
             print('\n请求测试报告data:')
             print(json.dumps(data, indent=4, ensure_ascii=False))
 
-    def create_chart(self):
+    def create_chart(self) -> None:
         """
         创建并汇总各种统计图表数据。
 
         本函数负责生成多个条形图，涵盖开发工时、BUG修复人、各端缺陷级别分布及缺陷根源分布统计。
         每个图表生成后，其路径信息被存储，并最终调用私有方法_charts_to_html将这些信息转换为HTML格式。
+
+        处理流程：
+            1. 初始化图表列表，用于存储所有图表的路径信息
+            2. 设置中文字体和负号显示
+            3. 创建开发工时统计条形图，并将图表路径信息添加到图表列表中
+            4. 如果存在BUG数据，则创建以下图表：
+                - BUG修复人统计条形图
+                - 各端缺陷级别分布统计条形图和表格数据
+                - 缺陷根源分布统计条形图和表格数据
+                - 缺陷每日变化趋势折线图
+            5. 调用私有方法_charts_to_html将图表路径信息转换并生成HTML
+            6. 如果不需要创建报告，则打印图表链接
+
+        异常处理：
+            ValueError: 当图表数据生成失败时抛出
+            TypeError: 当输入数据类型错误时抛出
         """
-        # 初始化图表列表，用于存储所有图表的路径信息
-        charts = list()
+        # ==================================================================
+        # 阶段1：初始化图表列表
+        # ==================================================================
+        charts = list()  # 初始化存储图表路径信息的列表
 
-        # 设置中文字体
-        plt.rcParams['font.sans-serif'] = [PLT_FONT[get_system_name()]]
+        # ==================================================================
+        # 阶段2：设置中文字体和负号显示
+        # ==================================================================
+        plt.rcParams['font.sans-serif'] = [PLT_FONT[get_system_name()]]  # 根据操作系统设置中文字体
+        plt.rcParams['axes.unicode_minus'] = False  # 设置负号显示
 
-        # 设置负号显示
-        plt.rcParams['axes.unicode_minus'] = False
-
-        # 创建开发工时统计条形图，并将图表路径信息添加到图表列表中
-        work_hour_plot_data = create_bar_plot(title='开发工时统计', data=self.workHours)
+        # ==================================================================
+        # 阶段3：创建开发工时统计条形图
+        # ==================================================================
+        work_hour_plot_data = create_bar_plot(title='开发工时统计', data=self.workHours)  # 生成开发工时统计条形图
         charts.append({
-            'plotPath': work_hour_plot_data['plotPath'],
+            'plotPath': work_hour_plot_data['plotPath'],  # 将图表路径信息添加到图表列表中
         })
 
+        # ==================================================================
+        # 阶段4：创建BUG相关图表（如果存在BUG数据）
+        # ==================================================================
         if self.bugIds:
-            # 创建BUG修复人统计条形图，并将图表路径信息添加到图表列表中
-            fixer_plot_data = create_bar_plot(title='BUG修复人', data=self.fixers)
+            # 创建BUG修复人统计条形图
+            fixer_plot_data = create_bar_plot(title='BUG修复人', data=self.fixers)  # 生成BUG修复人统计条形图
             charts.append({
-                'plotPath': fixer_plot_data['plotPath'],
+                'plotPath': fixer_plot_data['plotPath'],  # 将图表路径信息添加到图表列表中
             })
 
-            # 创建各端缺陷级别分布统计条形图和表格数据，并将图表路径信息和表格数据添加到图表列表中
+            # 创建各端缺陷级别分布统计条形图和表格数据
             bug_level_multi_client_count_plot_data = create_bar_plot(
-                title='各端缺陷级别分布', data=self.bugLevelsMultiClientCount)
+                title='各端缺陷级别分布', data=self.bugLevelsMultiClientCount)  # 生成各端缺陷级别分布统计条形图
             charts.append({
-                'plotPath': bug_level_multi_client_count_plot_data['plotPath'],
+                'plotPath': bug_level_multi_client_count_plot_data['plotPath'],  # 将图表路径信息添加到图表列表中
                 'tableData': {
                     'firstColumnHeader': '软件平台',  # 表格第一列的标题
                     'tableWidth': bug_level_multi_client_count_plot_data['plotData']['widthPx'],  # 表格宽度
@@ -4024,10 +4130,11 @@ class SoftwareQualityRating:
                 }
             })
 
-            # 创建缺陷根源分布统计条形图和表格数据，并将图表路径信息和表格数据添加到图表列表中
-            bug_source_count_plot_data = create_bar_plot(title='缺陷根源分布统计', data=self.bugSourceMultiClientCount)
+            # 创建缺陷根源分布统计条形图和表格数据
+            bug_source_count_plot_data = create_bar_plot(title='缺陷根源分布统计',
+                                                         data=self.bugSourceMultiClientCount)  # 生成缺陷根源分布统计条形图
             charts.append({
-                'plotPath': bug_source_count_plot_data['plotPath'],
+                'plotPath': bug_source_count_plot_data['plotPath'],  # 将图表路径信息添加到图表列表中
                 'tableData': {
                     'firstColumnHeader': '软件平台',  # 表格第一列的标题
                     'tableWidth': bug_source_count_plot_data['plotData']['widthPx'],  # 表格宽度
@@ -4037,28 +4144,33 @@ class SoftwareQualityRating:
                 }
             })
 
-            # 创建缺陷每日变化趋势折线图，并将图表路径信息添加到图表列表中
+            # 创建缺陷每日变化趋势折线图
             daily_trend_of_bug_changes_count_broken_line_data = create_broken_line_plot(
-                title='缺陷每日变化趋势', data=self.dailyTrendOfBugChanges)
+                title='缺陷每日变化趋势', data=self.dailyTrendOfBugChanges)  # 生成缺陷每日变化趋势折线图
             charts.append({
-                'plotPath': daily_trend_of_bug_changes_count_broken_line_data['plotPath'],
+                'plotPath': daily_trend_of_bug_changes_count_broken_line_data['plotPath'],  # 将图表路径信息添加到图表列表中
                 'tableData': {
                     'firstColumnHeader': '日期',  # 表格第一列的标题
                     'tableWidth': daily_trend_of_bug_changes_count_broken_line_data['plotData']['widthPx'],  # 表格宽度
                     'data': self.dailyTrendOfBugChanges,  # 表格中展示的数据
                     'isMultiDimensionalTable': True,  # 表示数据是多维的，需要使用多维度表格显示
                     'isRowTotal': False,  # 表示数据中包含行总计，需要计算并显示
-                    'sort': 'asc',
+                    'sort': 'asc',  # 按升序排序
                 }
             })
 
-        # 调用私有方法将图表路径信息转换并生成HTML
-        self._charts_to_html(charts)
-        # 如果不需要创建报告，则打印图表链接
+        # ==================================================================
+        # 阶段5：将图表路径信息转换为HTML格式
+        # ==================================================================
+        self._charts_to_html(charts)  # 调用私有方法将图表路径信息转换并生成HTML
+
+        # ==================================================================
+        # 阶段6：打印图表链接（如果不需要创建报告）
+        # ==================================================================
         if not IS_CREATE_REPORT:
             print('\n\n\n图表链接：')
             for chart in charts:
-                print('https://www.tapd.cn' + chart['plotPath'])
+                print('https://www.tapd.cn' + chart['plotPath'])  # 打印图表链接
 
     def _charts_to_html(self, charts: list):
         """
@@ -4950,54 +5062,36 @@ BUG未修复数为：{_print_text_font(unrepaired_bug_count, color="green")}'''
         - 捕获异常并打印堆栈信息。
         - 最终确保列字段展示配置信息被还原。
         """
-        try:
-            # 编辑列表展示字段
-            self.edit_list_config()
+        # 编辑列表展示字段
+        self.edit_list_config()
 
-            # 获取需求名称
-            self.get_requirement_detail()
+        # 获取需求名称
+        self.get_requirement_detail()
 
-            # 检查需求名称是否获取成功
-            if not self.requirementName:
-                raise ValueError("需求名称获取失败, 请检查需求ID是否正确")
+        # 汇总开发人员工时
+        self.requirement_task_statistics()
 
-            # 汇总开发人员工时
-            self.requirement_task_statistics()
+        if self.dailyWorkingHoursOfEachDeveloper:
+            # 计算开发周期
+            self.development_cycle()
 
-            # 检查测试任务是否存在
-            if not self.isExistTestTask:
-                raise ValueError(f'没有测试任务, 请检查"{self.requirementName}"需求是否有测试任务')
+        # 打印工时汇总
+        self.print_development_hours()
 
-            # 检查工时数据是否获取成功
-            if not self.workHours:
-                raise ValueError("工时数据获取失败, 请检查需求是否有子任务")
+        # 统计BUG数量
+        self.bug_list_detail()
 
-            if self.dailyWorkingHoursOfEachDeveloper:
-                # 计算开发周期
-                self.development_cycle()
+        # 恢复列字段展示的配置信息
+        self.restore_list_config()
 
-            # 打印工时汇总
-            self.print_development_hours()
+        # 计算并输出相关统计数据
+        self.score_result()
 
-            # 统计BUG数量
-            self.bug_list_detail()
+        # 创建图表
+        self.create_chart()
 
-            # 恢复列字段展示的配置信息
-            self.restore_list_config()
-
-            # 计算并输出相关统计数据
-            self.score_result()
-
-            # 创建图表
-            self.create_chart()
-
-            # 添加测试报告
-            self.add_test_report()
-
-        except ValueError as e:
-            # 捕获ValueError异常并打印堆栈信息
-            traceback.print_exc()
-            raise e
+        # 添加测试报告
+        self.add_test_report()
 
 
 if __name__ == "__main__":
