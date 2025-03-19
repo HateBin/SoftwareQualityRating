@@ -1,6 +1,11 @@
-from collections import defaultdict
+processed_data = {'2020-01-01': 1, '2019-01-01': 2, '2021-01-01': 3}
+sort_config = 'desc'
 
-BUG_LEVELS = ["致命", "严重", "一般", "提示", "建议"]
-b = defaultdict(int, {level: 0 for level in BUG_LEVELS})
-b['空'] += 1
-print(b)
+processed_data = dict(sorted(
+    processed_data.items(),
+    key=lambda x: x[0].lower() if isinstance(x[0], str) else x[0],
+    reverse=sort_config == 'desc'
+))
+
+
+print(processed_data)

@@ -4064,7 +4064,7 @@ class SoftwareQualityRating:
             print('\n请求测试报告data:')
             print(json.dumps(data, indent=4, ensure_ascii=False))
 
-    def create_chart(self):
+    def create_chart(self) -> None:
         """
         创建并汇总各种统计图表数据。
 
@@ -4104,6 +4104,11 @@ class SoftwareQualityRating:
         work_hour_plot_data = create_bar_plot(title='开发工时统计', data=self.workHours)  # 生成开发工时统计条形图
         charts.append({
             'plotPath': work_hour_plot_data['plotPath'],  # 将图表路径信息添加到图表列表中
+            # 'tableData': {
+            #     'tableWidth': work_hour_plot_data['plotData']['widthPx'],
+            #     'data': self.workHours,
+            #     'headers': ['开发人员', '工时'],
+            # }
         })
 
         # ==================================================================
@@ -4174,201 +4179,134 @@ class SoftwareQualityRating:
 
     def _charts_to_html(self, charts: list):
         """
-        将图表信息转换为HTML格式字符串。
+        将图表数据转换为标准化的HTML结构，包含图像和表格
 
-        遍历charts列表，根据每个图表的类型和数据生成相应的HTML代码。
-        支持两种类型的图表：图像和表格。
+        本方法支持处理多维数据和非多维数据的展示逻辑，主要功能包括：
+        1. 解析图表元数据生成图像标签
+        2. 判断生成多维表格还是简单表格
+        3. 动态构建表格HTML数据
+        4. 维护样式一致性
+
+        处理流程:
+            1. 入参数据校验
+            2. 图像元素处理
+            3. 表格数据结构校验
+            4. 表格行数据排序
+            5. 判断并构建多维表格或者简单表格
 
         参数:
-        - charts: 包含图表信息的列表，每个图表信息是一个字典。
+            charts: 图表数据列表，包含图表路径和表格元数据
         """
-        for chart in charts:
-            # 检查图表是否为字典类型
-            if isinstance(chart, dict):
-                # 如果图表包含plotPath键，则生成图像图表的HTML
-                if chart.get('plotPath'):
-                    self.chartHtml += f'''
-                    <div>
-                        <img src="{chart["plotPath"]}" />
-                    </div>'''
-                # 如果图表包含tableData键且为字典类型，则生成表格图表的HTML
-                if chart.get('tableData') and isinstance(chart['tableData'], dict):
-                    table_data: dict = chart['tableData']  # 获取表格数据
-                    if table_data.get('sort') and table_data['sort'] in ('asc', 'desc'):
-                        table_data['data'] = {
-                            k: table_data['data'][k]
-                            for k in sorted(
-                                table_data['data'],
-                                reverse=True if table_data['sort'] == 'desc' else False
-                            )
-                        }
-                    if table_data.get('isMultiDimensionalTable'):  # 如果数据是多维的，则生成多维表格
-                        data_headers = []  # 初始化表格的头部动态数据
-                        for valueData in table_data['data'].values():  # 获取数据头部动态数据
-                            data_headers += list(valueData)  # 添加到头部动态数据列表中
-                            break  # 跳出循环
-                        # 公用的样式
-                        common_style = {
-                            'padding': '0 10px',
-                            'vertical-align': 'middle',
-                            'border-right': 'none',
-                            'border-left': 'none',
-                            'border-top': 'none',
-                            'border-bottom': '1px solid rgb(230, 230, 230)',
-                            'background-color': 'rgb(255, 255, 255)',
-                        }
-                        # 表格首行的样式
-                        header_row_style = style_convert({
-                            **common_style,
-                            'height': '50px',
-                            'font-size': '12px',
-                            'color': '#8c95a8',
-                            'border-top': '1px solid rgb(230, 230, 230)',
-                        })
-                        # 表格内容的样式
-                        row_style = style_convert({
-                            **common_style,
-                            'height': '38px',
-                            'font-size': '12px',
-                        })
-                        # 表格总计行的样式
-                        total_row_style = style_convert({
-                            **common_style,
-                            'height': '38px',
-                            'font-size': '12px',
-                            'color': 'black',
-                            'font-weight': 'bold',
-                        })
-                        # 初始化表格内容行的HTML变量
-                        data_row_html = ''
-                        # 根据表格动态数据头的数量增加列表的值, 用于展示在总计行, 列表第一个数据记录的是总计中的小计
-                        total_row_values = [0, ] + [0 for _ in data_headers]
-                        for tableKey, tableData in table_data['data'].items():  # 遍历表格数据键与数据值
-                            # 遍历表格数据值, 生成表格内容行的HTML, tr标签为表格中的一整行, td标签为行中的单元格, 第一个td标签为一行中的第一个单元格, 第二个td标签为行中的第二个单元格, 以此类推
-                            data_row_html += f"""
-                            <tr>
-                                <td align="left" style="{row_style}">
-                                    {tableKey}
-                                </td>
-                                {f'''<td align="left" style="{row_style}">
-                                    {sum(tableData.values())}
-                                </td>''' if table_data.get('isRowTotal') else ''}
-                                {''.join(f'''
-                                <td align="left" style="{row_style}">
-                                    {dataValue}
-                                </td>''' for dataValue in tableData.values())}
-                            </tr>"""
-                            table_data_values = [value for value in tableData.values()]  # 将一行的数据遍历成一个列表
-                            for index in range(len(table_data_values)):  # 遍历列表中所有索引
-                                total_row_values[0] += table_data_values[index]  # 累加总计行中的小计
-                                total_row_values[index + 1] += table_data_values[index]  # 累加总计行中的对应索引的值
-                        # 构建表格的HTML, 首行的内容和总计行的内容直接在这里构建, 剩下的内容通过data_row_html引入
-                        self.chartHtml += f'''
-                        {'<div><br /></div>' * 2}
-                        <div>
-                            <table cellpadding="0" cellspacing="0" class="report-chart__table" style="width:{table_data['tableWidth']}px;border:none;margin-top:0;margin-bottom:0;margin-left:0;margin-right:0;">
-                                <tbody>
-                                    <tr>
-                                        <th align="left" style="{header_row_style}">
-                                            {table_data['firstColumnHeader']}
-                                        </th>
-                                        {f"""<th align="left" style="{header_row_style}">
-                                            小计
-                                        </th>""" if table_data.get('isRowTotal') else ''}
-                                        {''.join(f"""
-                                        <th align="left" style="{header_row_style}">
-                                            {dataHeader}
-                                        </th>""" for dataHeader in data_headers) if data_headers else ''}
-                                    </tr>
-                                    {data_row_html}
-                                    <tr>
-                                        <td align="left" style="{total_row_style}">
-                                            总计
-                                        </td>
-                                        {f"""<td align="left" style="{total_row_style}">
-                                            {total_row_values[0]}
-                                        </td>""" if table_data.get('isRowTotal') else ''}
-                                        {''.join(f"""
-                                        <td align="left" style="{total_row_style}">
-                                            {value}
-                                        </td>""" for value in total_row_values[1:])}
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>'''
-                    else:  # 非多维度的表格
-                        # 根据表格数据生成表格的样式和结构
-                        table_style = style_convert({
-                            # "width": f"{300 * len(table_data['headers'])}px",
-                            "width": f"{table_data['tableWidth']}px",
-                        })
-                        cell_style = style_convert({
-                            "text-align": "center",
-                            "border-color": "rgb(153, 153, 153)",
-                            "border-image": "initial",
-                            "padding": "2px",
-                        })
-                        title_font_style = style_convert({
-                            "font-size": "x-large",
-                            "font-family": "黑体",
-                        })
-                        column_header_font_style = style_convert({
-                            "font-size": "large",
-                            "font-family": "黑体",
-                        })
-                        row_header_font_style = style_convert({
-                            "font-size": "medium",
-                        })
-                        # 生成表格HTML代码
-                        self.chartHtml += f'''
-                        {'<div><br /></div>' * 2}
-                        <div>
-                            <table class="editor-table" style="{table_style}">
-                                <tbody>
-                                    <tr>
-                                        <td style="{cell_style}" colspan="{len(table_data['headers'])}">
-                                            <span style="{title_font_style}"><b>{table_data["title"]}</b></span>
-                                        </td>
-                                    </tr>
-                                    <tr>{''.join(f"""
-                                        <td style="{cell_style}">
-                                            <b>
-                                                <span style="{column_header_font_style}">
-                                                    {header}
-                                                </span>
-                                            </b>
-                                        </td>""" for header in table_data['headers'])}
-                                    </tr>
-                                {''.join(f"""
-                                    <tr>
-                                        <td style="{cell_style}">
-                                            <span style="{row_header_font_style}">
-                                                {name}
-                                            </span>
-                                        </td>
-                                        <td style="{cell_style}">
-                                            <div>
-                                                {value}
-                                            </div>
-                                        </td>
-                                    </tr>""" for name, value in table_data['data'].items())}
-                                </tbody>
-                            </table>
-                        </div>'''
-            # 根据图表是否为最后一个，添加不同数量的间隔行
-            if chart != charts[-1]:
-                interval_rows = 5
-            else:
-                interval_rows = 2
-            self.chartHtml += '<div><br /></div>' * interval_rows
+        # ==================================================================
+        # 阶段1：入参数据校验
+        # ==================================================================
+        if not isinstance(charts, list):
+            raise TypeError(f'charts数据类型错误，期望是列表，实际为：{type(charts).__name__}')
 
-    def _get_list_config(self):
+        for index, chart in enumerate(charts):
+            # 如果chart数据不是字典则跳过
+            if not isinstance(chart, dict):
+                continue
+            # ==================================================================
+            # 阶段2：图表处理
+            # ==================================================================
+            # 如果存在图表数据时则生成图像图表的HTML
+            if chart.get('plotPath'):
+                self.chartHtml += f'''
+                <div>
+                    <img src="{chart["plotPath"]}" />
+                </div>'''
+
+            # ==================================================================
+            # 阶段3：表格数据校验
+            # ==================================================================
+            table_data: dict = chart.get('tableData', {}) if isinstance(chart, dict) else {}
+            if table_data:
+                if 'data' not in table_data:
+                    raise ValueError(f'第{index + 1}个表格数据中缺少"data"键')
+
+                if not isinstance(table_data['data'], dict):
+                    raise TypeError(
+                        f'第{index + 1}个表格数据中"data"键的数据格式不正确，期望为字典类型，实际为{type(table_data["data"]).__name__}'
+                    )
+
+                if 'tableWidth' not in table_data:
+                    raise ValueError(f'第{index + 1}个表格数据中缺少"tableWidth"键')
+
+                if not isinstance(table_data['tableWidth'], int or float):
+                    raise TypeError(
+                        f'第{index + 1}个表格数据中"tableWidth"键的数据格式不正确，期望为整数或者浮点数类型，实际为{type(table_data["tableWidth"]).__name__}'
+                    )
+
+                # ==================================================================
+                # 阶段4：表格行数据排序
+                # ==================================================================
+                if table_data.get('sort') in ('asc', 'desc'):
+                    table_data['data'] = dict(sorted(
+                        table_data['data'].items(),
+                        key=lambda x: x[0].lower() if isinstance(x[0], str) else x[0],
+                        reverse=table_data['sort'] == 'desc'
+                    ))
+
+                # ==================================================================
+                # 阶段5：生成表格HTML
+                # ==================================================================
+                # 如果多维表格标记为True，则生成多维表格的HTML， 否则生成简单表格
+                if table_data.get('isMultiDimensionalTable'):
+                    # 执行多维表格的HTML生成
+                    self._add_multi_dimensional_table_html(table_data)
+                else:
+                    # 执行简单表格的HTML生成
+                    self._add_simple_table_html(table_data)
+
+            # ==================================================================
+            # 阶段9：间隔处理（保持原始视觉效果）
+            # ==================================================================
+            interval = 5 if index != len(charts) - 1 else 2
+            self.chartHtml += '<div><br /></div>' * interval
+
+    def _get_list_config(self) -> None:
         """
-        获取当前列表展示字段的配置信息[]转换成";"分隔的字符串并进行存储
-        :return: None, 该方法仅进行存储信息
+        获取并存储当前列表视图的字段展示配置信息
+
+        本方法通过TAPD官方API接口，获取缺陷列表和需求子任务列表的当前字段配置，
+        并将配置信息转换为分号分隔的字符串格式存储到类属性中，供后续配置比对使用
+
+        流程说明:
+            1. 获取缺陷列表视图的字段展示配置
+            2. 获取需求子任务列表的字段展示配置
+            3. 将列表格式的配置转换为标准化的字符串格式
+            4. 存储配置信息到类属性供后续使用
+
+        异常:
+            KeyError: 当接口返回数据缺少关键字段时抛出
+            requests.RequestException: 当API请求失败时抛出
+
+        关联方法:
+            get_query_filtering_list_config(): 获取缺陷列表视图配置
+            get_requirement_list_config(): 获取需求子任务列表配置
         """
-        self.oldBugListConfigs = ';'.join(get_query_filtering_list_config())  # 获取当前缺陷列表展示字段的配置信息, 存储到类属性中
-        self.oldSubTaskListConfigs = ';'.join(get_requirement_list_config())  # 获取当前需求中的子任务列表展示字段的配置信息, 存储到类属性中
+        # ==================================================================
+        # 阶段1：获取缺陷列表视图配置
+        # ==================================================================
+        # 调用API接口获取缺陷列表展示字段配置，返回字段标识符列表
+        # 示例返回数据：['id', 'title', 'status', 'platform']
+        bug_list_configs = get_query_filtering_list_config()
+
+        # ==================================================================
+        # 阶段2：获取子任务列表视图配置
+        # ==================================================================
+        # 调用API接口获取需求子任务列表展示字段配置，返回字段标识符列表
+        # 示例返回数据：['owner', 'due', 'status']
+        sub_task_list_configs = get_requirement_list_config()
+
+        # ==================================================================
+        # 阶段3：数据格式转换
+        # ==================================================================
+        # 将列表转换为分号分隔的字符串格式，用于后续配置比对
+        # 示例结果转换：['id','title'] → "id;title"
+        self.oldBugListConfigs = ';'.join(bug_list_configs)  # 缺陷列表字段配置字符串
+        self.oldSubTaskListConfigs = ';'.join(sub_task_list_configs)  # 子任务列表字段配置字符串
 
     def _daily_trend_of_bug_changes_count(self, data):
         """
@@ -4671,6 +4609,152 @@ class SoftwareQualityRating:
         # 如果bug不是当天修复并且严重等级不为"P0"或"P1"，则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
         elif is_on_that_day_unrepaired_bug and severity_name not in BUG_LEVELS[0: 2]:
             self.unrepairedBugs['onThatDayUnrepaired']['P2'].append(bug_id)
+
+    def _add_multi_dimensional_table_html(self, table_data: dict):
+        data_headers = []  # 初始化表格的头部动态数据
+        for valueData in table_data['data'].values():  # 获取数据头部动态数据
+            data_headers += list(valueData)  # 添加到头部动态数据列表中
+            break  # 跳出循环
+        # 公用的样式
+        common_style = {
+            'padding': '0 10px',
+            'vertical-align': 'middle',
+            'border-right': 'none',
+            'border-left': 'none',
+            'border-top': 'none',
+            'border-bottom': '1px solid rgb(230, 230, 230)',
+            'background-color': 'rgb(255, 255, 255)',
+        }
+        # 表格首行的样式
+        header_row_style = style_convert({
+            **common_style,
+            'height': '50px',
+            'font-size': '12px',
+            'color': '#8c95a8',
+            'border-top': '1px solid rgb(230, 230, 230)',
+        })
+        # 表格内容的样式
+        row_style = style_convert({
+            **common_style,
+            'height': '38px',
+            'font-size': '12px',
+        })
+        # 表格总计行的样式
+        total_row_style = style_convert({
+            **common_style,
+            'height': '38px',
+            'font-size': '12px',
+            'color': 'black',
+            'font-weight': 'bold',
+        })
+        # 初始化表格内容行的HTML变量
+        data_row_html = ''
+        # 根据表格动态数据头的数量增加列表的值, 用于展示在总计行, 列表第一个数据记录的是总计中的小计
+        total_row_values = [0, ] + [0 for _ in data_headers]
+        for tableKey, tableData in table_data['data'].items():  # 遍历表格数据键与数据值
+            # 遍历表格数据值, 生成表格内容行的HTML, tr标签为表格中的一整行, td标签为行中的单元格, 第一个td标签为一行中的第一个单元格, 第二个td标签为行中的第二个单元格, 以此类推
+            data_row_html += f"""
+               <tr>
+                   <td align="left" style="{row_style}">
+                       {tableKey}
+                   </td>
+                   {f'''<td align="left" style="{row_style}">
+                       {sum(tableData.values())}
+                   </td>''' if table_data.get('isRowTotal') else ''}
+                   {''.join(f'''
+                   <td align="left" style="{row_style}">
+                       {dataValue}
+                   </td>''' for dataValue in tableData.values())}
+               </tr>"""
+            table_data_values = [value for value in tableData.values()]  # 将一行的数据遍历成一个列表
+            for index in range(len(table_data_values)):  # 遍历列表中所有索引
+                total_row_values[0] += table_data_values[index]  # 累加总计行中的小计
+                total_row_values[index + 1] += table_data_values[index]  # 累加总计行中的对应索引的值
+        # 构建表格的HTML, 首行的内容和总计行的内容直接在这里构建, 剩下的内容通过data_row_html引入
+        self.chartHtml += f'''
+           {'<div><br /></div>' * 2}
+           <div>
+               <table cellpadding="0" cellspacing="0" class="report-chart__table" style="width:{table_data['tableWidth']}px;border:none;margin-top:0;margin-bottom:0;margin-left:0;margin-right:0;">
+                   <tbody>
+                       <tr>
+                           <th align="left" style="{header_row_style}">
+                               {table_data['firstColumnHeader']}
+                           </th>
+                           {f"""<th align="left" style="{header_row_style}">
+                               小计
+                           </th>""" if table_data.get('isRowTotal') else ''}
+                           {''.join(f"""
+                           <th align="left" style="{header_row_style}">
+                               {dataHeader}
+                           </th>""" for dataHeader in data_headers) if data_headers else ''}
+                       </tr>
+                       {data_row_html}
+                       <tr>
+                           <td align="left" style="{total_row_style}">
+                               总计
+                           </td>
+                           {f"""<td align="left" style="{total_row_style}">
+                               {total_row_values[0]}
+                           </td>""" if table_data.get('isRowTotal') else ''}
+                           {''.join(f"""
+                           <td align="left" style="{total_row_style}">
+                               {value}
+                           </td>""" for value in total_row_values[1:])}
+                       </tr>
+                   </tbody>
+               </table>
+           </div>'''
+
+    def _add_simple_table_html(self, table_data: dict):
+        # 根据表格数据生成表格的样式和结构
+        table_style = style_convert({
+            # "width": f"{300 * len(table_data['headers'])}px",
+            "width": f"{table_data['tableWidth']}px",
+        })
+        cell_style = style_convert({
+            "text-align": "center",
+            "border-color": "rgb(153, 153, 153)",
+            "border-image": "initial",
+            "padding": "2px",
+        })
+        column_header_font_style = style_convert({
+            "font-size": "large",
+            "font-family": "黑体",
+        })
+        row_header_font_style = style_convert({
+            "font-size": "medium",
+        })
+        # 生成表格HTML代码
+        self.chartHtml += f'''
+            {'<div><br /></div>' * 2}
+            <div>
+                <table class="editor-table" style="{table_style}">
+                    <tbody>
+                        <tr>{''.join(f"""
+                            <td style="{cell_style}">
+                                <b>
+                                    <span style="{column_header_font_style}">
+                                        {header}
+                                    </span>
+                                </b>
+                            </td>""" for header in table_data['headers'])}
+                        </tr>
+                    {''.join(f"""
+                        <tr>
+                            <td style="{cell_style}">
+                                <span style="{row_header_font_style}">
+                                    {name}
+                                </span>
+                            </td>
+                            <td style="{cell_style}">
+                                <div>
+                                    {value}
+                                </div>
+                            </td>
+                        </tr>""" for name, value in table_data['data'].items())}
+                    </tbody>
+                </table>
+            </div>'''
 
     def _calculate_positive_integrity_score(self):
         """
