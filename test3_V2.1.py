@@ -4318,8 +4318,8 @@ class SoftwareQualityRating:
         参数:
         - data: 包含缺陷创建、修复和关闭时间的数据字典。
         """
-        # 初始化缺陷统计字典
-        count_data = {
+        # 初始化一个字典，用于存储每日缺陷变化趋势数据
+        base_count_data: dict = {
             '创建缺陷总数': 0,
             '修复缺陷总数': 0,
             '关闭缺陷总数': 0,
@@ -4327,9 +4327,9 @@ class SoftwareQualityRating:
         }
 
         # 将缺陷创建、修复和关闭的时间转换为日期格式
-        create_date = date_time_to_date(data['created'])
-        resolve_date = date_time_to_date(data['resolved']) if data.get('resolved') else None
-        close_date = date_time_to_date(data['closed']) if data.get('closed') else None
+        create_date: str = date_time_to_date(data['created'])
+        resolve_date: str = date_time_to_date(data['resolved']) if data.get('resolved') else None
+        close_date: str = date_time_to_date(data['closed']) if data.get('closed') else None
 
         # 检查缺陷是否是需求完成后创建的, 如果是则返回
         if create_date > self.lastTaskDate:
@@ -4337,21 +4337,21 @@ class SoftwareQualityRating:
 
         # 检查创建日期是否在任务的最后日期之前或当天, 如果当前日期不在统计中，则初始化该日期的统计信息
         if not self.dailyTrendOfBugChanges.get(create_date):
-            self.dailyTrendOfBugChanges[create_date] = count_data.copy()
+            self.dailyTrendOfBugChanges[create_date] = base_count_data.copy()
         # 更新创建缺陷总数
         self.dailyTrendOfBugChanges[create_date]['创建缺陷总数'] += 1
 
         # 检查修复日期是否在任务的最后日期之前或当天
         if resolve_date and resolve_date <= self.lastTaskDate:
             if not self.dailyTrendOfBugChanges.get(resolve_date):
-                self.dailyTrendOfBugChanges[resolve_date] = count_data.copy()
+                self.dailyTrendOfBugChanges[resolve_date] = base_count_data.copy()
             # 更新修复缺陷总数
             self.dailyTrendOfBugChanges[resolve_date]['修复缺陷总数'] += 1
 
         # 判断存在关闭日期且关闭日期在任务时最后日期之前或当天
         if close_date and close_date <= self.lastTaskDate:
             if not self.dailyTrendOfBugChanges.get(close_date):
-                self.dailyTrendOfBugChanges[close_date] = count_data.copy()
+                self.dailyTrendOfBugChanges[close_date] = base_count_data.copy()
             # 更新关闭缺陷总数
             self.dailyTrendOfBugChanges[close_date]['关闭缺陷总数'] += 1
             # 如果缺陷在创建当天未关闭，则统计未关闭缺陷数
@@ -4361,7 +4361,7 @@ class SoftwareQualityRating:
                 for unclosed_date in unclosed_dates:  # 遍历未关闭的每一天
                     # 如果当前日期不在统计中，则初始化该日期的统计信息
                     if not self.dailyTrendOfBugChanges.get(unclosed_date):
-                        self.dailyTrendOfBugChanges[unclosed_date] = count_data.copy()
+                        self.dailyTrendOfBugChanges[unclosed_date] = base_count_data.copy()
                     self.dailyTrendOfBugChanges[unclosed_date]['未关闭缺陷总数'] += 1
         else:  # 如果缺陷未关闭
             # 获取从创建到任务的最后日期的工作日
@@ -4369,7 +4369,7 @@ class SoftwareQualityRating:
             for unclosed_date in unclosed_dates:  # 遍历未关闭的每一天
                 # 如果当前日期不在统计中，则初始化该日期的统计信息
                 if not self.dailyTrendOfBugChanges.get(unclosed_date):
-                    self.dailyTrendOfBugChanges[unclosed_date] = count_data.copy()
+                    self.dailyTrendOfBugChanges[unclosed_date] = base_count_data.copy()
                 self.dailyTrendOfBugChanges[unclosed_date]['未关闭缺陷总数'] += 1
 
     def edit_list_config(self):
