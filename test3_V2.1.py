@@ -4308,17 +4308,49 @@ class SoftwareQualityRating:
         self.oldBugListConfigs = ';'.join(bug_list_configs)  # 缺陷列表字段配置字符串
         self.oldSubTaskListConfigs = ';'.join(sub_task_list_configs)  # 子任务列表字段配置字符串
 
-    def _daily_trend_of_bug_changes_count(self, data):
+    def _daily_trend_of_bug_changes_count(self, data: Dict[str, Any]) -> None:
         """
-        统计每日缺陷变化趋势。
+        统计缺陷每日状态变化趋势，跟踪每个缺陷在整个生命周期中对每日统计指标的影响
 
-        该方法旨在分析和记录每一天缺陷的创建、修复、关闭以及未关闭状态的总数。
-        它通过检查缺陷的创建、修复和关闭日期，并与任务的最后日期进行比较，来更新每日趋势数据。
+        本方法通过解析缺陷的创建、解决和关闭时间，精确计算以下指标：
+        - 每日新增缺陷数量
+        - 每日修复缺陷数量
+        - 每日关闭缺陷数量
+        - 每日未关闭缺陷数量
 
         参数:
-        - data: 包含缺陷创建、修复和关闭时间的数据字典。
+            data (Dict[str, Any]): 缺陷数据字典，必须包含以下字段：
+                - created: 缺陷创建时间（必须字段）
+                - resolved: 缺陷解决时间（可选字段）
+                - closed: 缺陷关闭时间（可选字段）
+
+        返回:
+            None: 直接更新类属性dailyTrendOfBugChanges
+
+        异常处理:
+            KeyError: 当输入数据缺少created字段时抛出
+            ValueError: 当日期格式转换失败时抛出
+
+        实现策略:
+            1. 基础数据校验与清洗
+            2. 初始化用于在每个日期的统计数据
+            3. 日期格式标准化处理
+            4. 创建事件记录处理
+            5. 解决事件记录处理
+            6. 关闭事件记录处理
+            7. 未关闭状态持续跟踪
         """
-        # 初始化一个字典，用于存储每日缺陷变化趋势数据
+        # ==================================================================
+        # 阶段1：基础数据校验
+        # ==================================================================
+        # 检查必要字段存在性，缺失created字段立即抛出异常
+        if 'created' not in data:
+            raise KeyError("缺陷数据必须包含created字段")
+
+        # ==================================================================
+        # 阶段2：初始化数据
+        # ==================================================================
+        # 初始化每个日期的计数器, 保证所有日期下面都存在完整的键值对
         base_count_data: dict = {
             '创建缺陷总数': 0,
             '修复缺陷总数': 0,
@@ -4326,51 +4358,67 @@ class SoftwareQualityRating:
             '未关闭缺陷总数': 0,
         }
 
-        # 将缺陷创建、修复和关闭的时间转换为日期格式
-        create_date: str = date_time_to_date(data['created'])
-        resolve_date: str = date_time_to_date(data['resolved']) if data.get('resolved') else None
-        close_date: str = date_time_to_date(data['closed']) if data.get('closed') else None
+        # ==================================================================
+        # 阶段3：日期标准化处理
+        # ==================================================================
+        # 转换创建时间为标准日期格式（YYYY-MM-DD）
+        create_date = date_time_to_date(data['created'])
 
-        # 检查缺陷是否是需求完成后创建的, 如果是则返回
+        # 处理解决时间（允许空值）
+        resolve_date = date_time_to_date(data['resolved']) if data.get('resolved') else None
+
+        # 处理关闭时间（允许空值）
+        close_date = date_time_to_date(data['closed']) if data.get('closed') else None
+
+        # ==================================================================
+        # 阶段4：创建事件处理
+        # ==================================================================
+        # 忽略上线日期后创建的缺陷
         if create_date > self.lastTaskDate:
             return
 
-        # 检查创建日期是否在任务的最后日期之前或当天, 如果当前日期不在统计中，则初始化该日期的统计信息
-        if not self.dailyTrendOfBugChanges.get(create_date):
+        # 初始化或更新当日创建计数
+        if create_date not in self.dailyTrendOfBugChanges:
             self.dailyTrendOfBugChanges[create_date] = base_count_data.copy()
-        # 更新创建缺陷总数
         self.dailyTrendOfBugChanges[create_date]['创建缺陷总数'] += 1
 
-        # 检查修复日期是否在任务的最后日期之前或当天
+        # ==================================================================
+        # 阶段5：解决事件处理
+        # ==================================================================
+        # 仅处理有效且在项目周期内的解决日期
         if resolve_date and resolve_date <= self.lastTaskDate:
-            if not self.dailyTrendOfBugChanges.get(resolve_date):
+            if resolve_date not in self.dailyTrendOfBugChanges:
                 self.dailyTrendOfBugChanges[resolve_date] = base_count_data.copy()
-            # 更新修复缺陷总数
             self.dailyTrendOfBugChanges[resolve_date]['修复缺陷总数'] += 1
 
-        # 判断存在关闭日期且关闭日期在任务时最后日期之前或当天
+        # ==================================================================
+        # 阶段6：关闭事件处理
+        # ==================================================================
+        # 当存在有效关闭日期时的处理逻辑
         if close_date and close_date <= self.lastTaskDate:
-            if not self.dailyTrendOfBugChanges.get(close_date):
+            # 更新关闭计数
+            if close_date not in self.dailyTrendOfBugChanges:
                 self.dailyTrendOfBugChanges[close_date] = base_count_data.copy()
-            # 更新关闭缺陷总数
             self.dailyTrendOfBugChanges[close_date]['关闭缺陷总数'] += 1
-            # 如果缺陷在创建当天未关闭，则统计未关闭缺陷数
+
+            # 处理未能当天关闭的缺陷, 在关闭日期之前的时间段为未关闭状态
             if create_date < close_date:
-                # 获取从创建到关闭的工作日，并减去1，因为最后一天不需要统计
+                # 计算未关闭持续时间段（创建日到关闭日前一天）
                 unclosed_dates: list = get_days(create_date, close_date)[:-1]
-                for unclosed_date in unclosed_dates:  # 遍历未关闭的每一天
-                    # 如果当前日期不在统计中，则初始化该日期的统计信息
-                    if not self.dailyTrendOfBugChanges.get(unclosed_date):
-                        self.dailyTrendOfBugChanges[unclosed_date] = base_count_data.copy()
-                    self.dailyTrendOfBugChanges[unclosed_date]['未关闭缺陷总数'] += 1
-        else:  # 如果缺陷未关闭
-            # 获取从创建到任务的最后日期的工作日
+                for date in unclosed_dates:
+                    if date not in self.dailyTrendOfBugChanges:
+                        self.dailyTrendOfBugChanges[date] = base_count_data.copy()
+                    self.dailyTrendOfBugChanges[date]['未关闭缺陷总数'] += 1
+        else:
+            # ==================================================================
+            # 阶段7：未关闭状态处理
+            # ==================================================================
+            # 计算从创建日到项目结束日的未关闭时间段
             unclosed_dates: list = get_days(create_date, self.lastTaskDate)
-            for unclosed_date in unclosed_dates:  # 遍历未关闭的每一天
-                # 如果当前日期不在统计中，则初始化该日期的统计信息
-                if not self.dailyTrendOfBugChanges.get(unclosed_date):
-                    self.dailyTrendOfBugChanges[unclosed_date] = base_count_data.copy()
-                self.dailyTrendOfBugChanges[unclosed_date]['未关闭缺陷总数'] += 1
+            for date in unclosed_dates:
+                if date not in self.dailyTrendOfBugChanges:
+                    self.dailyTrendOfBugChanges[date] = base_count_data.copy()
+                self.dailyTrendOfBugChanges[date]['未关闭缺陷总数'] += 1
 
     def edit_list_config(self):
         """
