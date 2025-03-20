@@ -1,2 +1,2 @@
-a = [1]
-print(a[:-1])
+import sys
+sys.exit('退出程序')

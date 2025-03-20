@@ -3211,7 +3211,7 @@ class SoftwareQualityRating:
         # ==================================================================
         self.requirementName = ''  # 需求名称
         self.PM = ''  # 产品经理
-        self.testRecipient = []  # 测试报告接收人列表(测试人员)
+        self.testRecipient: list[str] = []  # 测试报告接收人列表(测试人员)
         self.testersStr = ''  # 测试人员字符串表示
         self.developers = []  # 开发人员列表
 
@@ -3239,7 +3239,7 @@ class SoftwareQualityRating:
         self.bugTotal = 0  # 缺陷总数
         self.bugInputTotal = 0  # 手动输入缺陷总数
         self.bugIds = []  # 缺陷ID列表
-        self.reopenBugsData = {}  # 重新打开缺陷数据
+        self.reopenBugsData = defaultdict(int)  # 重新打开缺陷数据
         self.unrepairedBugsData = defaultdict(int)  # 未修复缺陷数据
         self.fixers = defaultdict(int)  # 缺陷修复人统计
 
@@ -3268,9 +3268,9 @@ class SoftwareQualityRating:
         # ==================================================================
         # 阶段6：配置信息初始化
         # ==================================================================
-        self.isInitialListConfig = False  # 是否初始化列表配置标志
-        self.oldBugListConfigs = ''  # 原始缺陷列表配置
-        self.oldSubTaskListConfigs = ''  # 原始子任务列表配置
+        self.isInitialListConfig = True  # 是否初始化列表配置标志， True=列表配置为初始化， False=列表配置已被更新
+        self.oldBugListConfigStr = ''  # 原始缺陷列表配置
+        self.oldSubTaskListConfigStr = ''  # 原始子任务列表配置
 
         # ==================================================================
         # 阶段7：未修复缺陷数据结构初始化
@@ -3376,10 +3376,10 @@ class SoftwareQualityRating:
             # 阶段6：防御性编程
             # ==================================================================
             if not self.requirementName:
-                self.print_error("需求名称获取失败，请检查需求ID是否正确")
+                self._print_error("警告：需求名称获取失败，请检查需求ID是否正确")
 
             if not self.PM:
-                self.print_error("产品经理获取失败，请检查需求创建人是否正确")
+                self._print_error("警告：产品经理获取失败，请检查需求创建人是否正确")
 
         except requests.RequestException as e:
             # 捕获网络请求异常
@@ -3476,22 +3476,22 @@ class SoftwareQualityRating:
         # ==================================================================
         # 检查测试任务是否存在
         if not self.isExistTestTask:
-            self.print_error(f'没有测试任务, 请检查"{self.requirementName}"需求是否有测试任务')
+            self._print_error(f'警告：没有测试任务, 请检查"{self.requirementName}"需求是否有测试任务')
         if unfinished_tasks:
             count = 0
             unfinished_tasks_str: str = ''
             for unfinishedTask in unfinished_tasks:
                 count += 1
                 unfinished_tasks_str += f"\n{count}. {unfinishedTask}"
-            self.print_error(f"存在未完成任务, 请及时处理:{unfinished_tasks_str}")
+            self._print_error(f"警告：存在未完成任务, 请及时处理:{unfinished_tasks_str}")
         if not self.earliestTaskDate:
-            self.print_error(
+            self._print_error(
                 f"警告：未识别到最早任务日期，请检查{self.requirementName}需求的最早一个开发任务的预期开始时间是否正常")
         if not self.lastTaskDate:
-            self.print_error(
+            self._print_error(
                 f"警告：未识别到最晚任务日期，请检查{self.requirementName}需求的最后一个测试任务的预期结束时间是否正常")
         if not self.onlineDate:
-            self.print_error(
+            self._print_error(
                 f"警告：未识别到上线日期，请检查{self.requirementName}需求的最后一个测试任务的预期开始时间是否正常")
 
     def print_development_hours(self) -> None:
@@ -3708,10 +3708,10 @@ class SoftwareQualityRating:
 
             except KeyError as e:
                 # 处理字段缺失异常（记录日志并跳过当前缺陷）
-                self.print_error(f"缺陷数据缺失关键字段 {str(e)}，缺陷ID: {bug_id}")
+                self._print_error(f"警告：缺陷数据缺失关键字段 {str(e)}，缺陷ID: {bug_id}")
             except ValueError as e:
                 # 处理数据格式异常（记录日志并跳过当前缺陷）
-                self.print_error(f"数据格式异常 {str(e)}，缺陷ID: {bug_id}")
+                self._print_error(f"警告：数据格式异常 {str(e)}，缺陷ID: {bug_id}")
 
         # ==================================================================
         # 阶段3：后处理与结果输出
@@ -3806,13 +3806,13 @@ class SoftwareQualityRating:
 
         except ValueError as e:
             # 输入验证异常处理
-            self.print_error(f"输入数据异常：{str(e)}")
+            self._print_error(f"警告：输入数据异常：{str(e)}")
         except KeyboardInterrupt:
             # 用户中断处理
-            self.print_error("用户主动终止评分流程")
+            self._print_error("警告：用户主动终止评分流程")
         except Exception as e:
             # 通用异常处理
-            self.print_error(f"评分系统错误：{str(e)}")
+            self._print_error(f"警告：评分系统错误：{str(e)}")
 
     def development_cycle(self):
         """
@@ -3837,7 +3837,7 @@ class SoftwareQualityRating:
         # ==================================================================
         # 检查是否存在开发者工时数据
         if not self.dailyWorkingHoursOfEachDeveloper:
-            self.print_error("警告：未获取到开发者每日工时数据")
+            self._print_error("警告：未获取到开发者每日工时数据")
 
         # 初始化开发周期统计字典
         # 键：日期字符串（YYYY-MM-DD）
@@ -3898,7 +3898,7 @@ class SoftwareQualityRating:
         # ==================================================================
         # 检查计算结果有效性
         if self.developmentCycle <= 0:
-            self.print_error("警告：开发周期计算结果为非正数，请检查输入数据有效性")
+            self._print_error("警告：开发周期计算结果为非正数，请检查输入数据有效性")
 
     def add_test_report(self) -> None:
         """
@@ -3925,6 +3925,10 @@ class SoftwareQualityRating:
         # ==================================================================
         # 阶段1：测试结论数据初始化
         # ==================================================================
+
+        # 存储项目测试人员和测试接收人
+        self._processing_tester_list()
+
         # 构建测试结论核心指标字典
         test_conclusion: dict[str, str] = {
             '测试执行进度': '',  # 预留字段，需后续补充
@@ -3949,9 +3953,6 @@ class SoftwareQualityRating:
             f'''\n<div><span style="font-size: medium; background-color: rgb(255, 255, 255);">{title}：{value}</span></div>'''
             for title, value in test_conclusion.items()
         ]
-
-        # 从测试接收人列表中移除当前用户
-        self._remove_current_user()
 
         # 构建报告基础框架
         self.testReportHtml += f'''
@@ -4177,6 +4178,205 @@ class SoftwareQualityRating:
             for chart in charts:
                 print('https://www.tapd.cn' + chart['plotPath'])  # 打印图表链接
 
+    def edit_list_config(self) -> None:
+        """
+        配置列表视图的必要展示字段
+
+        该方法确保BUG列表和子任务列表包含脚本运行所需的必要字段，通过以下步骤实现：
+        1. 获取当前列表配置
+        2. 合并必要字段到新配置
+        3. 仅当配置发生变化时执行更新
+        4. 严格的异常处理和状态回滚
+
+        处理流程:
+            1. 配置初始化检查
+            2. 必要字段合并处理
+            3. 差异比较与条件更新
+            4. 原子化配置操作
+            5. 事务性错误处理
+
+        异常策略:
+            - 使用断言确保配置操作成功
+            - 捕获底层异常并附加上下文信息
+            - 异常时打印完整堆栈跟踪
+            - 保持异常传播不丢失原始信息
+        """
+        try:
+            # ==================================================================
+            # 阶段1：配置初始化
+            # ==================================================================
+            # 防御性获取配置：仅在未初始化时获取原始配置
+            if not all([self.oldBugListConfigStr, self.oldSubTaskListConfigStr]):
+                self._get_list_config()
+
+            # ==================================================================
+            # 阶段2：配置合并处理
+            # ==================================================================
+            bug_fields = list(self.oldBugListConfigStr.split(';'))
+            bug_fields.extend(BUG_LIST_MUST_KEYS)
+            new_bug_config = ';'.join(bug_fields)
+
+            task_fields = list(self.oldSubTaskListConfigStr.split(';'))
+            task_fields.extend(SUB_TASK_LIST_MUST_KEYS)
+            new_task_config = ';'.join(task_fields)
+
+            # ==================================================================
+            # 阶段3：条件更新检查
+            # ==================================================================
+            # 仅当配置实际变化时执行更新操作
+            config_modified = False
+
+            if new_bug_config != self.oldBugListConfigStr:
+                # 原子化BUG列表配置更新
+                success = edit_query_filtering_list_config(new_bug_config)
+                assert success, "BUG列表配置更新失败"
+                config_modified = True
+
+            if new_task_config != self.oldSubTaskListConfigStr:
+                # 原子化子任务列表配置更新
+                success = edit_requirement_list_config(new_task_config)
+                assert success, "子任务列表配置更新失败"
+                config_modified = True
+
+            # ==================================================================
+            # 阶段4：状态标记
+            # ==================================================================
+            # 仅在成功修改配置后标记初始化状态
+            if config_modified:
+                self.isInitialListConfig = False
+
+        except AssertionError as ae:
+            # 处理业务逻辑断言失败
+            error_msg = f"配置验证失败: {str(ae)}"
+            traceback.print_exc()
+            raise RuntimeError(error_msg) from ae
+        except Exception as e:
+            # 处理不可预见异常
+            error_msg = f"配置更新异常: {str(e)}"
+            traceback.print_exc()
+            raise RuntimeError(error_msg).with_traceback(e.__traceback__) from e
+
+    def restore_list_config(self):
+        """
+        还原列表视图的字段展示配置到初始状态
+
+        本方法通过调用TAPD官方API接口，将缺陷列表和需求子任务列表的字段展示配置
+        恢复到脚本运行前的原始状态。该方法通常在脚本执行结束时调用，确保系统配置
+        不受脚本运行影响。
+
+        处理流程:
+            1. 判断是否需要还原配置
+            2. 还原缺陷列表视图配置
+            3. 还原需求子任务列表视图配置
+            4. 更新配置初始化状态标记
+
+        异常处理:
+            AssertionError: 当配置还原操作失败时抛出
+            Exception: 当发生未预料异常时抛出
+
+        关联方法:
+            edit_query_filtering_list_config(): 编辑缺陷列表视图配置
+            edit_requirement_list_config(): 编辑需求子任务列表视图配置
+        """
+        try:
+            # ==================================================================
+            # 阶段1：判断是否需要还原配置
+            # ==================================================================
+            # 如果配置已经初始化，则无需还原
+            if self.isInitialListConfig:
+                return
+
+            # ==================================================================
+            # 阶段2：还原缺陷列表视图配置
+            # ==================================================================
+            # 调用API接口还原缺陷列表视图配置，使用原始配置字符串
+            # 断言确保操作成功，失败时抛出AssertionError
+            assert edit_query_filtering_list_config(self.oldBugListConfigStr)
+
+            # ==================================================================
+            # 阶段3：还原需求子任务列表视图配置
+            # ==================================================================
+            # 调用API接口还原需求子任务列表视图配置，使用原始配置字符串
+            # 断言确保操作成功，失败时抛出AssertionError
+            assert edit_requirement_list_config(self.oldSubTaskListConfigStr)
+
+        except AssertionError as ae:
+            # 捕获配置还原失败异常
+            # 打印完整堆栈信息，保留原始异常上下文
+            traceback.format_exc()
+            # 重新抛出异常，确保调用方能够处理
+            raise ae
+        except Exception as e:
+            # 捕获其他未预料异常
+            # 打印完整堆栈信息，保留原始异常上下文
+            traceback.format_exc()
+            # 重新抛出异常，确保调用方能够处理
+            raise e
+        else:
+            # ==================================================================
+            # 阶段4：更新配置初始化状态
+            # ==================================================================
+            # 仅在成功还原配置后标记初始化状态为True
+            # 表示当前配置已恢复到原始状态
+            self.isInitialListConfig = True
+
+    def get_reopen_bug_detail(self) -> None:
+        """
+        获取并统计重新打开的缺陷详细信息
+
+        本方法通过多线程并发请求，获取每个缺陷的状态流转历史记录，并统计每个缺陷被重新打开的次数。
+        该方法适用于需要分析缺陷生命周期中重新打开情况的场景，能够高效处理大量缺陷数据。
+
+        处理流程:
+            1. 初始化请求执行数据字典，用于存储每个缺陷ID对应的Future对象
+            2. 创建线程池执行器，并发获取每个缺陷的状态流转历史
+            3. 遍历请求结果，统计每个缺陷的重新打开次数
+            4. 更新类属性reopenBugsData，记录每个缺陷的重新打开次数
+
+        异常处理:
+            - 捕获线程池执行过程中的异常，确保程序稳定性
+            - 处理API请求失败或数据解析异常的情况
+
+        关联方法:
+            get_workitem_status_transfer_history(): 获取缺陷状态流转历史记录
+        """
+        # 初始化请求执行数据字典，用于存储每个缺陷ID对应的Future对象
+        request_exec_data = {}
+
+        # 定义实体类型为'bug'，用于后续API请求
+        entity_type = 'bug'
+
+        try:
+            # 使用线程池执行器并发获取缺陷状态流转历史
+            with ThreadPoolExecutor(max_workers=None) as executor:
+                # 遍历缺陷ID列表，为每个缺陷提交一个任务到线程池
+                for bug_id in self.bugIds:
+                    # 提交任务到线程池，并将返回的Future对象存储在request_exec_data中
+                    request_exec_data[bug_id] = executor.submit(
+                        get_workitem_status_transfer_history, entity_type, bug_id
+                    )
+
+            # 遍历请求结果，统计每个缺陷的重新打开次数
+            for bug_id, future in request_exec_data.items():
+                try:
+                    # 获取缺陷状态流转历史记录
+                    status_history_list = future.result()
+
+                    # 遍历状态流转历史，查找重新打开的状态记录
+                    for status_history in status_history_list:
+                        if status_history['current_status_origin'] == 'reopened':
+                            # 更新缺陷的重新打开次数
+                            self.reopenBugsData[bug_id] += 1
+                except Exception as e:
+                    # 捕获单个缺陷请求或数据处理中的异常，记录日志并继续处理其他缺陷
+                    print(f"处理缺陷 {bug_id} 时发生异常: {str(e)}")
+                    continue
+
+        except Exception as e:
+            # 捕获线程池或整体流程中的异常，记录日志并抛出
+            error_msg = f"获取缺陷重新打开详情失败: {str(e)}"
+            raise RuntimeError(error_msg) from e
+
     def _charts_to_html(self, charts: list):
         """
         将图表数据转换为标准化的HTML结构，包含图像和表格
@@ -4305,8 +4505,8 @@ class SoftwareQualityRating:
         # ==================================================================
         # 将列表转换为分号分隔的字符串格式，用于后续配置比对
         # 示例结果转换：['id','title'] → "id;title"
-        self.oldBugListConfigs = ';'.join(bug_list_configs)  # 缺陷列表字段配置字符串
-        self.oldSubTaskListConfigs = ';'.join(sub_task_list_configs)  # 子任务列表字段配置字符串
+        self.oldBugListConfigStr = ';'.join(bug_list_configs)  # 缺陷列表字段配置字符串
+        self.oldSubTaskListConfigStr = ';'.join(sub_task_list_configs)  # 子任务列表字段配置字符串
 
     def _daily_trend_of_bug_changes_count(self, data: Dict[str, Any]) -> None:
         """
@@ -4401,14 +4601,12 @@ class SoftwareQualityRating:
                 self.dailyTrendOfBugChanges[close_date] = base_count_data.copy()
             self.dailyTrendOfBugChanges[close_date]['关闭缺陷总数'] += 1
 
-            # 处理未能当天关闭的缺陷, 在关闭日期之前的时间段为未关闭状态
-            if create_date < close_date:
-                # 计算未关闭持续时间段（创建日到关闭日前一天）
-                unclosed_dates: list = get_days(create_date, close_date)[:-1]
-                for date in unclosed_dates:
-                    if date not in self.dailyTrendOfBugChanges:
-                        self.dailyTrendOfBugChanges[date] = base_count_data.copy()
-                    self.dailyTrendOfBugChanges[date]['未关闭缺陷总数'] += 1
+            # 计算未关闭持续时间段（创建日到关闭日前一天）
+            unclosed_dates: list = get_days(create_date, close_date)[:-1]
+            for date in unclosed_dates:
+                if date not in self.dailyTrendOfBugChanges:
+                    self.dailyTrendOfBugChanges[date] = base_count_data.copy()
+                self.dailyTrendOfBugChanges[date]['未关闭缺陷总数'] += 1
         else:
             # ==================================================================
             # 阶段7：未关闭状态处理
@@ -4420,205 +4618,329 @@ class SoftwareQualityRating:
                     self.dailyTrendOfBugChanges[date] = base_count_data.copy()
                 self.dailyTrendOfBugChanges[date]['未关闭缺陷总数'] += 1
 
-    def edit_list_config(self):
+    def _print_error(self, error_text: str) -> None:
         """
-        编辑列展示的字段
-        需要配置脚本必要的字段, 否则接口无法返回需要的字段信息
-        :raise: 捕获编辑列字段配置失败抛出异常
+        执行必要的清理操作后打印错误信息并退出程序
+
+        本方法用于在发生严重错误时，在必要时恢复系统配置状态，
+        最后强制终止程序运行，并输出错误信息。该方法确保在异常情况下能够优雅地退出，同时保留必要的错误上下文。
+
+        参数:
+            error_text (str): 需要显示的错误信息文本内容
+
+        返回:
+            None: 本方法执行后直接终止程序运行
+
+        异常:
+            无显式异常抛出，但会调用sys.exit(error_text)强制终止程序
+
+        处理流程:
+            1. 检查并恢复系统配置状态
+            2. 强制终止程序运行，并输出错误信息
+
+        关联方法:
+            restore_list_config(): 用于恢复系统配置状态
         """
-        if not self.oldBugListConfigs or not self.oldSubTaskListConfigs:  # 如果获取不到列展示字段的配置信息，则获取一次
-            self._get_list_config()  # 获取列展示字段的配置信息
-        new_bug_list_configs = self.oldBugListConfigs  # 将获取到的列展示字段的配置信息存储到变量中
-        new_sub_task_list_configs = self.oldSubTaskListConfigs  # 将获取到的列展示字段的配置信息存储到变量中
-        for bugListMustKey in BUG_LIST_MUST_KEYS:  # 遍历需要配置的BUG列展示字段
-            if bugListMustKey not in new_bug_list_configs:  # 如果需要配置的BUG列展示字段不在获取到的列展示字段的配置信息中，则添加到配置信息中
-                new_bug_list_configs += f';{bugListMustKey}'  # 添加到配置信息中
-        for subTaskListMustKey in SUB_TASK_LIST_MUST_KEYS:  # 遍历需要配置的子任务列展示字段
-            if subTaskListMustKey not in new_sub_task_list_configs:  # 如果需要配置的子任务列展示字段不在获取到的列展示字段的配置信息中，则添加到配置信息中
-                new_sub_task_list_configs += f';{subTaskListMustKey}'  # 添加到配置信息中
-        try:
-            if new_bug_list_configs != self.oldBugListConfigs:  # 如果新列字段配置信息不等于原来的列字段配置信息，则编辑BUG列表展示字段的配置信息
-                assert edit_query_filtering_list_config(new_bug_list_configs)  # 编辑BUG列表展示字段的配置信息
-            if new_sub_task_list_configs != self.oldSubTaskListConfigs:  # 如果新列字段配置信息不等于原来的列字段配置信息，则编辑子任务列表展示字段的配置信息
-                assert edit_requirement_list_config(new_sub_task_list_configs)  # 编辑子任务列表展示字段的配置信息
-        except Exception as e:  # 捕获异常并打印堆栈信息
-            traceback.format_exc()  # 打印堆栈信息
-            raise e  # 抛出异常
-
-    def restore_list_config(self):
-        try:
-            assert edit_query_filtering_list_config(self.oldBugListConfigs)
-            assert edit_requirement_list_config(self.oldSubTaskListConfigs)
-        except Exception as e:
-            traceback.format_exc()
-            raise e
-        else:
-            self.isInitialListConfig = True
-
-    def print_error(self, error_text):
-        print(_print_text_font(error_text, color='red'))
+        # 检查是否需要恢复列表配置状态
         if not self.isInitialListConfig:
+            # 调用配置恢复方法，确保系统状态一致性
             self.restore_list_config()
-        sys.exit(1)
 
-    def get_reopen_bug_detail(self):
-        """
-        获取重新打开的缺陷详细信息。
+        # 强制终止程序运行，返回状态码1表示异常退出
+        sys.exit(error_text)
 
-        本方法通过多线程执行，为每个bugId获取其状态转换历史，特别关注重新打开的状态。
-        """
-        # 初始化请求执行数据字典，用于存储每个bugId对应的执行结果。
-        request_exec_data = {}
-        # 定义实体类型为'bug'，用于后续的功能调用。
-        entity_type = 'bug'
-
-        # 使用上下文管理器创建一个线程池执行器，线程池大小无上限。
-        with ThreadPoolExecutor(max_workers=None) as executor:
-            # 遍历bugIds列表，为每个bugId提交一个任务到线程池。
-            for bugId in self.bugIds:
-                # 提交任务get_workitem_status_transfer_history到线程池执行，并将返回的Future对象存储在request_exec_data中。
-                request_exec_data[bugId] = executor.submit(get_workitem_status_transfer_history, entity_type, bugId)
-
-        # 遍历request_exec_data字典，获取每个bugId对应的执行结果（Future对象）。
-        for bugId, requestExec in request_exec_data.items():
-            # 获取执行结果，这将阻塞直到对应任务完成。
-            res_data_list = requestExec.result()
-            # 遍历结果列表，查找当前状态为'reopened'的数据项。
-            for data in res_data_list:
-                if data['current_status_origin'] == 'reopened':
-                    # 对于每个状态为'reopened'的bugId，计数加1。
-                    self.reopenBugsData[bugId] = self.reopenBugsData.get(bugId, 0) + 1
-
-    def _save_task_hours(self, data):
+    def _save_task_hours(self, data) -> None:
         """
         保存每个开发者每天的任务工时。
 
-        根据任务数据更新每个开发者每天的工时。如果任务开始和结束日期相同，则将完成的努力添加到该日期。
+        该方法根据任务数据更新每个开发者每天的工时。如果任务开始和结束日期相同，则将完成的努力添加到该日期。
         如果开始和结束日期不同，则根据每个日期的剩余工时分配努力，直到完成的努力分配完毕。
 
         参数:
-        - data: 包含任务信息的字典，包括开发者名称、完成的努力、任务开始和结束日期。
+            data (dict): 包含任务信息的字典，结构示例：
+                {
+                    'developerName': '开发者名称',
+                    'effort_completed': 实际完成工时,
+                    'begin': 任务开始日期,
+                    'due': 任务结束日期
+                }
 
         返回:
-        无返回值。更新 self.dailyWorkingHoursOfEachDeveloper 字典。
+            None: 直接更新类属性dailyWorkingHoursOfEachDeveloper
+
+        异常处理:
+            KeyError: 当输入数据缺少必要字段时抛出
+            ValueError: 当日期格式转换失败时抛出
+
+        实现流程:
+            1. 提取开发者名称和实际完成工时
+            2. 判断任务开始和结束日期是否相同
+            3. 如果日期相同，直接累加工时
+            4. 如果日期不同，按天分配工时
+            5. 确保每日工时不超过8小时
         """
-        # 获取开发者名称、实际完成工时
+        # ==================================================================
+        # 阶段1：提取开发者名称和实际完成工时
+        # ==================================================================
+        # 从输入数据中获取开发者名称
         developer_name = data['developerName']
+        # 从输入数据中获取实际完成工时，并转换为浮点数
         effort_completed = float(data.get('effort_completed', 0))
 
-        # 如果开始和结束日期相同，则将该日期的工时加上实际完成工时
+        # ==================================================================
+        # 阶段2：判断任务开始和结束日期是否相同
+        # ==================================================================
+        # 如果任务开始和结束日期相同，则直接将实际完成工时累加到该日期
         if data['begin'] == data['due']:
             self.dailyWorkingHoursOfEachDeveloper[developer_name][data['begin']] += effort_completed
-        # 如果开始和结束日期不同，则根据每个日期的剩余工时分配实际完成工时，直到完成的实际完成工时分配完毕
+
+        # ==================================================================
+        # 阶段3：按天分配工时（开始和结束日期不同）
+        # ==================================================================
+        # 如果任务开始和结束日期不同，则按天分配实际完成工时
         elif data['begin'] < data['due']:
             # 获取开始和结束日期之间的所有日期
             for day in get_days(data['begin'], data['due']):
-                # 获取该日期的工时
+                # 获取该日期已保存的工时
                 saved_task_hours = self.dailyWorkingHoursOfEachDeveloper[developer_name].get(day, 0)
-                # 计算该日期的剩余工时
+                # 计算该日期的剩余工时（每日最多8小时）
                 remaining_effort = 8 - saved_task_hours
-                # 如果剩余工时大于0，则将该日期的工时加上剩余工时，并减去实际完成工时
+
+                # ==================================================================
+                # 阶段4：分配剩余工时
+                # ==================================================================
+                # 如果剩余工时大于0且实际完成工时大于剩余工时
                 if effort_completed - remaining_effort > 0:
+                    # 将该日期的工时加上剩余工时
                     self.dailyWorkingHoursOfEachDeveloper[developer_name][day] += remaining_effort
-                    # 减去剩余工时
+                    # 从实际完成工时中减去已分配的工时
                     effort_completed -= remaining_effort
                 else:
-                    # 如果剩余工时小于等于0，则将该日期的工时加上实际完成工时，并结束循环
+                    # 如果剩余工时小于等于0，则将该日期的工时加上实际完成工时
                     self.dailyWorkingHoursOfEachDeveloper[developer_name][day] += effort_completed
+                    # 结束循环，工时分配完毕
                     break
 
-    def _remove_current_user(self):
+    def _processing_tester_list(self) -> None:
         """
-        从测试收件人列表中移除当前用户，并添加特定的测试负责人（如果当前用户不是测试负责人）。
+        处理测试人员名单，分别把项目测试人员和测试接收人进行分别存储
+        从测试报告接收人列表中移除当前用户，并确保测试负责人存在
 
-        1. 遍历testRecipient列表，移除每个元素中的部门信息，并构建一个新的字符串testersStr。
-        2. 获取当前用户的昵称，并检查是否在testRecipient列表中，如果在则移除。
-        3. 如果当前用户不是测试负责人，且测试负责人不在testRecipient列表中，则添加测试负责人到列表末尾。
+        本方法通过以下步骤维护测试收件人列表的完整性：
+        1. 格式化测试人员显示字符串
+        2. 识别并移除当前认证用户
+        3. 确保测试负责人在收件人列表中
+
+        流程细节：
+        - 统一处理部门前缀，生成易读的测试人员字符串
+        - 动态获取当前登录用户信息进行精确匹配
+        - 智能维护负责人配置，避免重复添加
+
+        异常处理：
+            KeyError: 当用户详情数据缺失关键字段时抛出
+            AttributeError: 当用户详情结构异常时抛出
+
+        关联方法：
+            get_user_detail(): 获取当前用户详细信息
         """
-        # 如果testRecipient列表存在，开始处理列表中的元素
+        # ==================================================================
+        # 阶段1：测试人员字符串格式化
+        # ==================================================================
+        # 当测试收件人列表存在时，构建去除部门前缀的测试人员显示字符串
         if self.testRecipient:
-            is_last = False
-            for tester in self.testRecipient:
-                # 检查当前遍历的测试收件人是否为列表中的最后一个
-                if tester == self.testRecipient[-1]:
-                    is_last = True
-                # 移除测试收件人中的部门信息，并根据是否为最后一个元素决定是否添加分隔符
-                tester = tester.replace(DEPARTMENT, '')
-                self.testersStr += f'{tester}' if is_last else f'{tester}、'
+            # 使用生成器表达式遍历收件人列表，去除部门前缀并用顿号连接，用于展示在测试报告概要中的测试人员
+            self.testersStr += '、'.join(
+                tester.replace(DEPARTMENT, '')  # 移除部门前缀
+                for tester in self.testRecipient  # 遍历原始收件人列表
+            )
 
-            # 获取当前用户的昵称
-            current_user_name = get_user_detail()['user_nick']
-            # 如果当前用户在测试收件人列表中，则移除
-            if current_user_name in self.testRecipient:
-                self.testRecipient.remove(current_user_name)
-            # 如果当前用户不是测试负责人，且测试负责人不在测试收件人列表中，则添加测试负责人
-            if current_user_name != TESTER_LEADER and TESTER_LEADER not in self.testRecipient:
+        # ==================================================================
+        # 阶段2：当前用户处理
+        # ==================================================================
+        # 从用户详情中提取昵称字段（需包含中文名和部门信息）
+        current_user_name = get_user_detail()['user_nick']  # 调用用户信息接口获取完整昵称
+
+        # 安全移除当前用户（如果存在于收件人列表）
+        if current_user_name in self.testRecipient:
+            # 使用列表的remove方法进行精确匹配删除
+            self.testRecipient.remove(current_user_name)
+
+            # ==================================================================
+        # 阶段3：测试负责人校验
+        # ==================================================================
+        # 检查测试负责人配置必要性
+        if current_user_name != TESTER_LEADER:  # 当前用户非负责人时的处理
+            if TESTER_LEADER not in self.testRecipient:  # 负责人不在列表时追加
+                # 将带部门前缀的负责人标识加入列表末尾
                 self.testRecipient.append(TESTER_LEADER)
 
     def _process_developer_task(self, developer: str, effort: float, begin: datetime.date,
                                 due: datetime.date, child_data: dict):
         """
-        处理开发者任务逻辑
-        - 累加工时
-        - 记录任务时间范围
-        - 保存详细工时分布
+        处理开发者任务的核心业务逻辑
+
+        主要功能：
+        - 工时统计：累计开发者总工时
+        - 时间范围跟踪：维护任务时间跨度信息
+        - 任务关联：建立子任务与开发者的关联关系
+        - 工时分布记录：生成每日工时分布数据
+
+        参数:
+            developer (str): 开发者姓名标识，用于工时统计和任务关联
+            effort (float): 当前任务消耗的工时数，精度保留两位小数
+            begin (datetime.date): 任务起始日期，用于时间范围计算
+            due (datetime.date): 任务截止日期，用于时间有效性校验
+            child_data (dict): 子任务原始数据字典，用于后续分析和持久化
+
+        返回:
+            None: 方法通过成员变量修改对象状态，无显式返回值
+
+        异常:
+            ValueError: 当传入无效日期参数时可能抛出
+            KeyError: 当传入非字典类型的child_data时可能抛出
         """
-        # 累加总工时
+        # ==================================================================
+        # 阶段1：工时累计
+        # ==================================================================
+
+        # 累加当前任务工时到开发者总工时
         self.workHours[developer] += effort
 
-        # 更新任务时间范围
-        self._update_date_range(begin=begin)
+        # ==================================================================
+        # 阶段2：时间范围更新
+        # ==================================================================
+        # 仅在有效起始日期时更新时间范围
+        # 调用内部方法更新任务时间跨度记录
+        if begin is not None:
+            self._update_date_range(begin=begin)
 
-        # 保存子任务引用（用于后续分析）
-        child_data['developerName'] = developer
+        # ==================================================================
+        # 阶段3：子任务数据关联
+        # ==================================================================
+        # 创建数据副本避免修改原始数据
+        # 深拷贝保证数据隔离性（假设child_data为简单字典结构）
+        processed_data = child_data.copy()
 
-        # 记录每日工时分布（如果存在有效时间）
-        if begin and due:
-            self._save_task_hours(child_data)
+        # 添加开发者姓名到处理后的数据
+        processed_data['developerName'] = developer
+
+        # ==================================================================
+        # 阶段4：工时分布记录
+        # ==================================================================
+        # 有效性校验：起始日期早于等于截止日期
+        if begin and due and begin <= due:
+            # 调用内部方法持久化工时分布数据
+            self._save_task_hours(processed_data)
+
+        else:
+            self._print_error(f"存在{developer}任务的预计开始时间和预计结束时间错误，begin={begin}，due={due}")
 
     def _process_tester_task(self, due_date: datetime.date, begin_date: datetime.date, owner: str):
         """
-        处理测试任务逻辑
-        - 标记测试任务存在
-        - 更新上线日期
-        - 维护测试联系人列表
+        处理测试任务的核心业务逻辑
+
+        该方法实现测试任务数据的处理流程，主要功能包括：
+        1. 标记测试任务存在状态
+        2. 维护项目关键时间节点
+        3. 管理测试报告接收人列表
+
+        参数:
+            due_date (datetime.date): 测试任务截止日期，用于时间范围计算
+            begin_date (datetime.date): 测试任务起始日期，用于上线日期确定
+            owner (str): 测试任务负责人标识，用于收件人列表管理
+
+        返回:
+            None: 通过修改实例属性实现状态更新
+
+        异常:
+            AttributeError: 当日期参数格式错误时可能抛出
+            KeyError: 当负责人信息解析异常时可能抛出
+
+        实现逻辑:
+            1. 首次测试任务标记
+            2. 任务时间范围更新
+            3. 上线日期智能推算
+            4. 收件人列表维护
         """
-        # 首次遇到测试任务时标记
+        # ==================================================================
+        # 阶段1：测试任务存在性标记
+        # ==================================================================
+        # 当首次发现测试任务时更新状态标识
         if not self.isExistTestTask:
-            self.isExistTestTask = True
+            self.isExistTestTask = True  # 设置测试任务存在标志
 
-        # 更新最晚任务日期（使用安全的日期比较）
-        self._update_date_range(due=due_date)
+        # ==================================================================
+        # 阶段2：时间范围更新
+        # ==================================================================
+        # 调用内部方法更新项目时间跨度记录
+        # 仅当截止日期有效时触发更新
+        if due_date is not None:
+            self._update_date_range(due=due_date)  # 更新最晚任务日期
 
-        # 更新上线日期逻辑优化
-        if begin_date and (not self.onlineDate or begin_date > self.onlineDate):
-            self.onlineDate = begin_date
+        # ==================================================================
+        # 阶段3：上线日期计算
+        # ==================================================================
+        # 逻辑规则：
+        # 当测试开始日期存在且满足以下条件之一时更新上线日期：
+        # a. 当前未设置上线日期
+        # b. 新开始日期晚于现有上线日期
+        if begin_date is not None:
+            if (self.onlineDate is None) or (begin_date > self.onlineDate):
+                self.onlineDate = begin_date  # 更新上线日期为最晚测试开始日期
 
-        # 维护测试收件人列表（去重处理）
+        # ==================================================================
+        # 阶段4：收件人列表维护
+        # ==================================================================
+        # 安全添加负责人到收件人列表（去重处理）
+        # 使用列表推导式实现存在性检查，避免KeyError
         if owner not in self.testRecipient:
-            self.testRecipient.append(owner)
+            self.testRecipient.append(owner)  # 追加新负责人到列表末尾
 
     def _update_date_range(self, begin: datetime.date = None, due: datetime.date = None):
-        """更新项目时间范围记录"""
-        # 最早任务日期
+        """
+        维护项目时间范围边界值
+
+        核心功能：
+        1. 动态更新项目生命周期的时间范围
+        2. 维护最早任务开始日期记录
+        3. 维护最晚任务结束日期记录
+        4. 空值安全处理机制
+
+        参数:
+            begin (datetime.date, optional): 候选的最早任务日期，当该日期早于当前记录时更新
+            due (datetime.date, optional): 候选的最晚任务日期，当该日期晚于当前记录时更新
+
+        实现逻辑:
+            1. 候选日期有效性检查
+            2. 当前记录存在性验证
+            3. 日期比较与边界值更新
+            4. 空值安全处理机制保障数据完整性
+
+        更新策略:
+            - 最早日期采用最小值策略（取更早的日期）
+            - 最晚日期采用最大值策略（取更晚的日期）
+        """
+        # ==================================================================
+        # 阶段1：最早任务日期更新处理
+        # ==================================================================
         if begin:
+            # 检查当前记录是否存在或新日期是否更早
+            # 条件1：尚未设置最早日期时直接赋值
+            # 条件2：已存在记录时比较日期先后
             if not self.earliestTaskDate or begin < self.earliestTaskDate:
-                self.earliestTaskDate = begin
+                # 更新实例属性记录项目最早开始时间点
+                self.earliestTaskDate = begin  # type: datetime.date
 
-        # 最晚任务日期（开发者任务维度）
+        # ==================================================================
+        # 阶段2：最晚任务日期更新处理
+        # ==================================================================
         if due:
+            # 检查当前记录是否存在或新日期是否更晚
+            # 条件1：尚未设置最晚日期时直接赋值
+            # 条件2：已存在记录时比较日期先后
             if not self.lastTaskDate or due > self.lastTaskDate:
-                self.lastTaskDate = due
-
-    def _statistics_bug_severity_level(self, severity_level: str):
-        if not severity_level:
-            severity_level = '空'
-        self.bugLevelsCount[severity_level] += 1
-
-    def _statistics_bug_source(self, bug_source: str):
-        if not bug_source:
-            bug_source = '空'
-        self.bugSourceCount[bug_source] += 1
+                # 更新实例属性记录项目最晚结束时间点
+                self.lastTaskDate = due  # type: datetime.date
 
     def _statistics_deploy_prod_day_unrepaired_bug(
             self,
@@ -4626,16 +4948,53 @@ class SoftwareQualityRating:
             bug_id: str,
             severity_name: str,
             resolved_date: str = None
-    ):
-        is_deploy_prod_day_unrepaired_bug = True
+    ) -> None:
+        """
+        统计上线生产环境当天仍未修复的缺陷，并按严重等级分类存储
+
+        核心功能：
+        1. 识别上线当天未修复的缺陷
+        2. 根据缺陷严重等级进行分类
+        3. 维护未修复缺陷的存储结构
+
+        参数详解:
+            bug_status (str): 缺陷当前状态，取值范围参考TAPD状态机
+                              示例值：'closed'（已关闭）、'resolved'（已解决）
+            bug_id (str): 缺陷唯一标识符，用于跟踪具体缺陷实例
+            severity_name (str): 缺陷严重等级名称，必须与BUG_LEVELS列表定义一致
+                                 示例值：'致命'、'严重'、'一般'
+            resolved_date (str, optional): 缺陷解决日期，格式应为'YYYY-MM-DD'
+                                           当缺陷未解决时可为空
+
+        实现逻辑:
+            1. 缺陷状态与解决时间双重校验
+            2. 上线当天未修复状态判定
+            3. 严重等级分类存储
+        """
+        # 初始化默认状态为上线当天未修复缺陷
+        is_deploy_prod_day_unrepaired_bug = True  # type: bool
+
+        # ==================================================================
+        # 阶段1：校验缺陷解决状态与时间
+        # ==================================================================
+        # 当缺陷已关闭且存在解决日期时，检查是否在上线前已解决
         if bug_status == 'closed' and resolved_date:
+            # 解决日期早于上线日期则标记为已修复缺陷
             if resolved_date < self.onlineDate:
-                is_deploy_prod_day_unrepaired_bug = False
-        if is_deploy_prod_day_unrepaired_bug and severity_name in BUG_LEVELS[0: 2]:
-            self.unrepairedBugs['deployProdDayUnrepaired']['P0P1'].append(bug_id)
-        # 如果上线当天未修复得BUG并且严重等级为"P2", 则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
-        elif is_deploy_prod_day_unrepaired_bug and severity_name not in BUG_LEVELS[0: 2]:
-            self.unrepairedBugs['deployProdDayUnrepaired']['P2'].append(bug_id)
+                is_deploy_prod_day_unrepaired_bug = False  # type: bool
+
+        # ==================================================================
+        # 阶段2：按严重等级分类存储缺陷ID
+        # ==================================================================
+        # 处理致命(P0)和严重(P1)级别缺陷
+        if is_deploy_prod_day_unrepaired_bug and severity_name in BUG_LEVELS[0:2]:
+            # 将缺陷ID添加到P0P1分类列表
+            self.unrepairedBugs['deployProdDayUnrepaired']['P0P1'].append(bug_id)  # list[str] 类型维护
+
+        # 处理一般(P2)及以下级别缺陷
+        elif is_deploy_prod_day_unrepaired_bug and severity_name not in BUG_LEVELS[0:2]:
+            # 将缺陷ID添加到P2分类列表
+            self.unrepairedBugs['deployProdDayUnrepaired']['P2'].append(bug_id)  # list[str] 类型维护
 
     def _statistics_on_that_day_unrepaired_bug(
             self,
@@ -4644,19 +5003,59 @@ class SoftwareQualityRating:
             severity_name: str,
             created_date: str,
             resolved_date: str = None
-    ):
-        is_on_that_day_unrepaired_bug = True
+    ) -> None:
+        """
+        统计缺陷创建当天未修复的缺陷，并按严重等级分类存储
+
+        核心功能：
+        1. 识别当天未及时修复的缺陷
+        2. 根据缺陷严重等级进行三级分类（P0/P1/P2）
+        3. 维护缺陷分类存储结构
+
+        参数详解:
+            bug_status (str): 缺陷当前状态，取值范围参考TAPD状态机
+                              示例值：'closed'（已关闭）、'active'（激活中）
+            bug_id (str): 缺陷唯一标识符，用于跟踪具体缺陷实例
+            severity_name (str): 缺陷严重等级名称，必须与BUG_LEVELS列表定义一致
+                                 示例值：'致命'、'严重'、'一般'
+            created_date (str): 缺陷创建日期，格式应为'YYYY-MM-DD'
+            resolved_date (str, optional): 缺陷解决日期，格式应为'YYYY-MM-DD'
+                                           当缺陷未解决时可为空
+
+        实现逻辑:
+            1. 缺陷状态与解决时间双重校验
+            2. 当天未修复状态判定
+            3. 三级严重等级分类存储
+        """
+        # 初始化默认状态为当天未修复缺陷
+        is_on_that_day_unrepaired_bug = True  # type: bool
+
+        # ==================================================================
+        # 阶段1：校验缺陷解决状态与时间
+        # ==================================================================
+        # 当缺陷已关闭且存在解决日期时，检查是否在创建当天已解决
         if bug_status == 'closed' and resolved_date:
+            # 创建日期与解决日期相同则标记为已修复缺陷
             if created_date == resolved_date:
-                is_on_that_day_unrepaired_bug = False
+                is_on_that_day_unrepaired_bug = False  # type: bool
+
+        # ==================================================================
+        # 阶段2：按严重等级分类存储缺陷ID
+        # ==================================================================
+        # 处理致命(P0)级别缺陷
         if is_on_that_day_unrepaired_bug and severity_name == BUG_LEVELS[0]:
-            self.unrepairedBugs['onThatDayUnrepaired']['P0'].append(bug_id)
-        # 如果bug不是当天修复并且严重等级为"P1"，则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
+            # 将缺陷ID添加到P0分类列表
+            self.unrepairedBugs['onThatDayUnrepaired']['P0'].append(bug_id)  # list[str] 类型维护
+
+        # 处理严重(P1)级别缺陷
         elif is_on_that_day_unrepaired_bug and severity_name == BUG_LEVELS[1]:
-            self.unrepairedBugs['onThatDayUnrepaired']['P1'].append(bug_id)
-        # 如果bug不是当天修复并且严重等级不为"P0"或"P1"，则将该bug的id添加到unrepairedBugsData字典中，并累加其数量
-        elif is_on_that_day_unrepaired_bug and severity_name not in BUG_LEVELS[0: 2]:
-            self.unrepairedBugs['onThatDayUnrepaired']['P2'].append(bug_id)
+            # 将缺陷ID添加到P1分类列表
+            self.unrepairedBugs['onThatDayUnrepaired']['P1'].append(bug_id)  # list[str] 类型维护
+
+        # 处理一般(P2)及以下级别缺陷
+        elif is_on_that_day_unrepaired_bug and severity_name not in BUG_LEVELS[0:2]:
+            # 将缺陷ID添加到P2分类列表
+            self.unrepairedBugs['onThatDayUnrepaired']['P2'].append(bug_id)  # list[str] 类型维护
 
     def _add_multi_dimensional_table_html(self, table_data: dict):
         data_headers = []  # 初始化表格的头部动态数据
@@ -5180,7 +5579,7 @@ BUG未修复数为：{_print_text_font(unrepaired_bug_count, color="green")}'''
         10. **异常处理**:
             - 使用 `try-except` 结构捕获 `ValueError` 异常，打印堆栈信息并重新抛出异常。
             - 在 `finally` 块中，无论是否发生异常，都还原列字段展示的配置信息：
-                - 调用 `edit_query_filtering_list_config(self.oldBugListConfigs)` 和 `edit_requirement_list_config(self.oldSubTaskListConfigs)` 方法，确保列字段配置恢复原样。
+                - 调用 `edit_query_filtering_list_config(self.oldBugListConfigStr)` 和 `edit_requirement_list_config(self.oldSubTaskListConfigStr)` 方法，确保列字段配置恢复原样。
             - 如果还原配置信息失败，捕获异常并打印堆栈信息，重新抛出异常。
 
         流程概述:
