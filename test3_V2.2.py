@@ -1,8 +1,5 @@
 # 2025年3月9日00:35:14
 
-"""
-1、考虑不同客户端上线时间分开的问题
-"""
 # ==================================================================
 # 导入标准库
 # ==================================================================
@@ -45,13 +42,14 @@ OPEN_AI_IS_STREAM_RESPONSE = True  # 是否支持流式响应
 ACCOUNT = 'wuchong@addcn.com'  # 账号
 PASSWORD = 'WUchong_1008'  # 密码
 PROJECT_ID = "63835346"  # 项目ID
-# REQUIREMENT_ID = "1163835346001078047"  # 需求ID 无BUG
-REQUIREMENT_ID = "1163835346001071668"  # 需求ID
+REQUIREMENT_ID = "1163835346001078047"  # 需求ID 无BUG
+# REQUIREMENT_ID = "1163835346001071668"  # 需求ID
 # REQUIREMENT_ID = "1163835346001033609"  # 需求ID 中规中矩  警告：没有测试任务, 请检查"【中古屋住宅】競價服務新增按天結算測試（限台中）"需求是否有测试任务
 # REQUIREMENT_ID = "1163835346001051222"  # 需求ID 较差的质量
 # REQUIREMENT_ID = "1163835346001049795"  # 需求ID 较差的质量  开发周期也是很多小数点尾数
 # REQUIREMENT_ID = "1163835346001055792"  # 需求ID 较差的质量
 # REQUIREMENT_ID = "1163835346001118124"  # 需求ID
+# REQUIREMENT_ID = "1163835346001124542"  # 需
 REQUIREMENT_LIST_ID = '1000000000000000417'  # 需求列表ID, 用于查询或者编辑列表展示字段的配置
 
 DEPARTMENT = 'T5'  # 部门名称
@@ -99,6 +97,16 @@ AI_URL_AND_KEY = {
     },
 }
 
+# 客户端列表，用于在提问阶段展示用户选择
+CLIENTS = [
+    'IOS',
+    'Android',
+    'PC',
+    'H5',
+    'API',
+    'Flutter',
+]
+
 # 创建一个CloudScraper实例，用于模拟浏览器请求
 scraper = cloudscraper.create_scraper(
     browser={
@@ -126,6 +134,9 @@ BUG_LIST_MUST_KEYS = [
 
 # 子任务列表中必须包含的字段
 SUB_TASK_LIST_MUST_KEYS = [
+    "id",  # 子任务ID
+    "name",  # 子任务名称
+    "status",  # 状态
     "owner",  # 处理人
     "begin",  # 预计开始
     "due",  # 预计结束
@@ -135,7 +146,7 @@ SUB_TASK_LIST_MUST_KEYS = [
 # 评分输入数据的格式
 SCORE_INPUT_DATA = {
     'input_type': int,  # 输入类型
-    'allow_content': [20, 15, 10, 5, 1]  # 评分输入数据的可选值
+    'allow_contents': [20, 15, 10, 5, 1]  # 评分输入数据的可选值
 }
 
 # 柱状图的颜色映射
@@ -528,13 +539,21 @@ def calculate_bug_repair_rating(unrepaired_bug: Dict[str, Any]) -> int or None:
     return None  # 防御性返回
 
 
-def _input(text: str, input_type: type = None, allow_content: List[Any] = None) -> Any:
+def _input(
+        text: str,
+        input_type: type = None,
+        allow_contents: List[Any] = None,
+        re_format: str = None,
+        re_prompts_format: str = None,
+        is_delete_space: bool = False,
+        is_strip: bool = True
+) -> Any:  # 需要二次优化
     """
     从用户获取输入并进行类型及有效性验证
 
     该函数实现一个交互式输入循环，持续提示用户输入直到满足以下条件：
     1. 输入内容能正确转换为指定类型（若指定 input_type）
-    2. 输入内容存在于允许的值列表（若指定 allow_content）
+    2. 输入内容存在于允许的值列表（若指定 allow_contents）
 
     特性：
     - 自动处理类型转换异常
@@ -545,7 +564,7 @@ def _input(text: str, input_type: type = None, allow_content: List[Any] = None) 
     参数详解：
     :param text: str -> 输入提示文本，显示在输入框前（如 "请输入年龄："）
     :param input_type: type -> 目标数据类型（如 int/float/str），None表示保持字符串类型
-    :param allow_content: list -> 允许的输入值列表，None表示不限制输入范围
+    :param allow_contents: list -> 允许的输入值列表，None表示不限制输入范围
 
     返回：
     any -> 返回经过验证和类型转换后的输入值
@@ -560,6 +579,12 @@ def _input(text: str, input_type: type = None, allow_content: List[Any] = None) 
             # 显示提示信息并获取原始输入
             raw_input: str = input(text)  # 调用内置input函数获取用户输入
 
+            if is_strip:
+                raw_input = raw_input.strip()
+
+            if is_delete_space:
+                raw_input = raw_input.replace(' ', '')
+
             # 类型转换处理
             if input_type:
                 # 尝试将输入转换为目标类型（如int('123')）
@@ -569,15 +594,26 @@ def _input(text: str, input_type: type = None, allow_content: List[Any] = None) 
                 converted_value = raw_input
 
             # 允许值范围验证
-            if allow_content is not None:
+            if allow_contents:
+                for index, allowContent in enumerate(allow_contents):
+                    if isinstance(allowContent, str):
+                        allow_contents[index] = allowContent.lower()
+                check_value = converted_value.lower() if isinstance(converted_value, str) else converted_value
                 # 检查转换后的值是否在允许列表中
-                if converted_value not in allow_content:
+                if check_value not in allow_contents:
                     # 构建友好的错误提示信息
-                    allowed_values = ', '.join(map(str, allow_content))
+                    allowed_values = ', '.join(map(str, allow_contents))
                     error_msg = f"输入值必须在 [{allowed_values}] 范围内"
                     # 打印带颜色的错误提示
                     print(_print_text_font(f"\n错误：{error_msg}\n", color='red'))
                     continue  # 跳过后续代码，重新循环
+
+            if re_format and not re.fullmatch(re_format, converted_value):
+                print(_print_text_font(
+                    f"\n格式错误：输入内容格式不匹配, 期望格式: {re_prompts_format if re_prompts_format else re_format}\n"
+                    , color='red'
+                ))
+                continue
 
             # 通过所有检查，返回合法值
             return converted_value
@@ -1231,311 +1267,6 @@ def get_user_detail() -> Dict[str, Any]:
     except Exception as orig_err:
         # 通用异常包装（保留原始堆栈信息）
         raise RuntimeError("获取用户信息失败") from orig_err
-
-
-def get_requirement_tasks() -> List[Dict[str, Any]]:
-    """
-    递归获取指定需求的所有子任务信息，支持分页查询
-
-    通过TAPD官方API接口，获取指定需求下的全量子任务数据，包括但不限于：
-    - 任务基础属性（ID、标题、状态）
-    - 时间信息（预计开始、截止时间）
-    - 工作量信息（完成工时）
-    - 责任人信息
-
-    返回:
-        List[Dict[str, Any]]: 结构化子任务数据列表，每个元素为包含子任务详细信息的字典
-        示例结构:
-        [
-            {
-                "id": "1001",
-                "name": "接口开发任务",
-                "status": "in_progress",
-                "owner": "T5_张三",
-                "begin": "2025-03-01",
-                "due": "2025-03-05",
-                "effort_completed": 8.5,
-                ...
-            },
-            ...
-        ]
-        若接口无数据或请求失败，返回空列表
-
-    异常:
-        requests.JSONDecodeError: 响应数据不符合JSON格式时抛出
-        ValueError: 数据解析失败或关键字段缺失时抛出
-        KeyError: 响应数据结构不符合预期时抛出
-
-    实现流程:
-        1. 初始化分页参数和存储结构
-        2. 构建符合TAPD API规范的请求参数
-        3. 分页获取数据并进行完整性校验
-        4. 合并多页数据并返回统一结果集
-    """
-
-    # ==================================================================
-    # 阶段1：初始化分页参数
-    # ==================================================================
-    current_page: int = 1  # 当前请求页码，从第一页开始
-    records_per_page: int = 100  # 每页请求数据量，TAPD API最大支持100条/页
-    accumulated_tasks: List[Dict] = []  # 累积所有分页的任务数据
-
-    # ==================================================================
-    # 阶段2：构建API请求基础参数
-    # ==================================================================
-    # 拼接完整的API端点URL（HOST为全局配置的TAPD域名）
-    api_endpoint: str = f"{HOST}/api/entity/stories/get_children_stories"
-
-    # 构造符合TAPD API规范的查询参数
-    # - workspace_id: 项目空间唯一标识（从全局配置获取）
-    # - story_id: 目标需求唯一标识（从全局配置获取）
-    # - 分页参数(page/per_page)和排序参数(sort_name/order)
-    base_params: Dict[str, Union[str, int]] = {
-        "workspace_id": PROJECT_ID,
-        "story_id": REQUIREMENT_ID,
-        "page": current_page,
-        "per_page": records_per_page,
-        "sort_name": "due",  # 按截止时间字段排序
-        "order": "asc"  # 升序排列(从最早到期到最晚到期)
-    }
-
-    # ==================================================================
-    # 阶段3：分页请求循环
-    # ==================================================================
-    while True:
-        # 发送API请求（使用封装的fetch_data方法处理重试和认证）
-        # fetch_data已内置异常处理和会话管理功能
-        api_response: requests.Response = fetch_data(
-            url=api_endpoint,
-            params=base_params,
-            method="GET"
-        )
-
-        try:
-            # ==================================================================
-            # 阶段4：响应数据解析与校验
-            # ==================================================================
-            # 将响应内容解析为JSON格式（可能抛出JSONDecodeError）
-            response_data: Dict = api_response.json()
-
-            # 校验顶层数据结构（TAPD标准响应结构）
-            if "data" not in response_data:
-                raise KeyError("API响应缺少核心数据域'data'字段")
-
-            # 校验子任务列表字段存在性
-            task_list_key: str = "children_list"
-            if task_list_key not in response_data["data"]:
-                raise KeyError(f"响应数据缺失关键字段'{task_list_key}'")
-
-            # 提取当前页任务数据并进行类型校验
-            current_page_tasks: List[Dict] = response_data["data"][task_list_key]
-            if not isinstance(current_page_tasks, list):
-                raise TypeError(
-                    f"子任务数据格式异常，预期列表类型，实际类型：{type(current_page_tasks)}"
-                )
-
-            # ==================================================================
-            # 阶段5：数据累积与分页控制
-            # ==================================================================
-            # 合并当前页数据到总集合
-            accumulated_tasks.extend(current_page_tasks)
-
-            # 判断分页终止条件：
-            # 1. 当前页数据量小于每页请求量（说明是最后一页）
-            # 2. 当前页数据量为零（异常情况保护）
-            if len(current_page_tasks) < records_per_page or not current_page_tasks:
-                return accumulated_tasks
-
-            # 更新分页参数准备下次请求
-            base_params["page"] += 1  # 页码递增
-            current_page = base_params["page"]  # 保持当前页码状态同步
-
-        except requests.JSONDecodeError as decode_err:
-            # 捕获JSON解析异常并附加调试信息
-            raw_content: str = api_response.text[:200] + "..." if api_response.text else "空响应内容"
-            error_msg: str = f"响应内容解析失败，原始内容：{raw_content}"
-            raise ValueError(error_msg) from decode_err
-
-        except KeyError as key_err:
-            # 细化键缺失异常信息
-            raise KeyError(f"数据结构异常，缺失关键字段：{str(key_err)}") from key_err
-
-
-def get_bug_list(requirement_name: str) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
-    """
-    获取指定需求关联的缺陷列表及其分类元数据
-
-    本方法通过TAPD搜索接口分页获取指定需求的所有缺陷数据，同时提取平台和根源的分类选项信息。
-    支持动态字段配置验证和分页请求控制，确保获取完整的缺陷数据集。
-
-    执行流程：
-    1. 初始化分页参数和存储结构
-    2. 构建符合TAPD接口规范的动态搜索条件
-    3. 分页发送API请求并验证响应数据结构
-    4. 提取平台和根源分类的元数据选项
-    5. 合并分页数据并进行完整性校验
-    6. 返回标准化结果集
-
-    参数:
-        requirement_name (str): 需求名称，用于构建缺陷搜索条件，需确保与TAPD系统内名称完全匹配
-                                示例："用户登录功能优化"
-
-    返回:
-        Tuple[List[str], List[str], List[Dict]]: 包含三个元素的元组：
-            - platforms (List[str]): 平台分类选项列表，按TAPD系统配置顺序排列
-                                     示例：["iOS", "Android", "Web"]
-            - root_causes (List[str]): 缺陷根源分类选项列表，按TAPD系统配置顺序排列
-                                       示例：["代码错误", "需求变更", "环境配置"]
-            - bugs (List[Dict]): 缺陷数据字典列表，每个字典对应一个缺陷的完整字段数据
-                                 示例：[{"id": "BUG001", "title": "登录按钮无响应", ...}, ...]
-
-    异常:
-        ValueError: 当响应数据格式异常或关键字段缺失时抛出
-        KeyError: 当接口返回数据结构不符合预期时抛出
-        requests.JSONDecodeError: 当响应内容无法解析为JSON格式时抛出
-
-    关联方法:
-        fetch_data(): 执行API请求的核心方法，处理网络通信和基础错误重试
-    """
-    # ==================================================================
-    # 阶段1：初始化分页参数
-    # ==================================================================
-    current_page: int = 1  # 当前请求页码，从第一页开始
-    page_size: int = 100  # 每页请求数据量，使用TAPD API允许的最大值
-    accumulated_bugs: List[Dict] = []  # 累积所有分页的缺陷数据
-    platforms: List[str] = []  # 平台分类选项存储列表
-    root_causes: List[str] = []  # 根源分类选项存储列表
-
-    # ==================================================================
-    # 阶段2：构建动态搜索条件
-    # ==================================================================
-    # 构造符合TAPD搜索接口规范的JSON查询条件
-    # 关键字段说明：
-    # - fieldSystemName: 指定搜索的字段为"关联需求"
-    # - value: 使用输入的需求名称作为搜索值
-    # - optionType: 使用逻辑与(AND)组合多个查询条件
-    search_condition = json.dumps({
-        "data": [{
-            "id": "5",  # 条件ID，TAPD系统保留字段
-            "fieldLabel": "关联需求",  # 界面显示的字段标签
-            "fieldOption": "like",  # 使用模糊匹配操作符
-            "fieldType": "input",  # 字段类型为文本输入
-            "fieldSystemName": "BugStoryRelation_relative_id",  # 系统内部字段标识
-            "value": requirement_name,  # 搜索的目标需求名称
-            "fieldIsSystem": "1",  # 标记为系统内置字段
-            "entity": "bug"  # 查询实体类型为缺陷
-        }],
-        "optionType": "AND",  # 条件组合方式
-        "needInit": "1"  # 需要初始化搜索条件标志
-    })
-
-    # ==================================================================
-    # 阶段3：分页请求控制
-    # ==================================================================
-    # 构造基础请求参数模板，分页参数将在循环中动态更新
-    base_request_data = {
-        "workspace_ids": PROJECT_ID,  # 项目空间唯一标识
-        "search_data": search_condition,  # 序列化的搜索条件
-        "obj_type": "bug",  # 查询对象类型为缺陷
-        "hide_not_match_condition_node": "0",  # 显示不匹配条件节点
-        "hide_not_match_condition_sub_node": "1",  # 隐藏不匹配子节点
-        "page": current_page,  # 当前页码参数
-        "perpage": str(page_size),  # 每页数据量参数（字符串类型）
-        "order_field": "created",  # 按缺陷创建时间升序排列
-    }
-
-    # 分页请求循环，直到获取全部数据
-    while True:
-        # ==================================================================
-        # 阶段4：发送API请求
-        # ==================================================================
-        # 使用封装的fetch_data方法发送POST请求
-        # 该方法已内置网络错误重试和会话管理功能
-        response = fetch_data(
-            url=f"{HOST}/api/search_filter/search_filter/search",
-            json=base_request_data,
-            method="POST"
-        )
-
-        try:
-            # ==================================================================
-            # 阶段5：响应数据处理
-            # ==================================================================
-            # 将响应内容解析为JSON格式（可能抛出JSONDecodeError）
-            response_data: Dict[str, Any] = response.json()
-
-            # 数据完整性校验：检查顶层data字段
-            if "data" not in response_data:
-                raise KeyError("API响应缺少核心数据域'data'字段")
-
-            # ==================================================================
-            # 阶段6：元数据提取（仅在首次请求时执行）
-            # ==================================================================
-            if not platforms or not root_causes:
-                # 验证项目特殊字段结构
-                project_fields = response_data["data"].get("project_special_fields", {})
-                if not isinstance(project_fields, dict):
-                    raise ValueError("'project_special_fields'字段类型异常，预期字典类型")
-
-                # 获取当前项目的分类配置数据
-                project_config = project_fields.get(PROJECT_ID, {})
-
-                # 提取平台分类选项（防御性字段检查）
-                if "platform" in project_config and not platforms:
-                    platforms = [
-                        str(item["value"])  # 强制类型转换为字符串
-                        for item in project_config["platform"]
-                        if "value" in item
-                    ]
-
-                # 提取根源分类选项（防御性字段检查）
-                if "source" in project_config and not root_causes:
-                    root_causes = [
-                        str(item["value"])  # 强制类型转换为字符串
-                        for item in project_config["source"]
-                        if "value" in item
-                    ]
-
-            # ==================================================================
-            # 阶段7：缺陷数据处理
-            # ==================================================================
-            # 校验列表数据字段存在性
-            if "list" not in response_data["data"]:
-                raise KeyError("响应数据缺失缺陷列表字段'list'")
-
-            current_page_bugs = response_data["data"]["list"]
-
-            # 数据类型二次校验（防御性编程）
-            if not isinstance(current_page_bugs, list):
-                raise TypeError(
-                    f"缺陷数据格式异常，预期列表类型，实际类型：{type(current_page_bugs)}"
-                )
-
-            # 合并分页数据到总集合
-            accumulated_bugs.extend(current_page_bugs)
-
-            # ==================================================================
-            # 阶段8：分页终止判断
-            # ==================================================================
-            # 当前页数据量小于请求量时终止循环（最后一页）
-            if len(current_page_bugs) < page_size:
-                break
-
-            # 更新分页参数准备下次请求
-            base_request_data["page"] += 1
-            current_page = base_request_data["page"]
-
-        except requests.JSONDecodeError as decode_err:
-            # 捕获JSON解析异常并附加原始响应内容
-            raw_content = response.text[:200] + "..." if response.text else "空响应内容"
-            raise ValueError(
-                f"响应内容解析失败，原始内容：{raw_content}"
-            ) from decode_err
-
-    # ==================================================================
-    # 阶段9：返回标准化结果
-    # ==================================================================
-    return platforms, root_causes, accumulated_bugs
 
 
 def fetch_data(
@@ -3435,7 +3166,6 @@ def _handle_normal_response(completion: Any, result: List[str]) -> str:
         ) from unexpect_error
 
 
-
 class SoftwareQualityRating:
     def __init__(self):
         """
@@ -3458,7 +3188,7 @@ class SoftwareQualityRating:
             2. 时间相关:
                 - earliestTaskDate: 最早任务日期
                 - lastTaskDate: 最晚任务日期
-                - onlineDate: 上线日期
+                - onlineDateDict: 上线日期
 
             3. 缺陷统计:
                 - bugLevelsCount: 缺陷级别统计
@@ -3491,19 +3221,24 @@ class SoftwareQualityRating:
         # ==================================================================
         # 阶段1：基础信息初始化
         # ==================================================================
-        self.requirementName = ''  # 需求名称
-        self.PM = ''  # 产品经理
-        self.testRecipient: list[str] = []  # 测试报告接收人列表(测试人员)
-        self.testersStr = ''  # 测试人员字符串表示
-        self.developers = []  # 开发人员列表
+        self.requirementName: str = ''  # 需求名称
+        self.PM: str = ''  # 产品经理
+        self.testRecipient: List[str] = []  # 测试报告接收人列表(测试人员)
+        self.testersStr: str = ''  # 测试人员字符串表示
+        self.developers: List[str] = []  # 开发人员列表
+        self.subDemandTasks: List[Dict[str, Any]] = []
+        self.bugs: List[Dict[str, Any]] = []
+        self.bugPlatforms: List[str] = []
+        self.bugSources: List[str] = []
 
         # ==================================================================
         # 阶段2：时间相关初始化
         # ==================================================================
-        self.isExistTestTask = False  # 是否存在测试任务标志
-        self.earliestTaskDate = None  # 最早任务日期
-        self.lastTaskDate = None  # 最晚任务日期
-        self.onlineDate = None  # 上线日期
+        self.isInputOnlineDate: bool = False  # 是否手动输入上线日期
+        self.earliestTaskDate: str = ''  # 最早任务日期
+        self.lastTaskDate: str = ''  # 最晚任务日期
+        self.onlineDateDict: Dict[str, Any] = {}  # 上线日期  # 针对涉及多客户端分别上线，手动输入记录上线日期
+        self.onlineDate: Any = None  # 上线日期  针对于程序自己去找最后一个测试任务的预计开始日期作为上线日期
 
         # ==================================================================
         # 阶段3：缺陷统计初始化
@@ -3663,6 +3398,11 @@ class SoftwareQualityRating:
             if not self.PM:
                 self._print_error("警告：产品经理获取失败，请检查需求创建人是否正确")
 
+            # ==================================================================
+            # 阶段7：展示可视化标题
+            # ==================================================================
+            print('\n' + f' 需求 {REQUIREMENT_ID}: {self.requirementName} '.center(LINE_LENGTH, '*'))
+
         except requests.RequestException as e:
             # 捕获网络请求异常
             error_msg = f"API请求失败: {str(e)}"
@@ -3678,7 +3418,450 @@ class SoftwareQualityRating:
             error_msg = f"获取需求详情失败: {str(e)}"
             raise RuntimeError(error_msg) from e
 
-    def requirement_task_statistics(self):
+    def get_requirement_tasks(self) -> None:  # 需二次优化
+        """
+        递归获取指定需求的所有子任务信息，支持分页查询
+
+        通过TAPD官方API接口，获取指定需求下的全量子任务数据，包括但不限于：
+        - 任务基础属性（ID、标题、状态）
+        - 时间信息（预计开始、截止时间）
+        - 工作量信息（完成工时）
+        - 责任人信息
+
+        返回:
+            List[Dict[str, Any]]: 结构化子任务数据列表，每个元素为包含子任务详细信息的字典
+            示例结构:
+            [
+                {
+                    "id": "1001",
+                    "name": "接口开发任务",
+                    "status": "in_progress",
+                    "owner": "T5_张三",
+                    "begin": "2025-03-01",
+                    "due": "2025-03-05",
+                    "effort_completed": 8.5,
+                    ...
+                },
+                ...
+            ]
+            若接口无数据或请求失败，返回空列表
+
+        异常:
+            requests.JSONDecodeError: 响应数据不符合JSON格式时抛出
+            ValueError: 数据解析失败或关键字段缺失时抛出
+            KeyError: 响应数据结构不符合预期时抛出
+
+        实现流程:
+            1. 初始化分页参数和存储结构
+            2. 构建符合TAPD API规范的请求参数
+            3. 分页获取数据并进行完整性校验
+            4. 合并多页数据并返回统一结果集
+        """
+
+        # ==================================================================
+        # 阶段1：初始化分页参数
+        # ==================================================================
+        current_page: int = 1  # 当前请求页码，从第一页开始
+        records_per_page: int = 100  # 每页请求数据量，TAPD API最大支持100条/页
+
+        # ==================================================================
+        # 阶段2：构建API请求基础参数
+        # ==================================================================
+        # 拼接完整的API端点URL（HOST为全局配置的TAPD域名）
+        api_endpoint: str = f"{HOST}/api/entity/stories/get_children_stories"
+
+        # 构造符合TAPD API规范的查询参数
+        # - workspace_id: 项目空间唯一标识（从全局配置获取）
+        # - story_id: 目标需求唯一标识（从全局配置获取）
+        # - 分页参数(page/per_page)和排序参数(sort_name/order)
+        base_params: Dict[str, Union[str, int]] = {
+            "workspace_id": PROJECT_ID,
+            "story_id": REQUIREMENT_ID,
+            "page": current_page,
+            "per_page": records_per_page,
+            "sort_name": "due",  # 按截止时间字段排序
+            "order": "asc"  # 升序排列(从最早到期到最晚到期)
+        }
+
+        # ==================================================================
+        # 阶段3：分页请求循环
+        # ==================================================================
+        while True:
+            # 发送API请求（使用封装的fetch_data方法处理重试和认证）
+            # fetch_data已内置异常处理和会话管理功能
+            api_response: requests.Response = fetch_data(
+                url=api_endpoint,
+                params=base_params,
+                method="GET"
+            )
+
+            try:
+                # ==================================================================
+                # 阶段4：响应数据解析与校验
+                # ==================================================================
+                # 将响应内容解析为JSON格式（可能抛出JSONDecodeError）
+                response_data: Dict = api_response.json()
+
+                # 校验顶层数据结构（TAPD标准响应结构）
+                if "data" not in response_data:
+                    raise KeyError("API响应缺少核心数据域'data'字段")
+
+                # 校验子任务列表字段存在性
+                task_list_key: str = "children_list"
+                if task_list_key not in response_data["data"]:
+                    raise KeyError(f"响应数据缺失关键字段'{task_list_key}'")
+
+                # 提取当前页任务数据并进行类型校验
+                current_page_tasks: List[Dict] = response_data["data"][task_list_key]
+                if not isinstance(current_page_tasks, list):
+                    raise TypeError(
+                        f"子任务数据格式异常，预期列表类型，实际类型：{type(current_page_tasks)}"
+                    )
+
+                # ==================================================================
+                # 阶段5：数据累积与分页控制
+                # ==================================================================
+                # 合并当前页数据到总集合
+                self.subDemandTasks.extend(current_page_tasks)
+
+                # 判断分页终止条件：
+                # 1. 当前页数据量小于每页请求量（说明是最后一页）
+                # 2. 当前页数据量为零（异常情况保护）
+                if len(current_page_tasks) < records_per_page or not current_page_tasks:
+                    break
+
+                # 更新分页参数准备下次请求
+                base_params["page"] += 1  # 页码递增
+                current_page = base_params["page"]  # 保持当前页码状态同步
+
+            except requests.JSONDecodeError as decode_err:
+                # 捕获JSON解析异常并附加调试信息
+                raw_content: str = api_response.text[:200] + "..." if api_response.text else "空响应内容"
+                error_msg: str = f"响应内容解析失败，原始内容：{raw_content}"
+                raise ValueError(error_msg) from decode_err
+
+            except KeyError as key_err:
+                # 细化键缺失异常信息
+                raise KeyError(f"数据结构异常，缺失关键字段：{str(key_err)}") from key_err
+
+    def get_bug_list(self) -> None:  # 需二次优化
+        """
+        获取指定需求关联的缺陷列表及其分类元数据
+
+        本方法通过TAPD搜索接口分页获取指定需求的所有缺陷数据，同时提取平台和根源的分类选项信息。
+        支持动态字段配置验证和分页请求控制，确保获取完整的缺陷数据集。
+
+        执行流程：
+        1. 初始化分页参数和存储结构
+        2. 构建符合TAPD接口规范的动态搜索条件
+        3. 分页发送API请求并验证响应数据结构
+        4. 提取平台和根源分类的元数据选项
+        5. 合并分页数据并进行完整性校验
+        6. 返回标准化结果集
+
+        参数:
+            requirement_name (str): 需求名称，用于构建缺陷搜索条件，需确保与TAPD系统内名称完全匹配
+                                    示例："用户登录功能优化"
+
+        返回:
+            Tuple[List[str], List[str], List[Dict]]: 包含三个元素的元组：
+                - platforms (List[str]): 平台分类选项列表，按TAPD系统配置顺序排列
+                                         示例：["iOS", "Android", "Web"]
+                - root_causes (List[str]): 缺陷根源分类选项列表，按TAPD系统配置顺序排列
+                                           示例：["代码错误", "需求变更", "环境配置"]
+                - bugs (List[Dict]): 缺陷数据字典列表，每个字典对应一个缺陷的完整字段数据
+                                     示例：[{"id": "BUG001", "title": "登录按钮无响应", ...}, ...]
+
+        异常:
+            ValueError: 当响应数据格式异常或关键字段缺失时抛出
+            KeyError: 当接口返回数据结构不符合预期时抛出
+            requests.JSONDecodeError: 当响应内容无法解析为JSON格式时抛出
+
+        关联方法:
+            fetch_data(): 执行API请求的核心方法，处理网络通信和基础错误重试
+        """
+        # ==================================================================
+        # 阶段1：初始化分页参数
+        # ==================================================================
+        current_page: int = 1  # 当前请求页码，从第一页开始
+        page_size: int = 100  # 每页请求数据量，使用TAPD API允许的最大值
+
+        # ==================================================================
+        # 阶段2：构建动态搜索条件
+        # ==================================================================
+        # 构造符合TAPD搜索接口规范的JSON查询条件
+        # 关键字段说明：
+        # - fieldSystemName: 指定搜索的字段为"关联需求"
+        # - value: 使用输入的需求名称作为搜索值
+        # - optionType: 使用逻辑与(AND)组合多个查询条件
+        search_condition = json.dumps({
+            "data": [{
+                "id": "5",  # 条件ID，TAPD系统保留字段
+                "fieldLabel": "关联需求",  # 界面显示的字段标签
+                "fieldOption": "like",  # 使用模糊匹配操作符
+                "fieldType": "input",  # 字段类型为文本输入
+                "fieldSystemName": "BugStoryRelation_relative_id",  # 系统内部字段标识
+                "value": self.requirementName,  # 搜索的目标需求名称
+                "fieldIsSystem": "1",  # 标记为系统内置字段
+                "entity": "bug"  # 查询实体类型为缺陷
+            }],
+            "optionType": "AND",  # 条件组合方式
+            "needInit": "1"  # 需要初始化搜索条件标志
+        })
+
+        # ==================================================================
+        # 阶段3：分页请求控制
+        # ==================================================================
+        # 构造基础请求参数模板，分页参数将在循环中动态更新
+        base_request_data = {
+            "workspace_ids": PROJECT_ID,  # 项目空间唯一标识
+            "search_data": search_condition,  # 序列化的搜索条件
+            "obj_type": "bug",  # 查询对象类型为缺陷
+            "hide_not_match_condition_node": "0",  # 显示不匹配条件节点
+            "hide_not_match_condition_sub_node": "1",  # 隐藏不匹配子节点
+            "page": current_page,  # 当前页码参数
+            "perpage": str(page_size),  # 每页数据量参数（字符串类型）
+            "order_field": "created",  # 按缺陷创建时间升序排列
+        }
+
+        # 分页请求循环，直到获取全部数据
+        while True:
+            # ==================================================================
+            # 阶段4：发送API请求
+            # ==================================================================
+            # 使用封装的fetch_data方法发送POST请求
+            # 该方法已内置网络错误重试和会话管理功能
+            response = fetch_data(
+                url=f"{HOST}/api/search_filter/search_filter/search",
+                json=base_request_data,
+                method="POST"
+            )
+
+            try:
+                # ==================================================================
+                # 阶段5：响应数据处理
+                # ==================================================================
+                # 将响应内容解析为JSON格式（可能抛出JSONDecodeError）
+                response_data: Dict[str, Any] = response.json()
+
+                # 数据完整性校验：检查顶层data字段
+                if "data" not in response_data:
+                    raise KeyError("API响应缺少核心数据域'data'字段")
+
+                # ==================================================================
+                # 阶段6：元数据提取（仅在首次请求时执行）
+                # ==================================================================
+                if not self.bugPlatforms or not self.bugSources:
+                    # 验证项目特殊字段结构
+                    project_fields = response_data["data"].get("project_special_fields")
+
+                    if project_fields:
+                        if not isinstance(project_fields, dict):
+                            raise ValueError("'project_special_fields'字段类型异常，预期字典类型")
+
+                        # 获取当前项目的分类配置数据
+                        project_config = project_fields.get(PROJECT_ID, {})
+
+                        # 提取平台分类选项（防御性字段检查）
+                        if "platform" in project_config and not self.bugPlatforms:
+                            self.bugPlatforms = [
+                                str(item["value"])  # 强制类型转换为字符串
+                                for item in project_config["platform"]
+                                if "value" in item
+                            ]
+
+                        # 提取根源分类选项（防御性字段检查）
+                        if "source" in project_config and not self.bugSources:
+                            self.bugSources = [
+                                str(item["value"])  # 强制类型转换为字符串
+                                for item in project_config["source"]
+                                if "value" in item
+                            ]
+
+                # ==================================================================
+                # 阶段7：缺陷数据处理
+                # ==================================================================
+                # 校验列表数据字段存在性
+                if "list" not in response_data["data"]:
+                    raise KeyError("响应数据缺失缺陷列表字段'list'")
+
+                current_page_bugs = response_data["data"]["list"]
+
+                # 数据类型二次校验（防御性编程）
+                if not isinstance(current_page_bugs, list):
+                    raise TypeError(
+                        f"缺陷数据格式异常，预期列表类型，实际类型：{type(current_page_bugs)}"
+                    )
+
+                # 合并分页数据到总集合
+                self.bugs.extend(current_page_bugs)
+
+                # ==================================================================
+                # 阶段8：分页终止判断
+                # ==================================================================
+                # 当前页数据量小于请求量时终止循环（最后一页）
+                if len(current_page_bugs) < page_size:
+                    break
+
+                # 更新分页参数准备下次请求
+                base_request_data["page"] += 1
+                current_page = base_request_data["page"]
+
+            except requests.JSONDecodeError as decode_err:
+                # 捕获JSON解析异常并附加原始响应内容
+                raw_content = response.text[:200] + "..." if response.text else "空响应内容"
+                raise ValueError(
+                    f"响应内容解析失败，原始内容：{raw_content}"
+                ) from decode_err
+
+    def get_all_list_data(self):  # 需二次优化
+        sub_demand_task_error: Dict[str, List[str]] = {}
+        bug_error: Dict[str, List[str]] = {}
+        is_exist_test_task: bool = False
+
+        print(' 前置准备 '.center(LINE_LENGTH, '='))
+
+        self.edit_list_config()
+
+        print('正在获取数据', end='')
+
+        for i in range(3):
+            time.sleep(1)
+            print('.', end='')
+
+        self.get_requirement_tasks()
+        self.get_bug_list()
+
+        print('完成')
+
+        self.restore_list_config()
+
+        print('正在进行数据校验', end='')
+
+        for i in range(3):
+            time.sleep(1)
+            print('.', end='')
+
+        if not self.subDemandTasks:
+            self._print_error("失败\n警告：未获取任何子任务数据，请检查需求任务")
+
+        for subDemandTask in self.subDemandTasks:
+            owner = subDemandTask['owner']
+            if subDemandTask['status'] != 'done':
+                if 'undone' not in sub_demand_task_error:
+                    sub_demand_task_error['undone'] = ['需求存在未完成的子任务：\n']
+                sub_demand_task_error['undone'].append(
+                    f"任务名称：{subDemandTask['name']}{f'，处理人：{owner}' if owner else ''}\n"
+                )
+                continue
+
+            check_sub_demand_task_key_result = list(msg for key, msg in {
+                'begin': '预计开始日期',
+                'due': '预计结束日期',
+                'owner': '处理人',
+            }.items() if not subDemandTask.get(key))
+
+            if check_sub_demand_task_key_result:
+                if 'lackValue' not in sub_demand_task_error:
+                    sub_demand_task_error['lackValue'] = ['警告：需求存在关键字段缺失：\n']
+                sub_demand_task_error['lackValue'].append(
+                    f"任务名称：{subDemandTask['name']}，关键字段缺少值：{'、'.join(check_sub_demand_task_key_result)}\n"
+                )
+
+            if owner and owner.replace(DEPARTMENT, '').replace(';', '') in TESTERS and not is_exist_test_task:
+                is_exist_test_task = True
+
+        if not is_exist_test_task:
+            sub_demand_task_error['nonExistentTestTask'] = ['警告：需求不存在测试任务，请完善需求任务！\n']
+
+        for bug in self.bugs:
+            check_bug_key_result = list(msg for key, msg in {
+                'platform': '软件平台',
+            }.items() if not bug.get(key))
+
+            if check_bug_key_result:
+                if 'lackValue' not in bug_error:
+                    bug_error['lackValue'] = ['警告：BUG存在关键字段缺失：\n']
+                bug_error['lackValue'].append(
+                    f"BUG名称：{bug['name']}，关键字段缺少值：{'、'.join(check_bug_key_result)}\n"
+                )
+
+        if sub_demand_task_error or bug_error:
+            error_texts: List[str] = []
+            if sub_demand_task_error.get('nonExistentTestTask'):
+                error_texts.append(sub_demand_task_error['nonExistentTestTask'][0])
+
+            if sub_demand_task_error.get('undone') and len(sub_demand_task_error['undone']) > 1:
+                error_texts.append('    '.join(sub_demand_task_error["undone"]))
+
+            if sub_demand_task_error.get('lackValue') and len(sub_demand_task_error['lackValue']) > 1:
+                error_texts.append('    '.join(sub_demand_task_error["lackValue"]))
+
+            if bug_error.get('lackValue') and len(bug_error['lackValue']) > 1:
+                error_texts.append('    '.join(bug_error["lackValue"]))
+
+            self._print_error('失败\n' + ''.join(error_texts))
+
+        print('通过')
+
+    def question_stage(self):  # 需要二次优化
+        if not self.bugs:
+            return
+        online_clients: List[str] = []
+        error_numbers: List[str] = []
+        print(' 提问阶段 '.center(LINE_LENGTH, '='))
+        is_multi_client_online: str = _input(
+            '问题1: 是否存在不同客户端分开上线的任务或者是否需要手动输入上线日期?(y/n): ',
+            input_type=str,
+            allow_contents=['y', 'n']
+        ).lower()
+        if is_multi_client_online == 'n':
+            return
+        self.isInputOnlineDate = True
+        question_client_select_text = '问题2: 涉及上线的客户端有哪些?\n'
+        for client in CLIENTS:
+            question_client_select_text += f"{CLIENTS.index(client) + 1}. {client}\n"
+        while True:
+            client_number_str: str = _input(
+                question_client_select_text + '输入序号并使用英文逗号隔开: ',
+                input_type=str
+            ).replace(' ', '')
+            for client_number in client_number_str.split(','):
+                if client_number:
+                    if not client_number.isdigit():
+                        online_clients.clear()
+                        break
+                    if len(CLIENTS) < int(client_number) or int(client_number) < 1:
+                        error_numbers.append(client_number)
+                    else:
+                        online_clients.append(CLIENTS[int(client_number) - 1])
+            if error_numbers:
+                print(_print_text_font(f'输入错误, 请重新输入, 错误序号: {", ".join(error_numbers)}'))
+                online_clients.clear()
+                error_numbers.clear()
+            elif not online_clients:
+                online_clients.clear()
+                print(_print_text_font('输入错误, 请重新输入'))
+            else:
+                error_clients = self._check_bug_client(online_clients)
+                if error_clients:
+                    online_clients.clear()
+                    print(_print_text_font(f'BUG中存在未选择的客户端({"、".join(error_clients)})，请检查BUG单后重新选择'))
+                else:
+                    break
+        question_number = 2
+        for onlineClient in online_clients:
+            question_number += 1
+            client_online_date: str = _input(
+                f'问题{question_number}: 客户端{onlineClient}上线时间?(格式：2023-07-01): ',
+                input_type=str,
+                re_format=r'\d{4}-\d{1,2}-\d{1,2}',
+                re_prompts_format='YYYY-MM-DD',
+                is_delete_space=True,
+            )
+            self.onlineDateDict[onlineClient] = date_time_to_date(client_online_date)
+
+    def requirement_task_statistics(self):  # 需要二次优化
         """
         统计需求关联的子任务数据，计算开发工时并识别关键时间节点
 
@@ -3696,34 +3879,13 @@ class SoftwareQualityRating:
         """
 
         # ==================================================================
-        # 阶段1：数据准备
-        # ==================================================================
-        # 未完成的任务列表
-        unfinished_tasks: list = []
-        # 获取子任务数据（已处理分页逻辑）
-        requirement_tasks = get_requirement_tasks()
-        if not requirement_tasks:
-            print("警告：未获取到任何子任务数据")
-            return
-
-        # ==================================================================
         # 阶段2：遍历处理每个子任务
         # ==================================================================
-        for child in requirement_tasks:
+        for child in self.subDemandTasks:
             try:
-                # 数据校验：确保必需字段存在
-                if not all(key in child for key in ('owner', 'begin', 'due', 'effort_completed', 'status', 'name')):
-                    print(f"无效任务数据，缺失关键字段：{child.get('id', '未知ID')}")
-                    continue
-
                 # 数据清洗：去除部门前缀
                 raw_owner = child['owner'].replace(";", "")  # 获取任务处理人名称(T5张三)
                 processing_personnel = extract_matching(rf"{DEPARTMENT}(.*?)$", raw_owner)[0]  # 去除部门前缀(张三)
-
-                # 数据校验：确保任务已完成
-                if child['status'] != 'done':
-                    unfinished_tasks.append(f"任务名称: {child['name']}; 处理人: {processing_personnel}")
-                    continue
 
                 # 提取实际完成工时、开始日期、结束日期
                 effort_completed = float(child.get('effort_completed', 0))  # 实际完成工时
@@ -3756,23 +3918,13 @@ class SoftwareQualityRating:
         # ==================================================================
         # 阶段4：后期校验
         # ==================================================================
-        # 检查测试任务是否存在
-        if not self.isExistTestTask:
-            self._print_error(f'警告：没有测试任务, 请检查"{self.requirementName}"需求是否有测试任务')
-        if unfinished_tasks:
-            count = 0
-            unfinished_tasks_str: str = ''
-            for unfinishedTask in unfinished_tasks:
-                count += 1
-                unfinished_tasks_str += f"\n{count}. {unfinishedTask}"
-            self._print_error(f"警告：存在未完成任务, 请及时处理:{unfinished_tasks_str}")
         if not self.earliestTaskDate:
             self._print_error(
                 f"警告：未识别到最早任务日期，请检查{self.requirementName}需求的最早一个开发任务的预期开始时间是否正常")
         if not self.lastTaskDate:
             self._print_error(
                 f"警告：未识别到最晚任务日期，请检查{self.requirementName}需求的最后一个测试任务的预期结束时间是否正常")
-        if not self.onlineDate:
+        if not self.onlineDate and not self.isInputOnlineDate:
             self._print_error(
                 f"警告：未识别到上线日期，请检查{self.requirementName}需求的最后一个测试任务的预期开始时间是否正常")
 
@@ -3819,10 +3971,8 @@ class SoftwareQualityRating:
         # ==================================================================
 
         # 生成分隔线：使用LINE_LENGTH常量控制横线长度
-        print('-' * LINE_LENGTH)
-
-        # 输出需求标题行：包含需求ID和需求名称
-        print(f"需求 {REQUIREMENT_ID}: {self.requirementName} 各开发人员花费的工时：")
+        print(' 统计工时和缺陷 '.center(LINE_LENGTH, '='))
+        print(' 各开发人员花费的工时 '.center(LINE_LENGTH, '-'))
 
         # ==================================================================
         # 阶段3：明细数据遍历输出
@@ -3840,7 +3990,7 @@ class SoftwareQualityRating:
         # 输出工时总计：显示计算得到的总工时
         print(f"工时合计：{self.devTotalHours} 小时")
 
-    def bug_list_detail(self) -> None:
+    def bug_list_detail(self) -> None:  # 需求二次优化
         """
         获取指定需求关联的缺陷列表并执行多维度统计分析
 
@@ -3868,27 +4018,20 @@ class SoftwareQualityRating:
         # 阶段1：数据获取与初始化
         # ==================================================================
 
-        # 调用API接口获取缺陷基础数据（分页逻辑封装在get_bug_list中）
-        # 返回三元组：平台列表、根源分类列表、缺陷数据字典列表
-        platforms, sources, bugs = get_bug_list(self.requirementName)
-        platforms: list[str]
-        sources: list[str]
-        bugs: list[dict]
-
         # 输出数据分割线（控制台可视化）
-        print('-' * LINE_LENGTH)
+        print(' 不同等级的缺陷的数量 '.center(LINE_LENGTH, '-'))
 
         # ==================================================================
         # 阶段2：缺陷数据遍历处理
         # ==================================================================
 
         # 处理空数据场景（防御性编程）
-        if not bugs:
+        if not self.bugs:
             print('未获取到有效缺陷数据')
             return
 
         # 遍历原始缺陷记录（每个缺陷为字典结构）
-        for bug in bugs:
+        for bug in self.bugs:
             # ==================================================================
             # 阶段2.1：基础字段提取与清洗
             # ==================================================================
@@ -3940,7 +4083,7 @@ class SoftwareQualityRating:
                 multi_client_data_processing(
                     result=self.bugSourceMultiClientCount,
                     key=bug_platform,
-                    all_sub_keys=sources,
+                    all_sub_keys=self.bugSources,
                     sub_key=bug_source
                 )
 
@@ -3963,6 +4106,7 @@ class SoftwareQualityRating:
                     # 上线未修复缺陷检测
                     self._statistics_deploy_prod_day_unrepaired_bug(
                         bug_status=bug_status,
+                        bug_platform=bug_platform,
                         bug_id=bug_id,
                         severity_name=severity_name,
                         resolved_date=resolved_date
@@ -4089,9 +4233,6 @@ class SoftwareQualityRating:
         except ValueError as e:
             # 输入验证异常处理
             self._print_error(f"警告：输入数据异常：{str(e)}")
-        except KeyboardInterrupt:
-            # 用户中断处理
-            self._print_error("警告：用户主动终止评分流程")
         except Exception as e:
             # 通用异常处理
             self._print_error(f"警告：评分系统错误：{str(e)}")
@@ -4342,10 +4483,6 @@ class SoftwareQualityRating:
         if IS_CREATE_REPORT:
             # 执行报告提交请求
             fetch_data(url=url, params=params, data=data, method='POST')
-        else:
-            # 调试模式下打印请求数据结构
-            print('\n请求测试报告data:')
-            print(json.dumps(data, indent=4, ensure_ascii=False))
 
     def create_chart(self) -> None:
         """
@@ -5117,7 +5254,7 @@ class SoftwareQualityRating:
         else:
             self._print_error(f"存在{developer}任务的预计开始时间和预计结束时间错误，begin={begin}，due={due}")
 
-    def _process_tester_task(self, due_date: datetime.date, begin_date: datetime.date, owner: str):
+    def _process_tester_task(self, due_date: datetime.date, begin_date: datetime.date, owner: str):  # 需要二次优化
         """
         处理测试任务的核心业务逻辑
 
@@ -5145,13 +5282,6 @@ class SoftwareQualityRating:
             4. 收件人列表维护
         """
         # ==================================================================
-        # 阶段1：测试任务存在性标记
-        # ==================================================================
-        # 当首次发现测试任务时更新状态标识
-        if not self.isExistTestTask:
-            self.isExistTestTask = True  # 设置测试任务存在标志
-
-        # ==================================================================
         # 阶段2：时间范围更新
         # ==================================================================
         # 调用内部方法更新项目时间跨度记录
@@ -5166,7 +5296,7 @@ class SoftwareQualityRating:
         # 当测试开始日期存在且满足以下条件之一时更新上线日期：
         # a. 当前未设置上线日期
         # b. 新开始日期晚于现有上线日期
-        if begin_date is not None:
+        if begin_date is not None and not self.isInputOnlineDate:
             if (self.onlineDate is None) or (begin_date > self.onlineDate):
                 self.onlineDate = begin_date  # 更新上线日期为最晚测试开始日期
 
@@ -5227,10 +5357,11 @@ class SoftwareQualityRating:
     def _statistics_deploy_prod_day_unrepaired_bug(
             self,
             bug_status: str,
+            bug_platform: str,
             bug_id: str,
             severity_name: str,
             resolved_date: str = None
-    ) -> None:
+    ) -> None:  # 需要二次优化
         """
         统计上线生产环境当天仍未修复的缺陷，并按严重等级分类存储
 
@@ -5261,9 +5392,13 @@ class SoftwareQualityRating:
         # ==================================================================
         # 当缺陷已关闭且存在解决日期时，检查是否在上线前已解决
         if bug_status == 'closed' and resolved_date:
-            # 解决日期早于上线日期则标记为已修复缺陷
-            if resolved_date < self.onlineDate:
-                is_deploy_prod_day_unrepaired_bug = False  # type: bool
+            if self.isInputOnlineDate:
+                if resolved_date < self.onlineDateDict[bug_platform]:
+                    is_deploy_prod_day_unrepaired_bug = False
+            else:
+                # 解决日期早于上线日期则标记为已修复缺陷
+                if resolved_date < self.onlineDate:
+                    is_deploy_prod_day_unrepaired_bug = False  # type: bool
 
         # ==================================================================
         # 阶段2：按严重等级分类存储缺陷ID
@@ -5338,6 +5473,13 @@ class SoftwareQualityRating:
         elif is_on_that_day_unrepaired_bug and severity_name not in BUG_LEVELS[0:2]:
             # 将缺陷ID添加到P2分类列表
             self.unrepairedBugs['onThatDayUnrepaired']['P2'].append(bug_id)  # list[str] 类型维护
+
+    def _check_bug_client(self, online_clients: List[str]):  # 需要二次优化
+        error_clients: List[str] = []
+        for bug in self.bugs:
+            if bug['platform'] not in online_clients and bug['platform'] not in error_clients:
+                error_clients.append(bug['platform'])
+        return error_clients
 
     def _add_multi_dimensional_table_html(self, table_data: dict) -> None:
         """
@@ -6198,7 +6340,7 @@ class SoftwareQualityRating:
                 error_msg = f"AI服务调用失败: {str(e)}"
                 raise RuntimeError(error_msg) from e
 
-    def run(self):
+    def run(self):  # 需要二次优化
         """
         执行软件质量评估主流程控制方法
 
@@ -6206,8 +6348,8 @@ class SoftwareQualityRating:
         包含配置管理、数据采集、计算分析、结果输出等阶段，确保各环节数据衔接与异常处理。
 
         实现流程:
-            1. 系统配置初始化
-            2. 需求元数据获取
+            1. 需求元数据获取
+            2. 系统配置初始化
             3. 开发资源消耗分析
             4. 缺陷数据采集与统计
             5. 质量指标计算与评分
@@ -6231,14 +6373,7 @@ class SoftwareQualityRating:
         """
         try:
             # ==================================================================
-            # 阶段1：系统视图配置初始化
-            # ==================================================================
-            # 配置缺陷列表和子任务列表的展示字段，确保后续数据采集完整性
-            # 包含字段状态校验和动态配置更新
-            self.edit_list_config()
-
-            # ==================================================================
-            # 阶段2：需求元数据获取与校验
+            # 阶段1：需求元数据获取与校验
             # ==================================================================
             # 通过TAPD API获取需求基础信息，包含：
             # - 需求名称
@@ -6246,6 +6381,10 @@ class SoftwareQualityRating:
             # - 关联开发团队
             # 执行数据有效性检查，缺失关键信息时中断流程
             self.get_requirement_detail()
+
+            self.get_all_list_data()
+
+            self.question_stage()
 
             # ==================================================================
             # 阶段3：开发资源消耗分析
@@ -6329,6 +6468,9 @@ class SoftwareQualityRating:
             # 数据校验异常处理
             traceback.print_exc()
             raise RuntimeError(f"流程执行失败: {str(ve)}") from ve
+        except KeyboardInterrupt:
+            # 用户中断处理
+            self._print_error("\n警告：用户主动终止评分流程")
         finally:
             try:
                 # ==================================================================
