@@ -3,31 +3,36 @@
 """
 1、考虑不同客户端上线时间分开的问题
 """
-
-# 导入必要的库
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.backends import default_backend
-from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, Optional, TypeVar, List, Union, Tuple
-from io import BytesIO
-from openai import OpenAI, APIConnectionError, APIStatusError, APIError
-from collections import defaultdict
-import matplotlib.pyplot as plt
-import cloudscraper
-import os
+# ==================================================================
+# 导入标准库
+# ==================================================================
 import base64
-import chinese_calendar as calendar
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 import datetime
-import requests
-import sys
-import re
 import functools
-import traceback
-import numpy as np
-import platform
+from io import BytesIO
 import json
 import math
+import os
+import platform
+import re
+import sys
 import time
+import traceback
+from typing import (Any, Dict, List, Optional, Tuple, TypeVar, Union)
+
+# ==================================================================
+# 导入第三方库
+# ==================================================================
+import chinese_calendar as calendar
+import cloudscraper
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+import matplotlib.pyplot as plt
+import numpy as np
+from openai import (APIError, APIConnectionError, APIStatusError, OpenAI)
+import requests
 
 IS_CREATE_REPORT = False  # 是否创建报告
 IS_CREATE_AI_SUMMARY = False  # 是否创建AI总结
@@ -42,7 +47,7 @@ PASSWORD = 'WUchong_1008'  # 密码
 PROJECT_ID = "63835346"  # 项目ID
 # REQUIREMENT_ID = "1163835346001078047"  # 需求ID 无BUG
 REQUIREMENT_ID = "1163835346001071668"  # 需求ID
-# REQUIREMENT_ID = "1163835346001033609"  # 需求ID 中规中矩  TypeError: '<=' not supported between instances of 'str' and 'NoneType'
+# REQUIREMENT_ID = "1163835346001033609"  # 需求ID 中规中矩  警告：没有测试任务, 请检查"【中古屋住宅】競價服務新增按天結算測試（限台中）"需求是否有测试任务
 # REQUIREMENT_ID = "1163835346001051222"  # 需求ID 较差的质量
 # REQUIREMENT_ID = "1163835346001049795"  # 需求ID 较差的质量  开发周期也是很多小数点尾数
 # REQUIREMENT_ID = "1163835346001055792"  # 需求ID 较差的质量
@@ -194,7 +199,7 @@ def create_plot(func):
             func_data: dict = func(*args, **kwargs)
 
             # 验证返回数据结构的完整性
-            required_keys = {'desiredWidthData', 'labels', 'title', 'maxBarHeight', 'ax'}
+            required_keys: set = {'desiredWidthData', 'labels', 'title', 'maxBarHeight', 'ax'}
             if not required_keys.issubset(func_data.keys()):
                 missing = required_keys - func_data.keys()
                 raise ValueError(f"缺失必要的图表配置参数: {missing}")
@@ -204,7 +209,7 @@ def create_plot(func):
             # ==================================================================
 
             # 解包图表配置参数
-            plot_data: dict = func_data['desiredWidthData']  # 图表尺寸等元数据
+            plot_data: dict[str, int or float] = func_data['desiredWidthData']  # 图表尺寸等元数据
             labels: list[str] = func_data['labels']  # 数据系列标签列表
             title: str = func_data['title']  # 图表主标题
             max_bar_height: int = func_data['maxBarHeight']  # 最大柱状高度值
@@ -270,7 +275,7 @@ def create_plot(func):
             # ==================================================================
 
             # 计算合适的Y轴范围及刻度间隔
-            y_intervals = calculation_plot_y_max_height(max_bar_height)
+            y_intervals: tuple[int] = calculation_plot_y_max_height(max_bar_height)
 
             # 设置Y轴刻度位置及标签
             plt.yticks(
@@ -279,7 +284,7 @@ def create_plot(func):
             )
 
             # 设置y轴的最大值
-            max_height = max(y_intervals)
+            max_height: int = max(y_intervals)
 
             # 设置Y轴显示范围（扩展10%的上方空间）
             ax.set_ylim(0, max_height * 1.1)
@@ -364,7 +369,7 @@ def calculate_bug_count_rating(X: float) -> int or None:
     # 定义评分区间与得分的映射关系（按评分从高到低排列）
     # 每个元组格式：(区间下界, 区间上界), 得分
     # 注意：区间为左开右闭，即 lower < X <= upper
-    score_mapping = {
+    score_mapping: dict[tuple[int or float, int or float], int] = {
         (-1, 1): 20,  # 特殊处理负值情况，实际业务中X应为正数
         (1, 1.5): 15,  # 1 < X <= 1.5
         (1.5, 2): 10,  # 1.5 < X <= 2
@@ -374,17 +379,19 @@ def calculate_bug_count_rating(X: float) -> int or None:
 
     # 遍历所有评分区间
     for (lower, upper), score in score_mapping.items():
+        lower: int or float
+        upper: int or float
+        score: int
         # 检查X是否在当前区间内（左开右闭）
         if lower < X <= upper:
             return score
 
     # 若未匹配任何区间（理论上不会执行到这里，因最后一个区间覆盖+∞）
     # 防御性编程：打印警告信息并返回None
-    print("错误：BUG密度值不在预期范围内，请检查输入数据有效性")
-    return None
+    raise "错误：BUG密度值不在预期范围内，请检查输入数据有效性"
 
 
-def calculate_bug_reopen_rating(X):
+def calculate_bug_reopen_rating(X: int) -> int:
     """
     根据缺陷重新打开次数计算软件质量评分
 
@@ -409,7 +416,7 @@ def calculate_bug_reopen_rating(X):
     """
     # 防御性处理：将输入强制转换为整数（处理浮点数输入情况）
     try:
-        X = int(X)
+        X: int = int(X)
     except (ValueError, TypeError):
         raise TypeError("错误：输入值必须为可转换为整数的类型")
 
@@ -420,7 +427,7 @@ def calculate_bug_reopen_rating(X):
         raise ValueError("错误：缺陷重新打开次数不应为负数")
 
     # 定义评分映射字典（key为最大次数阈值，value为对应得分）
-    score_mapping = {
+    score_mapping: dict[int, int] = {
         0: 20,  # 0次重开得满分
         1: 15,  # 1次重开扣5分
         2: 10,  # 2次重开扣10分
@@ -434,7 +441,7 @@ def calculate_bug_reopen_rating(X):
             return score_mapping[threshold]
 
 
-def calculate_bug_repair_rating(unrepaired_bug: dict) -> int or None:
+def calculate_bug_repair_rating(unrepaired_bug: Dict[str, Any]) -> int or None:
     """
     根据未修复缺陷的严重程度计算缺陷修复质量评分
 
@@ -470,8 +477,8 @@ def calculate_bug_repair_rating(unrepaired_bug: dict) -> int or None:
     """
 
     # 解构输入数据，提高可读性
-    prod_day_unrepaired = unrepaired_bug.get('deployProdDayUnrepaired', {})
-    on_that_day_unrepaired = unrepaired_bug.get('onThatDayUnrepaired', {})
+    prod_day_unrepaired: dict[str, list[str]] = unrepaired_bug.get('deployProdDayUnrepaired', {})
+    on_that_day_unrepaired: dict[str, list[str]] = unrepaired_bug.get('onThatDayUnrepaired', {})
 
     # ----------------------------
     # 优先级1：上线当天存在P0/P1未修复
@@ -521,7 +528,7 @@ def calculate_bug_repair_rating(unrepaired_bug: dict) -> int or None:
     return None  # 防御性返回
 
 
-def _input(text: str, input_type: type = None, allow_content: list = None) -> any:
+def _input(text: str, input_type: type = None, allow_content: List[Any] = None) -> Any:
     """
     从用户获取输入并进行类型及有效性验证
 
@@ -551,7 +558,7 @@ def _input(text: str, input_type: type = None, allow_content: list = None) -> an
     while True:
         try:
             # 显示提示信息并获取原始输入
-            raw_input = input(text)  # 调用内置input函数获取用户输入
+            raw_input: str = input(text)  # 调用内置input函数获取用户输入
 
             # 类型转换处理
             if input_type:
@@ -675,7 +682,7 @@ def _print_text_font(text: str or int, is_weight: bool = False, color: str = 're
     return formatted_text
 
 
-def get_session_id():
+def get_session_id() -> None:
     """
     用户登录认证并获取有效会话ID
 
@@ -891,7 +898,7 @@ def get_workitem_status_transfer_history(entity_type: str, entity_id: str) -> li
         ) from orig_err
 
 
-def get_requirement_list_config() -> list:
+def get_requirement_list_config() -> List[str]:
     """
     获取TAPD需求列表视图的列字段配置信息
 
@@ -1006,7 +1013,7 @@ def edit_requirement_list_config(custom_fields: str) -> bool:
         raise ValueError(error_msg) from json_err
 
 
-def get_query_filtering_list_config() -> list:
+def get_query_filtering_list_config() -> List[str]:
     """
     获取TAPD查询过滤列表的字段展示配置
 
@@ -1152,7 +1159,7 @@ def edit_query_filtering_list_config(custom_fields: str) -> bool:
         raise KeyError(f"响应数据缺失关键字段: {str(key_err)}") from key_err
 
 
-def get_user_detail() -> dict:
+def get_user_detail() -> Dict[str, Any]:
     """
     获取当前用户的详细信息
 
@@ -1228,245 +1235,307 @@ def get_user_detail() -> dict:
 
 def get_requirement_tasks() -> List[Dict[str, Any]]:
     """
-    获取指定需求的所有子任务信息
+    递归获取指定需求的所有子任务信息，支持分页查询
 
-    通过TAPD官方API接口，递归获取指定需求的所有子任务信息，包括任务的基本信息、处理人、预计开始和结束时间、完成工时等。
-    该方法支持分页查询，确保获取所有相关子任务数据。
+    通过TAPD官方API接口，获取指定需求下的全量子任务数据，包括但不限于：
+    - 任务基础属性（ID、标题、状态）
+    - 时间信息（预计开始、截止时间）
+    - 工作量信息（完成工时）
+    - 责任人信息
 
     返回:
-        list: 包含所有子任务信息的列表，每个子任务为一个字典结构。
-              示例: [
-                  {
-                      "owner": "T5张三",  # 任务处理人
-                      "begin": "2025-03-01",  # 预计开始时间
-                      "due": "2025-03-05",  # 预计结束时间
-                      "effort_completed": 10.5,  # 完成工时
-                      ...
-                  },
-                  ...
-              ]
-              若接口无数据或请求失败，返回空列表
+        List[Dict[str, Any]]: 结构化子任务数据列表，每个元素为包含子任务详细信息的字典
+        示例结构:
+        [
+            {
+                "id": "1001",
+                "name": "接口开发任务",
+                "status": "in_progress",
+                "owner": "T5_张三",
+                "begin": "2025-03-01",
+                "due": "2025-03-05",
+                "effort_completed": 8.5,
+                ...
+            },
+            ...
+        ]
+        若接口无数据或请求失败，返回空列表
 
     异常:
-        requests.JSONDecodeError: 响应数据解析json异常时抛出
-        ValueError: 响应数据解析异常时抛出
-        KeyError: 响应数据结构缺失关键字段时抛出
+        requests.JSONDecodeError: 响应数据不符合JSON格式时抛出
+        ValueError: 数据解析失败或关键字段缺失时抛出
+        KeyError: 响应数据结构不符合预期时抛出
 
-    实现逻辑:
-        1. 构造API请求URL和查询参数
-        2. 分页获取子任务数据
-        3. 校验数据完整性
-        4. 提取核心业务数据并返回
+    实现流程:
+        1. 初始化分页参数和存储结构
+        2. 构建符合TAPD API规范的请求参数
+        3. 分页获取数据并进行完整性校验
+        4. 合并多页数据并返回统一结果集
     """
 
-    # 初始化页码和每页大小
-    page: int = 1
-    page_size: int = 100
+    # ==================================================================
+    # 阶段1：初始化分页参数
+    # ==================================================================
+    current_page: int = 1  # 当前请求页码，从第一页开始
+    records_per_page: int = 100  # 每页请求数据量，TAPD API最大支持100条/页
+    accumulated_tasks: List[Dict] = []  # 累积所有分页的任务数据
 
-    # 初始化存储子任务数据的列表
-    requirement_tasks: list = []
+    # ==================================================================
+    # 阶段2：构建API请求基础参数
+    # ==================================================================
+    # 拼接完整的API端点URL（HOST为全局配置的TAPD域名）
+    api_endpoint: str = f"{HOST}/api/entity/stories/get_children_stories"
 
-    # 拼接完整API端点URL（HOST取自全局常量）
-    api_path = "/api/entity/stories/get_children_stories"
-    url = f"{HOST}{api_path}"  # 示例：https://www.tapd.cn/api/entity/...
-
-    # 构造查询参数：
-    # - workspace_id : 项目空间ID（取自全局PROJECT_ID）
-    # - story_id : 需求ID（取自全局REQUIREMENT_ID）
-    # - page : 当前页码
-    # - per_page : 每页数据量
-    # - sort_name : 排序字段（按预计结束时间排序）
-    # - order : 排序顺序（升序）
-    params = {
+    # 构造符合TAPD API规范的查询参数
+    # - workspace_id: 项目空间唯一标识（从全局配置获取）
+    # - story_id: 目标需求唯一标识（从全局配置获取）
+    # - 分页参数(page/per_page)和排序参数(sort_name/order)
+    base_params: Dict[str, Union[str, int]] = {
         "workspace_id": PROJECT_ID,
         "story_id": REQUIREMENT_ID,
-        "page": page,
-        "per_page": page_size,
-        "sort_name": "due",
-        "order": "asc",
+        "page": current_page,
+        "per_page": records_per_page,
+        "sort_name": "due",  # 按截止时间字段排序
+        "order": "asc"  # 升序排列(从最早到期到最晚到期)
     }
 
-    # 循环分页获取所有子任务数据
+    # ==================================================================
+    # 阶段3：分页请求循环
+    # ==================================================================
     while True:
-        # 通过封装后的fetch_data方法发送GET请求
-        # 该方法已内置重试机制和Cookie管理
-        response = fetch_data(
-            url=url,
-            params=params,
+        # 发送API请求（使用封装的fetch_data方法处理重试和认证）
+        # fetch_data已内置异常处理和会话管理功能
+        api_response: requests.Response = fetch_data(
+            url=api_endpoint,
+            params=base_params,
             method="GET"
         )
 
         try:
-            # 将响应内容解析为JSON格式
-            # 可能抛出JSONDecodeError（继承自ValueError）
-            response_json = response.json()
+            # ==================================================================
+            # 阶段4：响应数据解析与校验
+            # ==================================================================
+            # 将响应内容解析为JSON格式（可能抛出JSONDecodeError）
+            response_data: Dict = api_response.json()
 
-            # 数据完整性校验：
-            # 检查顶层data字段是否存在（TAPD标准响应结构）
-            if "data" not in response_json:
-                raise KeyError("API响应缺少'data'字段")
+            # 校验顶层数据结构（TAPD标准响应结构）
+            if "data" not in response_data:
+                raise KeyError("API响应缺少核心数据域'data'字段")
 
-            # 检查children_list字段是否存在
-            if "children_list" not in response_json['data']:
-                raise KeyError("响应数据缺少children_list字段")
+            # 校验子任务列表字段存在性
+            task_list_key: str = "children_list"
+            if task_list_key not in response_data["data"]:
+                raise KeyError(f"响应数据缺失关键字段'{task_list_key}'")
 
-            # 提取业务数据主体
-            requirement_datas: list = response_json["data"]['children_list']
-
-            # 检查数据类型是否为列表
-            if not isinstance(requirement_datas, list):
-                raise ValueError(
-                    f"预期列表类型状态数据，实际获取类型：{type(requirement_datas)}"
+            # 提取当前页任务数据并进行类型校验
+            current_page_tasks: List[Dict] = response_data["data"][task_list_key]
+            if not isinstance(current_page_tasks, list):
+                raise TypeError(
+                    f"子任务数据格式异常，预期列表类型，实际类型：{type(current_page_tasks)}"
                 )
 
-            # 如果当前页数据为空，则退出循环
-            if not requirement_datas:
-                break
+            # ==================================================================
+            # 阶段5：数据累积与分页控制
+            # ==================================================================
+            # 合并当前页数据到总集合
+            accumulated_tasks.extend(current_page_tasks)
 
-            # 将当前页数据添加到总列表中
-            requirement_tasks.extend(requirement_datas)
+            # 判断分页终止条件：
+            # 1. 当前页数据量小于每页请求量（说明是最后一页）
+            # 2. 当前页数据量为零（异常情况保护）
+            if len(current_page_tasks) < records_per_page or not current_page_tasks:
+                return accumulated_tasks
 
-            # 如果当前页数据量小于每页大小，说明已获取所有数据，退出循环
-            if len(requirement_datas) < page_size:
-                return requirement_tasks
-            else:
-                # 否则，增加页码，继续获取下一页数据
-                params['page'] += 1
+            # 更新分页参数准备下次请求
+            base_params["page"] += 1  # 页码递增
+            current_page = base_params["page"]  # 保持当前页码状态同步
 
-        except requests.JSONDecodeError as json_err:
-            # 捕获JSON解析异常并附加上下文信息
-            error_msg = f"响应内容非JSON格式，原始内容：{response.text[:200]}..."
-            raise ValueError(error_msg) from json_err
+        except requests.JSONDecodeError as decode_err:
+            # 捕获JSON解析异常并附加调试信息
+            raw_content: str = api_response.text[:200] + "..." if api_response.text else "空响应内容"
+            error_msg: str = f"响应内容解析失败，原始内容：{raw_content}"
+            raise ValueError(error_msg) from decode_err
+
         except KeyError as key_err:
             # 细化键缺失异常信息
-            raise KeyError(f"响应数据缺失关键字段：{str(key_err)}") from key_err
+            raise KeyError(f"数据结构异常，缺失关键字段：{str(key_err)}") from key_err
 
 
 def get_bug_list(requirement_name: str) -> Tuple[List[str], List[str], List[Dict[str, Any]]]:
     """
-    获取指定需求关联的缺陷列表及其分类信息
+    获取指定需求关联的缺陷列表及其分类元数据
 
-    通过TAPD搜索接口分页获取指定需求的所有缺陷数据，同时提取平台和根源的分类选项信息。
-    支持分页请求和动态字段配置，确保获取完整的缺陷数据集。
+    本方法通过TAPD搜索接口分页获取指定需求的所有缺陷数据，同时提取平台和根源的分类选项信息。
+    支持动态字段配置验证和分页请求控制，确保获取完整的缺陷数据集。
+
+    执行流程：
+    1. 初始化分页参数和存储结构
+    2. 构建符合TAPD接口规范的动态搜索条件
+    3. 分页发送API请求并验证响应数据结构
+    4. 提取平台和根源分类的元数据选项
+    5. 合并分页数据并进行完整性校验
+    6. 返回标准化结果集
 
     参数:
-        requirement_name (str): 需求名称，用于构建缺陷搜索条件
+        requirement_name (str): 需求名称，用于构建缺陷搜索条件，需确保与TAPD系统内名称完全匹配
+                                示例："用户登录功能优化"
 
     返回:
         Tuple[List[str], List[str], List[Dict]]: 包含三个元素的元组：
-            - 平台分类选项列表
-            - 根源分类选项列表
-            - 缺陷数据字典列表
+            - platforms (List[str]): 平台分类选项列表，按TAPD系统配置顺序排列
+                                     示例：["iOS", "Android", "Web"]
+            - root_causes (List[str]): 缺陷根源分类选项列表，按TAPD系统配置顺序排列
+                                       示例：["代码错误", "需求变更", "环境配置"]
+            - bugs (List[Dict]): 缺陷数据字典列表，每个字典对应一个缺陷的完整字段数据
+                                 示例：[{"id": "BUG001", "title": "登录按钮无响应", ...}, ...]
 
     异常:
         ValueError: 当响应数据格式异常或关键字段缺失时抛出
         KeyError: 当接口返回数据结构不符合预期时抛出
+        requests.JSONDecodeError: 当响应内容无法解析为JSON格式时抛出
 
-    实现逻辑:
-        1. 初始化分页参数和存储结构
-        2. 构建动态查询条件并发送搜索请求
-        3. 提取平台和根源的分类元数据
-        4. 处理分页数据并合并结果集
-        5. 校验数据结构完整性并返回标准化结果
+    关联方法:
+        fetch_data(): 执行API请求的核心方法，处理网络通信和基础错误重试
     """
-    # 初始化页码和每页大小
-    page: int = 1  # 当前请求页码
-    page_size: int = 100  # 每页数据量上限
-    bugs: List[Dict] = []  # 存储缺陷数据的列表
-    platforms: List[str] = []  # 存储平台分类选项
-    sources: List[str] = []  # 存储根源分类选项
+    # ==================================================================
+    # 阶段1：初始化分页参数
+    # ==================================================================
+    current_page: int = 1  # 当前请求页码，从第一页开始
+    page_size: int = 100  # 每页请求数据量，使用TAPD API允许的最大值
+    accumulated_bugs: List[Dict] = []  # 累积所有分页的缺陷数据
+    platforms: List[str] = []  # 平台分类选项存储列表
+    root_causes: List[str] = []  # 根源分类选项存储列表
 
-    # 构建API端点路径
-    api_path = "/api/search_filter/search_filter/search"
-    url = f"{HOST}{api_path}"  # 完整接口地址
-
-    # 构造动态查询条件（JSON格式）
+    # ==================================================================
+    # 阶段2：构建动态搜索条件
+    # ==================================================================
+    # 构造符合TAPD搜索接口规范的JSON查询条件
+    # 关键字段说明：
+    # - fieldSystemName: 指定搜索的字段为"关联需求"
+    # - value: 使用输入的需求名称作为搜索值
+    # - optionType: 使用逻辑与(AND)组合多个查询条件
     search_condition = json.dumps({
         "data": [{
-            "id": "5",
-            "fieldLabel": "关联需求",
-            "fieldOption": "like",
-            "fieldType": "input",
-            "fieldSystemName": "BugStoryRelation_relative_id",
-            "value": requirement_name,
-            "fieldIsSystem": "1",
-            "entity": "bug"
+            "id": "5",  # 条件ID，TAPD系统保留字段
+            "fieldLabel": "关联需求",  # 界面显示的字段标签
+            "fieldOption": "like",  # 使用模糊匹配操作符
+            "fieldType": "input",  # 字段类型为文本输入
+            "fieldSystemName": "BugStoryRelation_relative_id",  # 系统内部字段标识
+            "value": requirement_name,  # 搜索的目标需求名称
+            "fieldIsSystem": "1",  # 标记为系统内置字段
+            "entity": "bug"  # 查询实体类型为缺陷
         }],
-        "optionType": "AND",
-        "needInit": "1"
+        "optionType": "AND",  # 条件组合方式
+        "needInit": "1"  # 需要初始化搜索条件标志
     })
 
-    # 初始化请求参数模板
-    request_data = {
-        "workspace_ids": PROJECT_ID,  # 项目空间ID
+    # ==================================================================
+    # 阶段3：分页请求控制
+    # ==================================================================
+    # 构造基础请求参数模板，分页参数将在循环中动态更新
+    base_request_data = {
+        "workspace_ids": PROJECT_ID,  # 项目空间唯一标识
         "search_data": search_condition,  # 序列化的搜索条件
         "obj_type": "bug",  # 查询对象类型为缺陷
         "hide_not_match_condition_node": "0",  # 显示不匹配条件节点
         "hide_not_match_condition_sub_node": "1",  # 隐藏不匹配子节点
-        "page": page,  # 当前页码
-        "perpage": str(page_size),  # 每页数据量（字符串类型）
-        "order_field": "created",  # 按创建时间排序
+        "page": current_page,  # 当前页码参数
+        "perpage": str(page_size),  # 每页数据量参数（字符串类型）
+        "order_field": "created",  # 按缺陷创建时间升序排列
     }
 
-    # 分页请求循环
+    # 分页请求循环，直到获取全部数据
     while True:
-        # 发送POST请求获取缺陷数据
+        # ==================================================================
+        # 阶段4：发送API请求
+        # ==================================================================
+        # 使用封装的fetch_data方法发送POST请求
+        # 该方法已内置网络错误重试和会话管理功能
         response = fetch_data(
-            url=url,
-            json=request_data,
+            url=f"{HOST}/api/search_filter/search_filter/search",
+            json=base_request_data,
             method="POST"
         )
 
         try:
-            # 解析响应数据为JSON格式
-            response_json = response.json()
+            # ==================================================================
+            # 阶段5：响应数据处理
+            # ==================================================================
+            # 将响应内容解析为JSON格式（可能抛出JSONDecodeError）
+            response_data: Dict[str, Any] = response.json()
 
             # 数据完整性校验：检查顶层data字段
-            if "data" not in response_json:
-                raise KeyError("API响应缺少'data'字段")
+            if "data" not in response_data:
+                raise KeyError("API响应缺少核心数据域'data'字段")
 
-            # 首次请求时提取分类元数据
-            if not platforms or not sources:
-                # 校验项目特殊字段结构
-                if "project_special_fields" not in response_json["data"]:
-                    raise KeyError("响应数据缺少'project_special_fields'字段")
+            # ==================================================================
+            # 阶段6：元数据提取（仅在首次请求时执行）
+            # ==================================================================
+            if not platforms or not root_causes:
+                # 验证项目特殊字段结构
+                project_fields = response_data["data"].get("project_special_fields", {})
+                if not isinstance(project_fields, dict):
+                    raise ValueError("'project_special_fields'字段类型异常，预期字典类型")
 
-                # 获取当前项目的分类配置
-                project_fields = response_json["data"]["project_special_fields"].get(PROJECT_ID, {})
+                # 获取当前项目的分类配置数据
+                project_config = project_fields.get(PROJECT_ID, {})
 
-                # 提取平台分类选项
-                if not platforms and "platform" in project_fields:
-                    platforms = [item["value"] for item in project_fields["platform"]]
+                # 提取平台分类选项（防御性字段检查）
+                if "platform" in project_config and not platforms:
+                    platforms = [
+                        str(item["value"])  # 强制类型转换为字符串
+                        for item in project_config["platform"]
+                        if "value" in item
+                    ]
 
-                # 提取根源分类选项
-                if not sources and "source" in project_fields:
-                    sources = [item["value"] for item in project_fields["source"]]
+                # 提取根源分类选项（防御性字段检查）
+                if "source" in project_config and not root_causes:
+                    root_causes = [
+                        str(item["value"])  # 强制类型转换为字符串
+                        for item in project_config["source"]
+                        if "value" in item
+                    ]
 
-            # 校验列表数据字段
-            if "list" not in response_json["data"]:
-                raise KeyError("响应数据缺少'list'字段")
+            # ==================================================================
+            # 阶段7：缺陷数据处理
+            # ==================================================================
+            # 校验列表数据字段存在性
+            if "list" not in response_data["data"]:
+                raise KeyError("响应数据缺失缺陷列表字段'list'")
 
-            current_bugs = response_json["data"]["list"]  # 当前页缺陷数据
+            current_page_bugs = response_data["data"]["list"]
 
-            # 数据类型校验
-            if not isinstance(current_bugs, list):
-                raise ValueError(f"缺陷数据格式异常，预期列表类型，实际类型：{type(current_bugs)}")
+            # 数据类型二次校验（防御性编程）
+            if not isinstance(current_page_bugs, list):
+                raise TypeError(
+                    f"缺陷数据格式异常，预期列表类型，实际类型：{type(current_page_bugs)}"
+                )
 
-            # 合并数据到总列表
-            bugs.extend(current_bugs)
+            # 合并分页数据到总集合
+            accumulated_bugs.extend(current_page_bugs)
 
-            # 分页终止条件判断
-            if len(current_bugs) < page_size:
-                return platforms, sources, bugs  # 返回最终结果
+            # ==================================================================
+            # 阶段8：分页终止判断
+            # ==================================================================
+            # 当前页数据量小于请求量时终止循环（最后一页）
+            if len(current_page_bugs) < page_size:
+                break
 
-            # 更新页码参数
-            request_data["page"] += 1
+            # 更新分页参数准备下次请求
+            base_request_data["page"] += 1
+            current_page = base_request_data["page"]
 
-        except requests.JSONDecodeError as e:
-            # 处理JSON解析异常
-            error_detail = f"响应内容非JSON格式，原始内容：{response.text[:200]}..." if hasattr(response,
-                                                                                              'text') else "响应内容为空"
-            raise ValueError(error_detail) from e
+        except requests.JSONDecodeError as decode_err:
+            # 捕获JSON解析异常并附加原始响应内容
+            raw_content = response.text[:200] + "..." if response.text else "空响应内容"
+            raise ValueError(
+                f"响应内容解析失败，原始内容：{raw_content}"
+            ) from decode_err
+
+    # ==================================================================
+    # 阶段9：返回标准化结果
+    # ==================================================================
+    return platforms, root_causes, accumulated_bugs
 
 
 def fetch_data(
@@ -2447,83 +2516,154 @@ def calculate_plot_width(
 @create_plot
 def create_bar_plot(title: str, data: dict) -> dict:
     """
-    严格保持原始功能的柱状图生成方法优化版
+    生成标准化堆叠柱状图，支持多数据系列展示和智能标签布局
 
-    参数与返回值结构完全不变，仅在以下方面优化：
-    1. 增强数据校验
-    2. 优化内存管理
-    3. 改进异常处理
-    4. 增加代码可读性
+    本方法实现完整的堆叠柱状图生成流程，包含数据转换、视觉呈现、交互标签布局等功能。
+    支持多层级数据展示，自动处理颜色分配、标签防重叠、数值标注等可视化细节。
+
+    参数详解:
+        title (str):
+            图表主标题文本，用于描述图表的核心主题
+            示例: "各模块缺陷分布统计"
+            长度建议控制在40字符以内以确保可读性
+
+        data (dict):
+            多层嵌套的输入数据字典，结构要求：
+            {
+                "分类A": {"子类1": 10, "子类2": 20},  # 分类维度1的数据
+                "分类B": {"子类1": 30, "子类3": 40},  # 分类维度2的数据
+                "分类C": 50  # 直接数值将归入默认子类
+            }
+            字典键为字符串类型，值可为数值或嵌套字典
+
+    返回:
+        dict: 包含图表元数据的字典，结构为：
+        {
+            'desiredWidthData': dict,  # 图表尺寸配置数据
+            'labels': list,           # 数据子类标签列表
+            'title': str,             # 传递的标题文本
+            'maxBarHeight': int,      # 最大柱状高度值
+            'ax': plt.Axes            # Matplotlib坐标轴对象
+        }
+
+    异常:
+        ValueError: 当输入数据为空或格式不兼容时抛出
+        RuntimeError: 图表生成过程中发生不可恢复错误时抛出
+
+    实现流程:
+        1. 数据转换与格式化
+        2. 数据完整性校验
+        3. 图表基础框架构建
+        4. 堆叠柱状图绘制
+        5. 交互式标签布局
+        6. 元数据封装返回
     """
     try:
-        # ==================== 保持原始数据转换逻辑 ====================
+        # ==================================================================
+        # 阶段1：数据转换与格式化
+        # ==================================================================
+        # 将嵌套字典结构转换为NumPy数组和标签列表
+        # labels: 子类名称列表，如['子类1','子类2','子类3']
+        # np_data: 二维数组，行代表子类，列代表主分类
         labels, np_data = switch_numpy_data(data)
+
+        # 提取主分类键列表，如['分类A','分类B','分类C']
         keys = list(data.keys())
+
+        # 计算各主分类的总高度，用于顶部标签布局
         total_heights = np.sum(np_data, axis=0)
 
-        # ========== 新增防御性校验（不影响原有逻辑）==========
+        # ==================================================================
+        # 阶段2：数据完整性校验
+        # ==================================================================
+        # 防御空数据校验（主分类维度）
         if not keys:
-            raise ValueError("输入数据不能为空")
-        if np_data.size == 0:
-            raise ValueError("数据转换失败，请检查输入格式")
+            raise ValueError("输入数据字典不能为空")
 
-        # ========== 严格保持原始绘图逻辑 ==========
+        # 防御空数据校验（子类维度）
+        if np_data.size == 0:
+            raise ValueError("数据转换异常，请确认输入结构符合规范")
+
+        # ==================================================================
+        # 阶段3：图表基础框架构建
+        # ==================================================================
+        # 创建Matplotlib图形和坐标轴对象
+        # fig: 整个图形容器对象
+        # ax: 主要绘图区域对象
         fig, ax = plt.subplots()
 
-        # 保持原始宽度计算方式
+        # 计算动态柱宽和图表尺寸参数
+        # desired_bar_width: 单个柱子的宽度（基于分类数量自适应）
+        # plot_data: 包含图表尺寸元数据的字典
         desired_bar_width, plot_data = calculate_plot_width(keys, fig)
 
-        # 严格保持原始堆叠逻辑
+        # ==================================================================
+        # 阶段4：堆叠柱状图绘制
+        # ==================================================================
+        # 初始化堆叠基准线
         bottoms = np.zeros(len(keys))
+
+        # 按子类层级逐层绘制
         for idx in range(np_data.shape[0]):
-            # 保持原始bar参数设置
+            # 绘制当前子类的柱状图序列
             bars = ax.bar(
-                keys,
-                np_data[idx],
-                width=desired_bar_width,  # 关键点：保持原始宽度传递方式
-                bottom=bottoms,
-                color=PLOT_COLORS[idx % len(PLOT_COLORS)],
-                label=labels[idx] if labels else None
+                keys,  # X轴刻度标签
+                np_data[idx],  # 当前子类数据值
+                width=desired_bar_width,  # 动态计算的柱宽
+                bottom=bottoms,  # 当前堆叠基准高度
+                color=PLOT_COLORS[idx % len(PLOT_COLORS)],  # 循环使用预定义颜色
+                label=labels[idx] if labels else None  # 图例标签文本
             )
+
+            # 更新堆叠基准高度为当前层顶部
             bottoms += np_data[idx]
 
-            # 保持原始标签添加逻辑
+            # ==================================================================
+            # 阶段5：交互式标签布局
+            # ==================================================================
+            # 仅当存在多层数据时添加内部标签
             if np_data.shape[0] > 1:
-                for index, (bar, value) in enumerate(zip(bars, np_data[idx])):
-                    if value and value != total_heights[index]:  # 原始条件判断
+                # 遍历每个柱子添加数值标签
+                for bar_index, (bar, value) in enumerate(zip(bars, np_data[idx])):
+                    # 跳过零值和顶层值（顶层由总高度标签处理）
+                    if value and value != total_heights[bar_index]:
+                        # 计算标签位置（柱体中心偏下）
                         ax.text(
-                            bar.get_x() + bar.get_width() / 2,
-                            bar.get_y() + value / 2,
-                            str(int(value)),
-                            ha='center',
-                            va='center',
-                            color='white',
-                            fontsize=9
+                            bar.get_x() + bar.get_width() / 2,  # X轴居中位置
+                            bar.get_y() + value / 2,  # Y轴居中偏下
+                            str(int(value)),  # 整型数值标签
+                            ha='center',  # 水平居中
+                            va='center',  # 垂直居中
+                            color='white',  # 高对比度文本颜色
+                            fontsize=9  # 适配柱体高度的字号
                         )
 
+        # 添加总高度标签（每个主分类柱顶）
         for i, total in enumerate(total_heights):
-            if total:
+            if total:  # 过滤零值情况
                 ax.text(
-                    i,
-                    total,
-                    str(round(total, 2)),
-                    ha='center',
-                    va='bottom'
+                    i,  # X轴位置索引
+                    total,  # Y轴顶部位置
+                    str(round(total, 2)),  # 保留两位小数
+                    ha='center',  # 水平居中
+                    va='bottom'  # 垂直底部对齐
                 )
 
-        # ========== 严格保持返回结构 ==========
+        # ==================================================================
+        # 阶段6：元数据封装返回
+        # ==================================================================
         return {
-            'desiredWidthData': plot_data,
-            'labels': labels,
-            'title': title,
-            'maxBarHeight': math.ceil(max(total_heights)),
-            'ax': ax
+            'desiredWidthData': plot_data,  # 图表尺寸配置
+            'labels': labels,  # 子类标签列表
+            'title': title,  # 传递的标题文本
+            'maxBarHeight': math.ceil(max(total_heights)),  # 计算最大高度
+            'ax': ax  # 坐标轴对象用于后续配置
         }
 
     except Exception as e:
-        # 增强资源清理（原逻辑无此处理）
+        # 异常时强制释放图形资源
         plt.close('all')
-        raise RuntimeError(f"图表生成失败: {str(e)}") from e
+        raise RuntimeError(f"图表生成流程异常终止: {str(e)}") from e
 
 
 @create_plot
@@ -3098,60 +3238,202 @@ def get_system_name() -> str:
 
 
 def _handle_stream_response(completion, result: list) -> str:
-    """处理流式响应数据"""
+    """
+    处理流式API响应数据，实时解析并输出AI生成内容
+
+    该函数负责处理来自AI模型的流式响应数据，实现以下核心功能：
+    1. 实时分离并展示推理过程与最终答案
+    2. 动态更新生成内容缓冲区
+    3. 处理用户中断操作
+    4. 生成最终格式化输出
+
+    参数:
+        completion (generator): 流式响应生成器对象，包含分块传输的AI响应数据
+        result (list): 内容缓冲区列表，用于累积最终答案内容
+
+    返回:
+        str: 经过HTML格式转换的完整生成内容
+
+    异常处理:
+        KeyboardInterrupt: 捕获用户中断信号，返回已生成内容
+
+    实现流程:
+        1. 初始化输出状态标识
+        2. 遍历流式数据生成器
+        3. 解析并分类响应内容
+        4. 实时输出过程信息
+        5. 处理异常中断
+        6. 返回标准化结果
+    """
+
+    # ==================================================================
+    # 阶段1：初始化输出控制参数
+    # ==================================================================
+
+    # 打印带时间戳的生成开始标记（精确到秒）
     print(f'\n{datetime.datetime.now().strftime("%H:%M:%S")} 生成开始')
 
-    # 初始化状态追踪
-    is_reasoning = False
-    is_final_answer = False
+    # 初始化状态追踪标识
+    is_reasoning = False  # 推理过程输出状态标识
+    is_final_answer = False  # 最终答案输出状态标识
 
     try:
+        # ==================================================================
+        # 阶段2：流式数据遍历处理
+        # ==================================================================
+
+        # 遍历流式响应中的每个数据块（chunk）
         for chunk in completion:
-            # 提取增量内容
+
+            # 从数据块中提取增量内容（delta）
             delta = chunk.choices[0].delta
+
+            # 获取推理过程内容（可能为空字符串）
             reasoning_content = getattr(delta, 'reasoning_content', '')
+
+            # 获取正式答案内容（可能为空字符串）
             content = getattr(delta, 'content', '')
 
-            # 思考过程处理
+            # ==================================================================
+            # 阶段3：推理过程内容处理
+            # ==================================================================
+
+            # 检测到有效推理内容且尚未启动推理输出
             if reasoning_content:
                 if not is_reasoning:
+                    # 打印推理过程标题并换行
                     print('\n思考轨迹:', flush=True)
+                    # 更新推理状态标识
                     is_reasoning = True
+                # 持续输出推理内容（黑色字体）
+                # 使用_print_text_font处理字体样式，实时刷新输出缓冲区
                 print(_print_text_font(reasoning_content, color='black'), end='', flush=True)
 
-            # 最终答案处理
+            # ==================================================================
+            # 阶段4：最终答案内容处理
+            # ==================================================================
+
+            # 检测到有效答案内容且尚未启动答案输出
             if content:
                 if not is_final_answer:
+                    # 打印答案标题（添加双换行分隔）
                     print('\n\n最终答案:', flush=True)
+                    # 更新答案状态标识
                     is_final_answer = True
+                # 持续输出答案内容
+                # 直接输出原始内容，实时刷新输出缓冲区
                 print(content, end='', flush=True)
+                # 累积内容到结果缓冲区
                 result.append(content)
 
+                # ==================================================================
+        # 阶段5：生成完成处理
+        # ==================================================================
+
+        # 打印带时间戳的完成标记
         print(f'\n\n{datetime.datetime.now().strftime("%H:%M:%S")} 生成完成')
+
+        # 将缓冲区内容转换为HTML格式
         return ai_result_switch_html(''.join(result))
 
     except KeyboardInterrupt:
+        # ==================================================================
+        # 阶段6：中断异常处理
+        # ==================================================================
+
+        # 捕获用户中断信号（Ctrl+C）
         print('\n\n生成过程已中断')
+
+        # 返回已累积的内容（转换为HTML格式）
         return ai_result_switch_html(''.join(result))
 
 
-def _handle_normal_response(completion, result: list) -> str:
-    """处理非流式响应数据"""
-    try:
-        # 提取思考过程
-        if reasoning_content := getattr(completion.choices[0].message, 'reasoning_content', None):
-            print(f"\n思考轨迹:\n{_print_text_font(reasoning_content, color='black')}")
+def _handle_normal_response(completion: Any, result: List[str]) -> str:
+    """
+    处理OpenAI API的非流式响应数据，提取关键信息并格式化输出
 
-        # 提取最终答案
-        if final_answer := completion.choices[0].message.content:
+    该方法负责解析标准API响应结构，执行以下核心操作：
+    1. 提取AI模型的中间思考过程（如支持）
+    2. 获取最终生成的文本内容
+    3. 执行结构化数据验证和异常处理
+    4. 将原始文本转换为标准化HTML格式
+
+    参数:
+        completion (Any): OpenAI API响应对象，包含完整的响应数据结构
+        result (List[str]): 累积生成结果的缓冲区列表，用于存储最终答案内容
+
+    返回:
+        str: 经过HTML格式转换的最终生成文本，可直接用于前端展示
+
+    异常:
+        ValueError: 当响应内容为空或无法解析时抛出
+
+    实现逻辑:
+        1. 响应数据解构与校验
+        2. 中间过程信息提取（若存在）
+        3. 最终答案内容提取与存储
+        4. 响应内容格式化与异常处理
+    """
+    try:
+        # ==================================================================
+        # 阶段1：响应数据解构与校验
+        # ==================================================================
+        # 验证响应对象是否包含必要属性（防御性编程）
+        if not hasattr(completion, 'choices') or len(completion.choices) == 0:
+            raise AttributeError("响应对象缺少choices属性或内容为空")
+
+        # 获取首个候选响应消息（假设单候选响应模式）
+        message = completion.choices[0].message
+
+        # ==================================================================
+        # 阶段2：中间思考过程提取
+        # ==================================================================
+        # 使用安全属性获取方法提取推理内容（兼容字段不存在的情况）
+        reasoning_content = getattr(message, 'reasoning_content', None)
+
+        # 当存在中间推理过程时，进行格式化输出
+        if reasoning_content:
+            # 调用字体格式化工具，生成带颜色标记的文本
+            formatted_reasoning = _print_text_font(
+                text=reasoning_content,
+                color='black'  # 使用黑色字体强调思考过程
+            )
+            # 输出带时间戳的思考轨迹日志
+            print(f"\n思考轨迹:\n{formatted_reasoning}")
+
+        # ==================================================================
+        # 阶段3：最终答案内容处理
+        # ==================================================================
+        # 提取消息内容主体，处理可能的内容缺失情况
+        final_answer = message.content if hasattr(message, 'content') else ''
+
+        # 当存在有效内容时执行处理流程
+        if final_answer:
+            # 打印带时间戳的生成结果日志
             print("\n最终答案:\n{}".format(final_answer))
+            # 将原始内容存入结果缓冲区
             result.append(final_answer)
 
+        # ==================================================================
+        # 阶段4：响应内容格式化
+        # ==================================================================
+        # 生成带时间戳的完成日志
         print(f'\n{datetime.datetime.now().strftime("%H:%M:%S")} 生成完成')
+
+        # 将原始文本转换为HTML格式并返回
         return ai_result_switch_html(''.join(result))
 
-    except AttributeError as e:
-        raise APIError("响应结构异常") from e
+    except Exception as unexpect_error:
+        # ==================================================================
+        # 异常处理：未知错误捕获
+        # ==================================================================
+        # 记录完整的错误堆栈信息
+        error_trace = traceback.format_exc()
+        # 生成带调试信息的错误报告
+        raise RuntimeError(
+            f"非流式响应处理异常: {str(unexpect_error)}\n追踪信息:{error_trace}"
+        ) from unexpect_error
+
 
 
 class SoftwareQualityRating:
@@ -5057,12 +5339,48 @@ class SoftwareQualityRating:
             # 将缺陷ID添加到P2分类列表
             self.unrepairedBugs['onThatDayUnrepaired']['P2'].append(bug_id)  # list[str] 类型维护
 
-    def _add_multi_dimensional_table_html(self, table_data: dict):
-        data_headers = []  # 初始化表格的头部动态数据
-        for valueData in table_data['data'].values():  # 获取数据头部动态数据
-            data_headers += list(valueData)  # 添加到头部动态数据列表中
-            break  # 跳出循环
-        # 公用的样式
+    def _add_multi_dimensional_table_html(self, table_data: dict) -> None:
+        """
+        生成多维数据表格的HTML结构，支持动态列头和行统计功能
+
+        该方法通过解析多维字典数据，自动构建包含列头、数据行和总计行的复杂HTML表格。
+        特别适用于展示多维度交叉统计结果，支持自动计算行总计和列总计。
+
+        参数:
+            table_data (dict): 包含表格配置和数据的字典，结构示例：
+                {
+                    'tableWidth': 1000,       # 表格总宽度(像素)
+                    'data': {                 # 核心数据字典
+                        '平台A': {'类型1': 5, '类型2': 3},
+                        '平台B': {'类型1': 2, '类型2': 7}
+                    },
+                    'firstColumnHeader': '软件平台',  # 首列标题文本
+                    'isRowTotal': True        # 是否显示行总计列
+                }
+
+        返回:
+            None: 直接更新实例的chartHtml属性
+
+        实现流程:
+            1. 提取数据列头信息
+            2. 定义表格样式体系
+            3. 构建表格数据行HTML
+            4. 计算并生成总计行数据
+            5. 组合完整表格HTML结构
+        """
+        # ==================================================================
+        # 阶段1：数据列头提取
+        # ==================================================================
+        # 从首行数据值中提取列头信息（动态适应数据结构）
+        data_headers = []
+        for value_data in table_data['data'].values():
+            data_headers = list(value_data.keys())  # 提取内部字典的键作为列头
+            break  # 仅需获取第一个元素的键集合
+
+        # ==================================================================
+        # 阶段2：表格样式体系定义
+        # ==================================================================
+        # 通用单元格样式配置（基础边框和间距设置）
         common_style = {
             'padding': '0 10px',
             'vertical-align': 'middle',
@@ -5072,7 +5390,8 @@ class SoftwareQualityRating:
             'border-bottom': '1px solid rgb(230, 230, 230)',
             'background-color': 'rgb(255, 255, 255)',
         }
-        # 表格首行的样式
+
+        # 表头行特定样式（增加顶部边框和文字颜色）
         header_row_style = style_convert({
             **common_style,
             'height': '50px',
@@ -5080,13 +5399,15 @@ class SoftwareQualityRating:
             'color': '#8c95a8',
             'border-top': '1px solid rgb(230, 230, 230)',
         })
-        # 表格内容的样式
+
+        # 数据行通用样式（标准行高和字体）
         row_style = style_convert({
             **common_style,
             'height': '38px',
             'font-size': '12px',
         })
-        # 表格总计行的样式
+
+        # 总计行强调样式（加粗字体和深色文字）
         total_row_style = style_convert({
             **common_style,
             'height': '38px',
@@ -5094,65 +5415,87 @@ class SoftwareQualityRating:
             'color': 'black',
             'font-weight': 'bold',
         })
-        # 初始化表格内容行的HTML变量
-        data_row_html = ''
-        # 根据表格动态数据头的数量增加列表的值, 用于展示在总计行, 列表第一个数据记录的是总计中的小计
-        total_row_values = [0, ] + [0 for _ in data_headers]
-        for tableKey, tableData in table_data['data'].items():  # 遍历表格数据键与数据值
-            # 遍历表格数据值, 生成表格内容行的HTML, tr标签为表格中的一整行, td标签为行中的单元格, 第一个td标签为一行中的第一个单元格, 第二个td标签为行中的第二个单元格, 以此类推
-            data_row_html += f"""
-               <tr>
-                   <td align="left" style="{row_style}">
-                       {tableKey}
-                   </td>
-                   {f'''<td align="left" style="{row_style}">
-                       {sum(tableData.values())}
-                   </td>''' if table_data.get('isRowTotal') else ''}
-                   {''.join(f'''
-                   <td align="left" style="{row_style}">
-                       {dataValue}
-                   </td>''' for dataValue in tableData.values())}
-               </tr>"""
-            table_data_values = [value for value in tableData.values()]  # 将一行的数据遍历成一个列表
-            for index in range(len(table_data_values)):  # 遍历列表中所有索引
-                total_row_values[0] += table_data_values[index]  # 累加总计行中的小计
-                total_row_values[index + 1] += table_data_values[index]  # 累加总计行中的对应索引的值
-        # 构建表格的HTML, 首行的内容和总计行的内容直接在这里构建, 剩下的内容通过data_row_html引入
-        self.chartHtml += f'''
-           {'<div><br /></div>' * 2}
-           <div>
-               <table cellpadding="0" cellspacing="0" class="report-chart__table" style="width:{table_data['tableWidth']}px;border:none;margin-top:0;margin-bottom:0;margin-left:0;margin-right:0;">
-                   <tbody>
-                       <tr>
-                           <th align="left" style="{header_row_style}">
-                               {table_data['firstColumnHeader']}
-                           </th>
-                           {f"""<th align="left" style="{header_row_style}">
-                               小计
-                           </th>""" if table_data.get('isRowTotal') else ''}
-                           {''.join(f"""
-                           <th align="left" style="{header_row_style}">
-                               {dataHeader}
-                           </th>""" for dataHeader in data_headers) if data_headers else ''}
-                       </tr>
-                       {data_row_html}
-                       <tr>
-                           <td align="left" style="{total_row_style}">
-                               总计
-                           </td>
-                           {f"""<td align="left" style="{total_row_style}">
-                               {total_row_values[0]}
-                           </td>""" if table_data.get('isRowTotal') else ''}
-                           {''.join(f"""
-                           <td align="left" style="{total_row_style}">
-                               {value}
-                           </td>""" for value in total_row_values[1:])}
-                       </tr>
-                   </tbody>
-               </table>
-           </div>'''
 
-    def _add_simple_table_html(self, table_data: dict):
+        # ==================================================================
+        # 阶段3：数据行HTML生成
+        # ==================================================================
+        data_row_html = ''  # 初始化数据行HTML容器
+        total_row_values = [0] * (len(data_headers) + 1)  # 初始化总计行数值容器[行小计, 列1, 列2...]
+
+        # 遍历每个主分类的数据条目（如不同平台的数据）
+        for table_key, table_data_dict in table_data['data'].items():
+            # 构建单行数据单元格
+            row_cells = []
+            current_row_total = 0  # 当前行小计
+
+            # 遍历每个子分类的数据值（如不同缺陷类型）
+            for header in data_headers:
+                cell_value = table_data_dict.get(header, 0)
+                row_cells.append(f'<td align="left" style="{row_style}">{cell_value}</td>')
+                current_row_total += cell_value
+
+            # 添加行小计单元格（根据配置决定是否显示）
+            if table_data.get('isRowTotal'):
+                row_cells.insert(0, f'<td align="left" style="{row_style}">{current_row_total}</td>')
+
+            # 累积到总计行数值
+            total_row_values[0] += current_row_total  # 行小计累计
+            for idx, val in enumerate(table_data_dict.values()):
+                total_row_values[idx + 1] += val  # 各列数值累计
+
+            # 组装完整数据行HTML
+            data_row_html += f'''
+            <tr>
+                <td align="left" style="{row_style}">{table_key}</td>
+                {''.join(row_cells)}
+            </tr>'''
+
+        # ==================================================================
+        # 阶段4：表头与总计行构建
+        # ==================================================================
+        # 生成动态列头HTML
+        header_cells = []
+        if table_data.get('isRowTotal'):
+            header_cells.append(f'<th align="left" style="{header_row_style}">小计</th>')
+        header_cells.extend(
+            f'<th align="left" style="{header_row_style}">{header}</th>'
+            for header in data_headers
+        )
+
+        # 生成总计行HTML
+        total_cells = []
+        if table_data.get('isRowTotal'):
+            total_cells.append(f'<td align="left" style="{total_row_style}">{total_row_values[0]}</td>')
+        total_cells.extend(
+            f'<td align="left" style="{total_row_style}">{val}</td>'
+            for val in total_row_values[1:]
+        )
+
+        # ==================================================================
+        # 阶段5：完整表格组装
+        # ==================================================================
+        self.chartHtml += f'''
+        {'<div><br /></div>' * 2}
+        <div>
+            <table cellpadding="0" cellspacing="0" class="report-chart__table" 
+                   style="width:{table_data['tableWidth']}px;border:none;margin:0;">
+                <tbody>
+                    <tr>
+                        <th align="left" style="{header_row_style}">
+                            {table_data['firstColumnHeader']}
+                        </th>
+                        {''.join(header_cells)}
+                    </tr>
+                    {data_row_html}
+                    <tr>
+                        <td align="left" style="{total_row_style}">总计</td>
+                        {''.join(total_cells)}
+                    </tr>
+                </tbody>
+            </table>
+        </div>'''
+
+    def _add_simple_table_html(self, table_data: dict):  # 暂不进行优化
         # 根据表格数据生成表格的样式和结构
         table_style = style_convert({
             # "width": f"{300 * len(table_data['headers'])}px",
@@ -5203,426 +5546,802 @@ class SoftwareQualityRating:
                 </table>
             </div>'''
 
-    def _calculate_positive_integrity_score(self):
+    def _calculate_positive_integrity_score(self) -> None:
         """
-        输入项目的积极性/文档完成性评分。
+        计算配合积极性与文档完整性综合评分
 
-        本函数展示了一段文本，描述了不同评分标准下，对项目期间团队合作的积极性和文档完成情况的评价。
-        根据这段文本，用户会被要求输入一个分数，来表示项目的积极性/文档完成性评分。
+        通过交互式输入获取综合评分，评分标准合并文档质量和配合态度表现。
+        用户需根据实际项目情况，直接参照以下标准给出评分：
+
+        评分标准：
+        20分 - 项目期间积极配合测试主动跟进问题并解决。提测文档清晰完善（技术、接口）等。
+                会给测试提供测试范围、注意事项、脚本、或其他有意义的建议。对测试执行起到重要帮助
+        15分 - 项目期间积极配合测试主动跟进问题并解决。提测文档清晰完善（技术、接口）等
+        10分 - 项目期间能够基本配合测试进行相关项目推进，能够跟进问题并按期解决，文档部分缺失、未及时更新
+        5分  - 项目期间态度懈怠、散漫、不配合测试解决问题。但文档全面、及时更新
+        1分  - 项目期间态度懈怠、散漫、不配合测试解决问题、文档缺失、不更新、有错误等。
+
+        参数: 无，通过标准输入流获取数据
+        返回: None，直接更新score['positiveIntegrityScore']
         """
-        # 打印标题，用于清晰地标识出这部分评分的开始
-        print('配合积极性/文档完成性'.center(LINE_LENGTH, '-'))
+        try:
+            # ==================================================================
+            # 阶段1：构建简洁评分说明
+            # ==================================================================
+            # 打印标题，用于清晰地标识出这部分评分的开始
+            print('配合积极性/文档完成性'.center(LINE_LENGTH, '-'))
 
-        # 定义评分标准文本，详细解释了每个分数段代表的项目团队行为和文档完成情况
-        score_text = """20分：项目期间积极配合测试主动跟进问题并解决。提测文档清晰完善（技术、接口）等。会给测试提供测试范围、注意事项、脚本、或其他有意义的建议。对测试执行起到重要帮助
-15分：项目期间积极配合测试主动跟进问题并解决。提测文档清晰完善（技术、接口）等
-10分：项目期间能够基本配合测试进行相关项目推进，能够跟进问题并按期解决，文档部分缺失、未及时更新
-5分：项目期间态度懈怠、散漫、不配合测试解决问题。但文档全面、及时更新
-1分：项目期间态度懈怠、散漫、不配合测试解决问题、文档缺失、不更新、有错误等。
-"""
-        # 调用_input函数来获取用户输入的分数，并将分数存储在实例的score字典中
-        self.score['positiveIntegrityScore'] = _input(score_text + '请输入分数：', **SCORE_INPUT_DATA)
-        self.scoreContents.append({
-            'title': '配合积极性/文档完成性',
-            'scoreRule': score_text,
-            'score': self.score['positiveIntegrityScore']
-        })
+            # 定义评分标准文本，详细解释了每个分数段代表的项目团队行为和文档完成情况
+            score_text = ("20分：项目期间积极配合测试主动跟进问题并解决。提测文档清晰完善（技术、接口）等。会给测试提供测试范围、注意事项、脚本、或其他有意义的建议。对测试执行起到重要帮助\n"
+                          "15分：项目期间积极配合测试主动跟进问题并解决。提测文档清晰完善（技术、接口）等\n"
+                          "10分：项目期间能够基本配合测试进行相关项目推进，能够跟进问题并按期解决，文档部分缺失、未及时更新\n"
+                          "5分：项目期间态度懈怠、散漫、不配合测试解决问题。但文档全面、及时更新\n"
+                          "1分：项目期间态度懈怠、散漫、不配合测试解决问题、文档缺失、不更新、有错误等。\n")
 
-    def _calculate_smoke_testing_score(self):
+            # ==================================================================
+            # 阶段2：获取综合评分输入
+            # ==================================================================
+            final_score = _input(
+                text=score_text + '请输入分数：',
+                **SCORE_INPUT_DATA
+            )
+
+            # ==================================================================
+            # 阶段3：存储结果并生成报告
+            # ==================================================================
+            self.score['positiveIntegrityScore'] = final_score
+            self.scoreContents.append({
+                'title': '配合积极性/文档完成性',
+                'scoreRule': score_text,
+                'score': self.score['positiveIntegrityScore']
+            })
+
+        except ValueError as ve:
+            raise ValueError(f"评分输入异常: {str(ve)}") from ve
+        except Exception as e:
+            raise RuntimeError("综合评分计算失败") from e
+
+    def _calculate_smoke_testing_score(self) -> None:
         """
-        计算并输入冒烟测试分数。
+        计算研发冒烟测试综合评分
 
-        本函数解释了冒烟测试分数的评定标准，并要求用户根据这些标准输入分数。
-        它首先打印出冒烟测试的标题，然后定义不同分数对应的测试情况，
-        最后提示用户输入分数，该分数将被记录在实例的score字典中。
+        通过交互式输入获取综合评分，评分标准冒烟测试。
+        用户需根据实际项目情况，直接参照以下标准给出评分：
+
+        评分标准：
+        20分 - 考核期内所有版本有冒烟自测并一次通过
+        15分 - 考核期版本有冒烟自测但部分用例不通过
+        10分 - 考核期内提测版本没有进行冒烟自测，主流程通过
+        5分  - 考核期内有进行冒烟自测，主流程不通过
+        1分  - 考核期内提测版本没有进行冒烟自测，主流程不通过
+
+        参数: 无，通过标准输入流获取数据
+        返回: None，直接更新score['smokeTestingScore']
         """
-        # 打印冒烟测试标题，用于清晰地区分不同的评分项
-        print('冒烟测试'.center(LINE_LENGTH, '-'))
+        try:
+            # ==================================================================
+            # 阶段1：构建简洁评分说明
+            # ==================================================================
+            # 打印标题，用于清晰地标识出这部分评分的开始
+            print('冒烟测试'.center(LINE_LENGTH, '-'))
 
-        # 定义冒烟测试分数的评定标准
-        score_text = """20分：考核期内所有版本有冒烟自测并一次通过 
-15分：考核期版本有冒烟自测但部分用例不通过 
-10分：考核期内提测版本没有进行冒烟自测，主流程通过 
-5分：考核期内有进行冒烟自测，主流程不通过 
-1分：考核期内提测版本没有进行冒烟自测，主流程不通过
-"""
-        # 调用_input函数来获取用户输入的分数，并将分数存储在实例的score字典中
-        self.score['smokeTestingScore'] = _input(score_text + '请输入分数：', **SCORE_INPUT_DATA)
+            # 定义评分标准文本，详细解释了每个分数段代表的项目团队行为和文档完成情况
+            score_text = ("20分：考核期内所有版本有冒烟自测并一次通过\n"
+                          "15分：考核期版本有冒烟自测但部分用例不通过\n"
+                          "10分：考核期内提测版本没有进行冒烟自测，主流程通过\n"
+                          "5分：考核期内有进行冒烟自测，主流程不通过\n"
+                          "1分：考核期内提测版本没有进行冒烟自测，主流程不通过\n")
 
-        self.scoreContents.append({
-            'title': '冒烟测试',
-            'scoreRule': score_text,
-            'score': self.score['smokeTestingScore']
-        })
+            # ==================================================================
+            # 阶段2：获取综合评分输入
+            # ==================================================================
+            final_score = _input(
+                text=score_text + '请输入分数：',
+                **SCORE_INPUT_DATA
+            )
 
-    def _calculate_bug_count_score(self):
+            # ==================================================================
+            # 阶段3：存储结果并生成报告
+            # ==================================================================
+            self.score['smokeTestingScore'] = final_score
+            self.scoreContents.append({
+                'title': '冒烟测试',
+                'scoreRule': score_text,
+                'score': self.score['smokeTestingScore']
+            })
+
+        except ValueError as ve:
+            raise ValueError(f"评分输入异常: {str(ve)}") from ve
+        except Exception as e:
+            raise RuntimeError("综合评分计算失败") from e
+
+    def _calculate_bug_count_score(self) -> None:
         """
-        计算BUG数得分的方法。
+        计算软件质量评分中的BUG数量评分项
 
-        本方法首先会打印BUG数标题，并根据已知的BUG总数和开发周期，
-        或者通过用户输入获取这些值。然后，它会计算开发人员平均每人小时数
-        和每日平均小时数，进而计算UU（User Unit）结果。最后，根据BUG总数
-        和UU结果计算项目平均一天工作量的Bug数，并根据这一结果调用另一个函数
-        来计算BUG数得分。
+        本方法实现完整的BUG数量评分流程，包含以下关键步骤：
+        1. 获取BUG总数和开发周期数据（优先使用实例数据，支持用户输入）
+        2. 计算开发团队的平均人时工作量
+        3. 根据BUG密度计算基准评分
+        4. 根据缺陷严重级别调整最终评分
+        5. 构建评分结果数据结构并记录日志
+
+        流程细节：
+        - 采用交互式输入机制保障数据完整性
+        - 集成业务规则：致命/严重缺陷对评分的限制作用
+        - 自动生成详细的评分依据说明
+
+        返回:
+            None: 结果直接存储在实例的score字典和scoreContents列表中
+
+        异常处理:
+            - 除零错误防御：在计算UU值时自动处理零值情况
+            - 类型转换异常：通过_input函数的内置校验机制处理
         """
-        # 打印标题
+        # ==================================================================
+        # 阶段1：初始化与数据准备
+        # ==================================================================
+
+        # 打印章节标题并进行格式化分隔
+        # 使用中心对齐方式显示"BUG数"标题，两侧填充横线字符至指定长度
         print('BUG数'.center(LINE_LENGTH, '-'))
 
-        # 获取BUG总数，如果已知则直接打印，否则请求用户输入
+        # ==================================================================
+        # 阶段2：输入数据获取与校验
+        # ==================================================================
+
+        # BUG总数获取逻辑：
+        # 优先使用实例中已存在的bugTotal值，若为空则通过_input函数交互获取
+        # self.bugTotal可能来源于API获取或先前计算的结果
         bug_total = self.bugTotal
         if bug_total:
+            # 使用绿色字体突出显示已存在的BUG总数
             print(f"获取的BUG总数为：{_print_text_font(bug_total, color='green')}")
         else:
+            # 通过_input函数获取用户输入，强制转换为整数类型
+            # 输入值将同时更新实例的bugInputTotal属性
             bug_total = _input("请输入BUG总数为：", int)
             self.bugInputTotal = bug_total
-        self.bugCountScoreMsg += f'BUG总数为：{bug_total}\n'
 
-        # 获取开发周期，如果已知则直接打印，否则请求用户输入
+        # 开发周期获取逻辑：
+        # 优先使用实例中的developmentCycle值，若为空则通过_input获取
+        # 开发周期单位为自然日，保留一位小数精度
         if self.developmentCycle:
+            # 显示已存在的开发周期值，进行四舍五入处理
             print(f"获取的开发周期总天数为：{_print_text_font(round(self.developmentCycle, 1), color='green')}")
         else:
+            # 通过_input函数获取浮点数类型的开发周期
             self.developmentCycle = _input("请输入开发周期总天数：", float)
-        self.bugCountScoreMsg += f'开发周期总天数为：{self.developmentCycle}\n'
 
-        # 打印开发人员总数
-        print(f"获取的开发人员总数为：{_print_text_font(self.developerCount, color='green')}")
+        # ==================================================================
+        # 阶段3：核心指标计算
+        # ==================================================================
 
-        # 计算平均每人小时数和每日平均小时数
+        # 计算平均人时指标：
+        # devTotalHours表示开发总工时，developerCount为开发人数
+        # 公式：人均工时 = 总工时 / 人数
         avg_person_hours = self.devTotalHours / self.developerCount
+
+        # 计算日均工时：
+        # 将人均工时按开发周期平均分配，得到每日工作量
         daily_avg_hours = avg_person_hours / self.developmentCycle
 
-        # 计算UU结果，即开发人员总数乘以平均工时
+        # 计算UU指标（Unit of Work）：
+        # 反映团队每日总工作量，用于BUG密度计算
+        # 公式：UU = 开发人数 × 日均工时
         uu_result = self.developerCount * daily_avg_hours
 
-        # 计算项目平均一天工作量的Bug数，避免除以0的情况
-        X = round(bug_total / uu_result if uu_result != 0 else float('inf'), 1)
+        # 计算BUG密度：
+        # 防御除零错误，当UU值为零时返回无穷大
+        # 结果保留一位小数，用于后续评分计算
+        avg_bug_count = round(
+            bug_total / uu_result if uu_result != 0 else float('inf'),
+            1
+        )
 
-        # 打印计算结果
-        print(f"开发人员总数乘以平均工时为 {_print_text_font(f'{uu_result:.2f}', color='green')}")
-        print(f"该项目平均一天工作量的Bug数为 {_print_text_font(X, color='green')}")
+        # ==================================================================
+        # 阶段4：评分计算与业务规则应用
+        # ==================================================================
 
-        self.bugCountScoreMsg += f'开发人员总数乘以平均工时为 {uu_result:.2f}\n'
-        self.bugCountScoreMsg += f'该项目平均一天工作量的Bug数为 {X}\n'
+        # 输出计算过程关键指标
+        print(
+            f"获取的开发人员总数为：{_print_text_font(self.developerCount, color='green')}\n"
+            f"开发人员总数乘以平均工时为 {_print_text_font(f'{uu_result:.2f}', color='green')}\n"
+            f"该项目平均一天工作量的Bug数为 {_print_text_font(avg_bug_count, color='green')}"
+        )
 
-        # 调用calculate_bug_count_rating函数计算得分，并进行输出
-        self.score['bugCountScore'] = calculate_bug_count_rating(X)
+        # 调用评分函数获取基准分数
+        # calculate_bug_count_rating实现BUG密度到评分的映射规则
+        self.score['bugCountScore'] = calculate_bug_count_rating(avg_bug_count)
 
+        # 应用严重缺陷调整规则：
+        # 当存在致命缺陷时，评分上限为10分
+        # 当存在严重缺陷时，评分上限为15分
         if self.bugLevelsCount:
-            if self.bugLevelsCount['致命']:
-                if self.score['bugCountScore'] > 10:
-                    self.score['bugCountScore'] = 10
-            elif self.bugLevelsCount['严重']:
-                if self.score['bugCountScore'] > 15:
-                    self.score['bugCountScore'] = 15
+            if self.bugLevelsCount['致命'] > 0:
+                self.score['bugCountScore'] = min(self.score['bugCountScore'], 10)
+            elif self.bugLevelsCount['严重'] > 0:
+                self.score['bugCountScore'] = min(self.score['bugCountScore'], 15)
 
+        # ==================================================================
+        # 阶段5：结果输出与持久化
+        # ==================================================================
+
+        # 打印最终得分并更新实例数据
         print('-' * LINE_LENGTH)
+        bug_count_score = f'{self.score["bugCountScore"]} 分'
+        print(
+            f'当平均一天工作量的Bug数={_print_text_font(avg_bug_count, color="green")}时，'
+            f'当前该项目软件质量评分中“BUG数”一项得分为：{_print_text_font(bug_count_score)}'
+        )
 
-        # 如果得分不为None，则输出得分
-        if self.score['bugCountScore'] is not None:
-            bug_count_score = f'{self.score["bugCountScore"]} 分'
-            print(
-                f'当平均一天工作量的Bug数={_print_text_font(X, color="green")}时，当前该项目软件质量评分中“BUG数”一项得分为：{_print_text_font(bug_count_score)}')
+        # 构建评分依据说明文档
+        self.bugCountScoreMsg = (
+            f'BUG总数为：{bug_total}\n'
+            f'开发周期总天数为：{self.developmentCycle}\n'
+            f'开发人员总数乘以平均工时为 {uu_result:.2f}\n'
+            f'该项目平均一天工作量的Bug数为 {avg_bug_count}\n'
+        )
+
+        # 将评分详情存入scoreContents列表
+        # 包含评分规则说明和实际得分
         self.scoreContents.append({
-            'title': 'BUG数',
-            'scoreRule': self.bugCountScoreMsg + """20分：0<=平均一天工作的Bug数<=1且无严重、致命BUG
-15分：1<平均一天工作量的Bug数<=1.5且无致命Bug
-10分：1.5<平均一天工作量的Bug数<=2.0
-5分：2.0<平均一天工作量的Bug数<=3.0
-1分：3.0<平均一天工作量的Bug数
-""",
-            'score': self.score['bugCountScore']
+            'title': 'BUG数',  # 评分项名称
+            'scoreRule': self.bugCountScoreMsg + (  # 评分规则说明
+                "20分：0<=平均一天工作的Bug数<=1且无严重、致命BUG\n"
+                "15分：1<平均一天工作量的Bug数<=1.5且无致命Bug\n"
+                "10分：1.5<平均一天工作量的Bug数<=2.0\n"
+                "5分：2.0<平均一天工作量的Bug数<=3.0\n"
+                "1分：3.0<平均一天工作量的Bug数\n"
+            ),
+            'score': self.score['bugCountScore']  # 实际得分
         })
 
-    def _calculate_bug_repair_score(self):
+    def _calculate_bug_repair_score(self) -> None:
         """
-        计算并打印BUG修复评分情况。
+        计算缺陷修复质量评分并构建评分报告
 
-        该方法首先会检查在项目上线当天是否存在未修复的BUG（P0、P1和P2）。
-        如果存在，则打印出未修复BUG的数量，并根据这些数据计算BUG修复评分。
-        如果不存在未修复的BUG，则提供一个评分标准文本，供用户输入评分。
+        该方法通过分析不同严重级别缺陷的修复情况，结合预定义的评分规则，
+        生成可视化质量评分报告。核心功能包含：
+        1. 初始化评分规则模板
+        2. 缺陷存在性校验与状态分类
+        3. 多维度缺陷数据可视化展示
+        4. 交互式评分输入与自动计算
+        5. 结构化评分结果存储
+
+        参数: 无
+        返回: 无
+
+        异常处理:
+            - 当输入评分值非法时触发_input函数的验证机制
+            - 缺陷数据为空时自动分配满分
         """
-        score_text = r"""P0=致命缺陷, P1=严重缺陷, P2=一般缺陷、提示、建议
-20分：名下BUG当天修复，当天通过回归验证且无重开 
-15分：名下BUG（P0\P1）当天修复，P2\其他隔天修复，所以BUG均不能重开
-10分：名下BUG（P0）当天修复，（P1\P2）当天未修复，隔天修复
-5分：名下BUG（P2）上线当天存在未修复
-1分：名下BUG（P0\P1）上线当天存在未修复
-"""
-        # 打印BUG修复标题
+
+        # ==================================================================
+        # 阶段1：评分规则模板初始化
+        # ==================================================================
+        # 构建评分标准说明文本，包含各级缺陷定义和评分规则
+        score_text = (
+            r"P0=致命缺陷, P1=严重缺陷, P2=一般缺陷、提示、建议" "\n"
+            r"20分：名下BUG当天修复，当天通过回归验证且无重开" "\n"
+            r"15分：名下BUG（P0\P1）当天修复，P2\其他隔天修复，所以BUG均不能重开" "\n"
+            r"10分：名下BUG（P0）当天修复，（P1\P2）当天未修复，隔天修复" "\n"
+            r"5分：名下BUG（P2）上线当天存在未修复" "\n"
+            r"1分：名下BUG（P0\P1）上线当天存在未修复" "\n"
+        )
+
+        # ==================================================================
+        # 阶段2：缺陷修复报告标题输出
+        # ==================================================================
+        # 生成居中显示的标题分隔线，增强可视化结构
         print('BUG修复'.center(LINE_LENGTH, '-'))
-        # 检查是否存在未修复的BUG
-        if self.bugTotal:
-            # 打印各优先级未修复BUG的数量
-            self.bugRepairScoreMsg += \
-                f'''P0=致命缺陷, P1=严重缺陷, P2=一般缺陷、提示、建议
-在项目上线当天存在P0或者P1未修复BUG数为：{_print_text_font(len(self.unrepairedBugs["deployProdDayUnrepaired"]["P0P1"]), color="green")}
-在项目上线当天存在P2未修复BUG数为：{_print_text_font(len(self.unrepairedBugs["deployProdDayUnrepaired"]["P2"]), color="green")}
-P0当天未修复的BUG数为：{_print_text_font(len(self.unrepairedBugs["onThatDayUnrepaired"]["P0"]), color="green")}
-P1当天未修复的BUG数为：{_print_text_font(len(self.unrepairedBugs["onThatDayUnrepaired"]["P1"]), color="green")}
-P2当天未修复的BUG数为：{_print_text_font(len(self.unrepairedBugs["onThatDayUnrepaired"]["P2"]), color="green")}'''
-            print(self.bugRepairScoreMsg)
-            print('-' * LINE_LENGTH)
 
-            score_text = self.bugRepairScoreMsg + '\n' + score_text
-
-            # 计算BUG修复评分
-            self.score['bugRepairScore'] = calculate_bug_repair_rating(self.unrepairedBugs)
-
-            # 如果评分不为空，则打印评分
-            if self.score['bugRepairScore'] is not None:
-                bug_repair_score = f'{self.score["bugRepairScore"]} 分'
-                print(
-                    f'根据以上BUG修复情况，当前该项目软件质量评分中“BUG修复”一项得分为： {_print_text_font(bug_repair_score)}')
-        else:
+        # ==================================================================
+        # 阶段3：缺陷存在性校验与处理分支
+        # ==================================================================
+        # 当总缺陷数为零时的处理逻辑
+        if not self.bugTotal:
+            # 子分支3.1：存在输入缺陷但已全部解决
             if self.bugInputTotal > 0:
-                # 提供评分标准文本，供用户输入评分
-                self.score['bugRepairScore'] = _input(score_text + '请输入分数：', **SCORE_INPUT_DATA)
+                # 展示评分标准并获取用户输入，应用输入验证规则
+                self.score['bugRepairScore'] = _input(
+                    score_text + '请输入分数：',
+                    **SCORE_INPUT_DATA
+                )
+            # 子分支3.2：无任何缺陷记录
             else:
+                # 直接赋予最高评分并输出结果
                 print(f'BUG修复评分为：{_print_text_font(20)}')
                 self.score['bugRepairScore'] = 20
+        # 存在缺陷时的处理流程
+        else:
+            # ==================================================================
+            # 阶段4：多维缺陷数据可视化构建
+            # ==================================================================
+            # 组装各严重级别未修复缺陷的统计信息
+            self.bugRepairScoreMsg += (
+                'P0=致命缺陷, P1=严重缺陷, P2=一般缺陷、提示、建议\n'
+                # 上线日未修复的高危缺陷统计
+                f'在项目上线当天存在P0或者P1未修复BUG数为：{_print_text_font(len(self.unrepairedBugs["deployProdDayUnrepaired"]["P0P1"]), color="green")}\n'
+                # 上线日未修复的中等缺陷统计
+                f'在项目上线当天存在P2未修复BUG数为：{_print_text_font(len(self.unrepairedBugs["deployProdDayUnrepaired"]["P2"]), color="green")}\n'
+                # 创建日未修复的致命缺陷统计
+                f'P0当天未修复的BUG数为：{_print_text_font(len(self.unrepairedBugs["onThatDayUnrepaired"]["P0"]), color="green")}\n'
+                # 创建日未修复的严重缺陷统计
+                f'P1当天未修复的BUG数为：{_print_text_font(len(self.unrepairedBugs["onThatDayUnrepaired"]["P1"]), color="green")}\n'
+                # 创建日未修复的一般缺陷统计
+                f'P2当天未修复的BUG数为：{_print_text_font(len(self.unrepairedBugs["onThatDayUnrepaired"]["P2"]), color="green")}'
+            )
 
+            # ==================================================================
+            # 阶段5：交互界面渲染与数据展示
+            # ==================================================================
+            # 输出格式化后的统计信息
+            print(self.bugRepairScoreMsg)
+            # 添加视觉分隔线
+            print('-' * LINE_LENGTH)
+
+            # ==================================================================
+            # 阶段6：自动评分计算逻辑
+            # ==================================================================
+            # 合并统计数据和评分标准用于后续展示
+            score_text = self.bugRepairScoreMsg + '\n' + score_text
+            # 调用评分算法计算最终得分
+            self.score['bugRepairScore'] = calculate_bug_repair_rating(self.unrepairedBugs)
+
+            # ==================================================================
+            # 阶段7：评分结果可视化输出
+            # ==================================================================
+            # 当评分有效时的处理流程
+            if self.score['bugRepairScore'] is not None:
+                # 构建带颜色标记的得分展示文本
+                bug_repair_score = f'{self.score["bugRepairScore"]} 分'
+                # 输出格式化评分结果
+                print(
+                    f'根据以上BUG修复情况，当前该项目软件质量评分中“BUG修复”一项得分为： {_print_text_font(bug_repair_score)}')
+
+        # ==================================================================
+        # 阶段8：结构化数据存储
+        # ==================================================================
+        # 将评分结果按标准格式存入报告数据结构
         self.scoreContents.append({
-            'title': 'BUG修复',
-            'scoreRule': score_text,
-            'score': self.score['bugRepairScore']
+            'title': 'BUG修复',  # 评分项名称
+            'scoreRule': score_text,  # 使用的评分规则文本
+            'score': self.score['bugRepairScore']  # 最终得分值
         })
 
     def _calculate_bug_reopen_score(self):
         """
-        计算和输出BUG重启得分。
+        计算缺陷重新打开次数的质量评分并记录评分结果
 
-        该方法首先打印BUG重启部分的标题，然后根据BUG的重启和未修复数量计算得分。
-        如果存在BUG总数，则获取重启BUG的详细信息，并计算重启和未修复的BUG数量，
-        随后输出这些数量，并计算得分。如果BUG总数为0，则显示预设的得分标准，并要求输入得分。
+        本方法实现完整的缺陷重启评分流程，包含以下关键步骤：
+        1. 初始化评分规则说明文本
+        2. 处理无缺陷数据的特殊情况
+        3. 获取缺陷重启详细数据
+        4. 计算重启和未修复缺陷数量
+        5. 生成可视化评分结果
+        6. 存储评分结果到数据结构
+
+        参数:
+            无显式参数，通过实例属性访问相关数据：
+            - self.bugTotal: 当前版本缺陷总数
+            - self.bugInputTotal: 用户输入的缺陷总数
+            - self.reopenBugsData: 缺陷重启统计数据字典
+            - self.unrepairedBugsData: 未修复缺陷统计数据字典
+
+        返回:
+            None: 结果直接存储在实例属性self.score和self.scoreContents中
+
+        异常处理:
+            - 当输入分数不符合规范时由_input函数处理
+            - 当缺陷统计数据异常时由calculate_bug_reopen_rating函数处理
         """
-        score_text = """20分：当前版本名下所有BUG一次性回归验证通过无重启
-15分：名下BUG重启数=1
-10分：名下BUG重启数=2
-5分：名下BUG重启数=3
-1分：名下BUG重启数>=4
-"""
+        # ==================================================================
+        # 阶段1：初始化评分规则文本
+        # ==================================================================
+        # 定义评分规则的多行说明文本，包含各分数段对应的条件
+        score_text = (
+            '20分：当前版本名下所有BUG一次性回归验证通过无重启\n'
+            '15分：名下BUG重启数=1\n'
+            '10分：名下BUG重启数=2\n'
+            '5分：名下BUG重启数=3\n'
+            '1分：名下BUG重启数>=4\n'
+        )
+
+        # 打印带装饰线的标题，居中显示"BUG重启"文本
         print('BUG重启'.center(LINE_LENGTH, '-'))
-        if self.bugTotal:
-            self.get_reopen_bug_detail()  # 获取重启BUG数据
-            reopen_bug_count = sum(self.reopenBugsData.values())  # 计算重启BUG数量
-            unrepaired_bug_count = sum(self.unrepairedBugsData.values())  # 计算未修复BUG数量
-            self.bugReopenScoreMsg += \
-                f'''BUG重启数为：{_print_text_font(reopen_bug_count, color="green")}
-BUG未修复数为：{_print_text_font(unrepaired_bug_count, color="green")}'''
-            print(self.bugReopenScoreMsg)
-            self.score["bugReopenScore"] = calculate_bug_reopen_rating(reopen_bug_count + unrepaired_bug_count)
-            print('-' * LINE_LENGTH)
-            # 调用calculate_bug_reopen_rating函数计算重启BUG得分，并进行输出
-            bug_reopen_score = f"{self.score['bugReopenScore']} 分"
-            print(
-                f'当名下BUG重启数和未修复数总计={_print_text_font(reopen_bug_count + unrepaired_bug_count, color="green")}时，当前该项目软件质量评分中“BUG重启”一项得分为： {_print_text_font(bug_reopen_score)}')
-            score_text = self.bugReopenScoreMsg + '\n' + score_text
-        else:
+
+        # ==================================================================
+        # 阶段2：处理无缺陷数据情况
+        # ==================================================================
+        if not self.bugTotal:
+            # 当实际缺陷数为0但用户输入缺陷数存在时，要求手动输入分数
             if self.bugInputTotal > 0:
-                # 当BUG总数为0时，显示预设的得分标准，并要求输入得分
-                self.score['bugReopenScore'] = _input(score_text + '请输入分数：', **SCORE_INPUT_DATA)
+                self.score['bugReopenScore'] = _input(
+                    score_text + '请输入分数：',  # 拼接规则说明和输入提示
+                    **SCORE_INPUT_DATA  # 传入预定义的输入验证参数
+                )
             else:
+                # 完全无缺陷时自动赋予最高分
                 print(f'BUG重启评分为：{_print_text_font(20)}')
                 self.score['bugReopenScore'] = 20
+
+        # ==================================================================
+        # 阶段3：处理存在缺陷数据情况
+        # ==================================================================
+        else:
+            # 获取缺陷重启的详细数据，填充self.reopenBugsData
+            self.get_reopen_bug_detail()
+
+            # 计算总重启缺陷数（字典值求和）
+            reopen_bug_count = sum(self.reopenBugsData.values())
+
+            # 计算总未修复缺陷数（字典值求和）
+            unrepaired_bug_count = sum(self.unrepairedBugsData.values())
+
+            # ==================================================================
+            # 阶段4：构建可视化结果信息
+            # ==================================================================
+            # 使用带颜色的文本格式化统计结果
+            self.bugReopenScoreMsg += (
+                f'BUG重启数为：{_print_text_font(reopen_bug_count, color="green")}\n'
+                f'BUG未修复数为：{_print_text_font(unrepaired_bug_count, color="green")}'
+            )
+
+            # 输出统计信息到控制台
+            print(self.bugReopenScoreMsg)
+
+            # ==================================================================
+            # 阶段5：计算最终评分
+            # ==================================================================
+            # 调用评分计算函数，传入总异常缺陷数（重启+未修复）
+            self.score["bugReopenScore"] = calculate_bug_reopen_rating(
+                reopen_bug_count + unrepaired_bug_count
+            )
+
+            # 打印分隔线
+            print('-' * LINE_LENGTH)
+
+            # 格式化评分结果文本
+            bug_reopen_score = f"{self.score['bugReopenScore']} 分"
+
+            # 生成带颜色标注的最终评分说明
+            print(
+                f'当名下BUG重启数和未修复数总计={_print_text_font(reopen_bug_count + unrepaired_bug_count, color="green")}时，'
+                f'当前该项目软件质量评分中“BUG重启”一项得分为： {_print_text_font(bug_reopen_score)}'
+            )
+
+            # 合并统计信息和评分规则
+            score_text = self.bugReopenScoreMsg + '\n' + score_text
+
+        # ==================================================================
+        # 阶段6：存储评分结果
+        # ==================================================================
+        # 将评分细节存入结果列表，包含：
+        # - 评分项标题
+        # - 评分规则说明
+        # - 实际得分
         self.scoreContents.append({
             'title': 'BUG重启',
             'scoreRule': score_text,
             'score': self.score['bugReopenScore']
         })
 
-    def _ai_generate_summary(self):
+    def _ai_generate_summary(self) -> None:
         """
-        生成测试质量报告的摘要。
+        生成测试质量报告的综合分析摘要
 
-        本函数根据项目开发和测试数据，生成一个详细的测试质量报告摘要。
-        它会根据BUG统计、开发人员信息、工作小时、BUG修复情况等数据进行分析，
-        并提出改进建议和总结。
+        本方法实现测试质量报告的智能生成流程，包含以下核心功能：
+        1. 多维度数据集成：聚合需求基础信息、缺陷分布、评分数据等关键指标
+        2. 结构化提示工程：构建符合大语言模型处理的提示模板
+        3. AI内容生成：调用深度学习模型生成专业分析报告
+        4. 交互式优化机制：支持人工复核与内容再生
 
         参数:
-        无
+            无显式参数，通过实例属性获取分析数据：
+            - self.requirementName: 需求名称
+            - self.developmentCycle: 开发周期（天）
+            - self.developerCount: 开发人员数量
+            - self.bugTotal: 实际发现的BUG总数
+            - self.bugInputTotal: 输入的BUG总数
+            - self.bugLevelsCount: BUG等级分布数据
+            - self.scoreContents: 评分项详细信息列表
+            - self.workHours: 工时统计数据
+            - self.fixers: 缺陷修复人员数据
+            - self.bugLevelsMultiClientCount: 多客户端缺陷等级分布
+            - self.bugSourceMultiClientCount: 多客户端缺陷来源分布
+            - self.score: 评分字典
 
-        返回值:
-        无
+        返回:
+            None: 结果直接写入self.reportSummary属性
+
+        异常:
+            APIError: 当AI服务调用失败时抛出
+            ValueError: 输入数据格式异常时抛出
+
+        实现流程:
+            1. 基础信息整合与校验
+            2. 缺陷数据动态装配
+            3. 评分规则与结果解析
+            4. 多维数据关联分析
+            5. 提示模板工程构建
+            6. AI服务交互控制
+            7. 输出内容质量保障
         """
-        # 构建摘要的基本信息
-        text = '请仔细的阅读我说的话, 尤其是重点和注意\n'
-        text += f"需求名称:{self.requirementName};开发周期总天数为:{round(self.developmentCycle, 1)};开发人员数量为:{self.developerCount};"
+        # ==================================================================
+        # 阶段1：基础信息装配
+        # ==================================================================
 
-        if self.bugTotal:
-            text += f"BUG总数为: {self.bugTotal};"
+        # 初始化提示文本框架，包含指令头和基础需求信息
+        text_parts = [
+            '请仔细的阅读我说的话, 尤其是重点和注意\n',
+            f"需求名称:{self.requirementName};",
+            f"开发周期总天数为:{round(self.developmentCycle, 1)};",
+            f"开发人员数量为:{self.developerCount};"
+        ]
+
+        # ==================================================================
+        # 阶段2：缺陷数据动态处理
+        # ==================================================================
+
+        # 处理BUG总数展示逻辑（区分实际统计与输入数据）
+        if self.bugTotal is not None:
+            bug_count_info = f"BUG总数为: {self.bugTotal};"
         else:
-            text += f"BUG总数为: {self.bugInputTotal}{'(未发现BUG)' if self.bugInputTotal == 0 else ''};"
+            status_suffix = '(未发现BUG)' if self.bugInputTotal == 0 else ''
+            bug_count_info = f"BUG总数为: {self.bugInputTotal}{status_suffix};"
+        text_parts.append(bug_count_info)
 
-        # 如果有BUG等级分布数据，则添加到摘要中
+        # 装配BUG等级分布数据（当存在有效数据时）
         if self.bugLevelsCount:
-            text += f"BUG等级分布情况为:{self.bugLevelsCount};"
+            text_parts.append(f"BUG等级分布情况为:{self.bugLevelsCount};")
 
-        # 如果有评分内容，则添加到摘要中
+        # ==================================================================
+        # 阶段3：评分数据分析
+        # ==================================================================
+
         if self.scoreContents:
-            text += f'\n项目研发评分情况:'
-            for scoreData in self.scoreContents:
-                text += f"\n{scoreData['title']}评分:"
-                text += f"\n{scoreData['scoreRule']}"
-                text += f"得分为:{scoreData['score']}\n"
-            text += ('注意:\n'
-                     'BUG修复评分(10-20分)都不存在项目上线当天未修复的BUG, 这是BUG创建当天未修复;\n'
-                     'BUG修复评分(1-5分)都存在项目上线当天未修复的BUG;\n'
-                     '(P0当天未修复的BUG数为、P1当天未修复的BUG数为、P2当天未修复的BUG数为)都归属在"BUG创建当天未修复的BUG数"\n'
-                     '(在项目上线当天存在P0或者P1未修复BUG数为、在项目上线当天存在P2未修复BUG数为)都归属在"项目上线当天未修复的BUG数"\n'
-                     '比如:\n'
-                     '在项目上线当天存在P0或者P1未修复BUG数为：0\n'
-                     '在项目上线当天存在P2未修复BUG数为：1\n'
-                     'P0当天未修复的BUG数为：0\n'
-                     'P1当天未修复的BUG数为：6\n'
-                     'P2当天未修复的BUG数为：20\n'
-                     '以上指的是项目上线当天未修复的BUG是:P0或者P1=0,P2=1;存在创建当天未修复的BUG是:P0=0,P1=6,P2=20\n'
-                     )
+            # 构建评分分析章节框架
+            score_section = [
+                '\n项目研发评分情况:',
+                *[f"\n{item['title']}评分:\n{item['scoreRule']}\n得分为:{item['score']}"
+                  for item in self.scoreContents],
+                '\n注意:\n'
+                'BUG修复评分(10-20分)表示不存在上线当天未修复BUG，但存在创建当天未修复BUG;\n'
+                'BUG修复评分(1-5分)表示存在上线当天未修复BUG;\n'
+                '(P0当天未修复BUG数、P1当天未修复BUG数、P2当天未修复BUG数)归属"创建当天未修复BUG数"\n'
+                '(上线当天P0/P1未修复数、上线当天P2未修复数)归属"上线当天未修复BUG数"\n'
+                '示例说明:\n'
+                '上线当天P0/P1未修复数：0\n'
+                '上线当天P2未修复数：1\n'
+                '创建当天P0未修复数：0\n'
+                '创建当天P1未修复数：6\n'
+                '创建当天P2未修复数：20\n'
+                '表示：上线当天无P0/P1BUG未修复，存在1个P2BUG上线当天未修复BUG；创建创建当天未修复BUG有6个P1BUG和20个P2BUG\n'
+            ]
+            text_parts.extend(score_section)
 
-        # 存在工时、修复BUG情况、缺陷级别分布、缺陷来源分布等数据，则添加到摘要中
-        if self.workHours and self.fixers and self.bugLevelsMultiClientCount and self.bugSourceMultiClientCount:
-            text += (f"开发人员工时情况(单位为小时): {self.workHours},"
-                     f"开发人员修复BUG情况(数值为BUG修复数): {self.fixers},"
-                     f"各端缺陷级别分布为(数值为BUG数量): {self.bugLevelsMultiClientCount},"
-                     f"各端缺陷来源分布为(数值为BUG数量): {self.bugSourceMultiClientCount},"
-                     f"总分:{sum(self.score.values())}")
-            text += ';'
+        # ==================================================================
+        # 阶段4：多维数据关联
+        # ==================================================================
 
-        # 添加测试经理的需求说明和格式要求
-        text += ('重点:我是一个测试经理，我现在需要做提测质量报告分析，根据以上信息给我一个对开发情况和测试结果的一个详细总结、点评和建议, '
-                 '在总结中可以看到一些不足之处的描述、改进办法和建议之类的, 并且需要美观的格式、描述清晰、直观、言简意赅、简明扼要、关键部分需要详细（比如BUG总数是多少，重启占比多少）'
-                 '下面是格式要求：'
-                 '将内容中的关键点使用<red>内容</red>标识,'
-                 )
-        text += ';'
+        # 当存在工时、修复数据等多维指标时进行深度关联
+        if all([
+            self.workHours,
+            self.fixers,
+            self.bugLevelsMultiClientCount,
+            self.bugSourceMultiClientCount
+        ]):
+            multidimensional_data = (
+                f"开发人员工时(小时): {self.workHours},"
+                f"开发人员修复情况(BUG数): {self.fixers},"
+                f"各端缺陷等级分布: {self.bugLevelsMultiClientCount},"
+                f"各端缺陷来源分布: {self.bugSourceMultiClientCount},"
+                f"总分:{sum(self.score.values())};"
+            )
+            text_parts.append(multidimensional_data)
 
-        # 如果定义了报告摘要的组成部分，则添加到摘要中
+        # ==================================================================
+        # 阶段5：提示工程构建
+        # ==================================================================
+
+        # 定义报告生成规范与格式要求
+        formatting_rules = [
+            '重点:作为测试经理需要生成提测质量分析报告，要求：',
+            '- 详细总结开发测试情况',
+            '- 指出不足与改进建议',
+            '- 格式美观、表述清晰',
+            '- 关键指标突出显示（如BUG总数、重启占比）',
+            '- 使用<red>标签标注重点内容'
+        ]
+        text_parts.extend(formatting_rules)
+
+        # 装配报告结构要求（当有预定义结构时）
         if TEST_REPORT_SUMMARY_COMPOSITION:
-            text += '组成部分为: ' + '、'.join(TEST_REPORT_SUMMARY_COMPOSITION)
+            structure_info = '组成部分: ' + '、'.join(TEST_REPORT_SUMMARY_COMPOSITION)
+            text_parts.append(structure_info)
 
-        text = text.replace(' ', '')
+        # 添加输出模板参考
+        template_reference = f'\n输出模板参考(不要画表格):{ai_output_template()}'
+        text_parts.append(template_reference)
 
-        # # 添加测试报告的HTML内容
-        # text += self.testReportHtml
-        text += f'\n输出模板(只是参考, 按照实际的来写):{ai_output_template()}'
+        # ==================================================================
+        # 阶段6：AI服务交互控制
+        # ==================================================================
 
-        # 循环生成报告摘要，直到满足条件
+        # 构建完整提示文本
+        full_prompt = ''.join(text_parts)
+
+        # 内容生成主循环
         while True:
-            self.reportSummary = deepseek_chat(text)
+            try:
+                # 调用AI服务生成报告内容
+                self.reportSummary = deepseek_chat(full_prompt)
 
-            # 如果支持重新生成AI摘要，则询问用户是否重新生成
-            if IS_SUPPORT_RETRY_CREATE_AI_SUMMARY:
-                print('')
-                print('')
-                while True:
-                    confirm = input('是否重新生成AI总结?(y/n): ').lower()
-                    if confirm in ('y', 'n'):
-                        break
+                # 当启用重试机制时进行交互确认
+                if IS_SUPPORT_RETRY_CREATE_AI_SUMMARY:
+                    print('\n' * 2)  # 输出视觉分隔
+
+                    # 用户确认循环
+                    while (confirm := input('是否重新生成AI总结?(y/n): ').lower()) not in {'y', 'n'}:
+                        print('输入错误, 请使用 y/n 确认: ')
+
+                    if confirm == 'y':
+                        continue  # 重新生成
                     else:
-                        print('输入错误, 是否重新生成AI总结?(y/n): ')
-                if confirm == 'y':
-                    continue
+                        break  # 退出循环
                 else:
-                    break
-            else:
-                break
+                    break  # 无重试需求直接退出
+
+            except (APIError, ConnectionError) as e:
+                # 处理服务不可用类异常
+                error_msg = f"AI服务调用失败: {str(e)}"
+                raise RuntimeError(error_msg) from e
 
     def run(self):
         """
-        执行软件质量评估的主要流程。该方法依次调用多个辅助方法来处理需求、工时、BUG等数据，
-        并在必要时进行错误检查和异常抛出。以下是详细的流程说明：
+        执行软件质量评估主流程控制方法
 
-        1. **编辑列表展示字段**:
-            - 调用 `self.edit_list_config()` 方法，配置必要的列字段以便后续获取所需数据。
-            - 如果获取不到列展示字段的配置信息，则先调用 `_get_list_config()` 获取当前的列展示字段配置。
-            - 确保缺陷列表和子任务列表中包含必要的字段（如状态、严重等级、修复人等），否则补充这些字段。
+        该方法统筹协调评估流程的各个关键环节，通过模块化调用实现完整的质量评估工作流。
+        包含配置管理、数据采集、计算分析、结果输出等阶段，确保各环节数据衔接与异常处理。
 
-        2. **获取需求名称**:
-            - 调用 `self.get_requirement_detail()` 方法，从服务器获取当前需求的详细信息，包括需求名称、开发人员等。
-            - 检查需求名称是否成功获取。如果未能成功获取需求名称，则抛出 `ValueError` 异常提示用户检查需求ID。
+        实现流程:
+            1. 系统配置初始化
+            2. 需求元数据获取
+            3. 开发资源消耗分析
+            4. 缺陷数据采集与统计
+            5. 质量指标计算与评分
+            6. 可视化结果生成
+            7. 评估报告生成与提交
+            8. 系统配置还原
 
-        3. **汇总开发人员工时**:
-            - 调用 `self.ger_requirement_task()` 方法，递归获取所有子任务并计算每个开发者的总工时。
-            - 检查是否存在测试任务。如果没有测试任务，则抛出 `ValueError` 异常提示用户检查需求是否有测试任务。
-            - 检查工时数据是否成功获取。如果没有获取到工时数据，则抛出 `ValueError` 异常提示用户检查需求是否有子任务。
+        异常处理:
+            - 关键数据缺失时抛出ValueError并中断流程
+            - 网络请求失败时进行重试并抛出可追溯异常
+            - 最终确保系统配置状态还原
 
-        4. **计算开发周期**:
-            - 如果有每日工作小时数的数据 (`self.dailyWorkingHoursOfEachDeveloper`)，则调用 `self.development_cycle()` 方法计算开发周期。
-            - 遍历每个开发者的工作小时数，对于每个开发者在每个日期的工作小时数：
-                - 如果工作小时数大于或等于8小时，则将该日期标记为1个完整工作日。
-                - 如果工作小时数小于8小时，则计算该日期的工作小时数占一个完整工作日的比例，并与该日期已有的工作小时数比较，取较大值。
-            - 最后，将所有日期的工作小时数相加，得到总的开发周期。
-
-        5. **打印工时汇总**:
-            - 调用 `self.print_development_hours()` 方法，计算并打印特定需求的所有开发人员的工时合计及每个开发人员的工时。
-            - 计算所有开发人员的总工时和开发人员数量，并打印每个开发人员的工时及总工时。
-
-        6. **统计BUG数量**:
-            - 调用 `self.bug_list_detail()` 方法，通过调用API分页获取BUG数据，并按严重等级统计BUG数量。
-            - 统计各端缺陷级别分布和缺陷根源分布，记录未修复的BUG以及上线当天未修复的BUG。
-            - 输出各严重等级的BUG数量，并存储总的BUG数量。
-
-        7. **计算并输出相关统计数据**:
-            - 调用 `self.score_result()` 方法，根据BUG总数、开发周期、开发人员数量等信息计算项目平均一天工作量的Bug数及相应的软件质量评分。
-            - 分别计算BUG数评分、BUG修复评分、BUG重启评分、配合积极性/文档完成性评分、冒烟测试评分。
-            - 打印总分。
-
-        8. **创建图表**:
-            - 调用 `self.create_chart()` 方法，生成多个条形图和折线图，涵盖开发工时、BUG修复人、各端缺陷级别分布及缺陷根源分布统计。
-            - 将图表路径信息转换为HTML格式，并存储在 `self.chartHtml` 中。
-            - 如果不需要创建报告，则打印图表链接。
-
-        9. **添加测试报告**:
-            - 调用 `self.add_test_report()` 方法，构造测试报告的请求，包含报告的标题、接收人、抄送人等信息。
-            - 附带关于测试结论、执行进度、发现的BUG数等详细信息，并通过POST请求将报告数据提交到指定的URL。
-            - 如果打开了AI生成总结内容开关 (`IS_CREATE_AI_SUMMARY`)，则调用AI生成总结方法。
-
-        10. **异常处理**:
-            - 使用 `try-except` 结构捕获 `ValueError` 异常，打印堆栈信息并重新抛出异常。
-            - 在 `finally` 块中，无论是否发生异常，都还原列字段展示的配置信息：
-                - 调用 `edit_query_filtering_list_config(self.oldBugListConfigStr)` 和 `edit_requirement_list_config(self.oldSubTaskListConfigStr)` 方法，确保列字段配置恢复原样。
-            - 如果还原配置信息失败，捕获异常并打印堆栈信息，重新抛出异常。
-
-        流程概述:
-        - 编辑列表展示字段以确保获取所需数据。
-        - 获取需求名称并验证其有效性。
-        - 汇总开发人员工时并验证测试任务的存在。
-        - 计算开发周期并打印工时汇总。
-        - 统计BUG数量并计算相关评分。
-        - 创建图表并生成HTML代码。
-        - 添加测试报告并提交。
-        - 捕获异常并打印堆栈信息。
-        - 最终确保列字段展示配置信息被还原。
+        关联方法:
+            - edit_list_config(): 列表视图配置管理
+            - get_requirement_detail(): 需求详情获取
+            - requirement_task_statistics(): 工时数据分析
+            - bug_list_detail(): 缺陷数据统计
+            - score_result(): 质量评分计算
+            - create_chart(): 可视化图表生成
+            - add_test_report(): 测试报告生成
         """
-        # 编辑列表展示字段
-        self.edit_list_config()
+        try:
+            # ==================================================================
+            # 阶段1：系统视图配置初始化
+            # ==================================================================
+            # 配置缺陷列表和子任务列表的展示字段，确保后续数据采集完整性
+            # 包含字段状态校验和动态配置更新
+            self.edit_list_config()
 
-        # 获取需求名称
-        self.get_requirement_detail()
+            # ==================================================================
+            # 阶段2：需求元数据获取与校验
+            # ==================================================================
+            # 通过TAPD API获取需求基础信息，包含：
+            # - 需求名称
+            # - 需求状态
+            # - 关联开发团队
+            # 执行数据有效性检查，缺失关键信息时中断流程
+            self.get_requirement_detail()
 
-        # 汇总开发人员工时
-        self.requirement_task_statistics()
+            # ==================================================================
+            # 阶段3：开发资源消耗分析
+            # ==================================================================
+            # 统计需求关联的所有子任务数据：
+            # 1. 递归获取多级子任务结构
+            # 2. 按开发者聚合总工时数据
+            # 3. 计算开发周期与人力投入
+            self.requirement_task_statistics()
 
-        if self.dailyWorkingHoursOfEachDeveloper:
-            # 计算开发周期
-            self.development_cycle()
+            # ==================================================================
+            # 阶段4：开发周期计算（条件执行）
+            # ==================================================================
+            # 当存在每日工时数据时，执行精细化开发周期计算：
+            # 1. 解析开发者每日投入工时
+            # 2. 计算有效工作日及部分工作日折算
+            # 3. 生成开发周期日报表
+            if self.dailyWorkingHoursOfEachDeveloper:
+                self.development_cycle()
 
-        # 打印工时汇总
-        self.print_development_hours()
+            # ==================================================================
+            # 阶段5：开发资源消耗可视化输出
+            # ==================================================================
+            # 生成工时汇总报告：
+            # 1. 计算开发者总工时及人均工时
+            # 2. 格式化输出至控制台
+            # 3. 生成工时分布直方图
+            self.print_development_hours()
 
-        # 统计BUG数量
-        self.bug_list_detail()
+            # ==================================================================
+            # 阶段6：缺陷数据采集与分析
+            # ==================================================================
+            # 通过TAPD缺陷接口获取全量缺陷数据：
+            # 1. 分页获取缺陷列表
+            # 2. 按严重等级/状态/根源分类统计
+            # 3. 识别未修复及重开缺陷
+            # 4. 生成缺陷分布矩阵
+            self.bug_list_detail()
 
-        # 恢复列字段展示的配置信息
-        self.restore_list_config()
+            # ==================================================================
+            # 阶段7：系统视图配置还原
+            # ==================================================================
+            # 恢复列表视图的原始配置，确保系统状态一致性：
+            # 1. 缺陷列表字段还原
+            # 2. 需求列表字段还原
+            # 3. 配置变更审计日志记录
+            self.restore_list_config()
 
-        # 计算并输出相关统计数据
-        self.score_result()
+            # ==================================================================
+            # 阶段8：质量指标体系计算
+            # ==================================================================
+            # 执行多维度质量评分计算：
+            # 1. BUG密度评分
+            # 2. 缺陷修复及时性评分
+            # 3. 缺陷重开率评分
+            # 4. 文档完备性评分
+            # 5. 生成综合质量评分卡
+            self.score_result()
 
-        # 创建图表
-        self.create_chart()
+            # ==================================================================
+            # 阶段9：数据可视化生成
+            # ==================================================================
+            # 创建评估结果可视化图表：
+            # 1. 工时分布柱状图
+            # 2. 缺陷分类环形图
+            # 3. 质量评分雷达图
+            # 4. 生成图表HTML嵌入代码
+            self.create_chart()
 
-        # 添加测试报告
-        self.add_test_report()
+            # ==================================================================
+            # 阶段10：测试报告生成与提交
+            # ==================================================================
+            # 构造并提交标准化测试报告：
+            # 1. 组装报告基础信息（标题/接收人/抄送）
+            # 2. 插入可视化图表及数据摘要
+            # 3. 调用TAPD报告提交接口
+            # 4. 触发AI总结生成（如配置启用）
+            self.add_test_report()
+
+        except ValueError as ve:
+            # 数据校验异常处理
+            traceback.print_exc()
+            raise RuntimeError(f"流程执行失败: {str(ve)}") from ve
+        finally:
+            try:
+                # ==================================================================
+                # 最终阶段：防御性系统配置还原
+                # ==================================================================
+                # 确保在任何执行路径下均还原系统配置：
+                # 1. 缺陷列表字段配置回滚
+                # 2. 需求列表字段配置回滚
+                # 3. 事务性操作保障
+                self.restore_list_config()
+            except Exception as final_error:
+                traceback.print_exc()
+                raise RuntimeError(f"配置还原失败: {str(final_error)}") from final_error
 
 
 if __name__ == "__main__":
