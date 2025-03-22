@@ -547,87 +547,161 @@ def _input(
         re_prompts_format: str = None,
         is_delete_space: bool = False,
         is_strip: bool = True
-) -> Any:  # 需要二次优化
+) -> Any:
     """
-    从用户获取输入并进行类型及有效性验证
+    实现交互式输入验证框架，支持多维度输入校验
 
-    该函数实现一个交互式输入循环，持续提示用户输入直到满足以下条件：
-    1. 输入内容能正确转换为指定类型（若指定 input_type）
-    2. 输入内容存在于允许的值列表（若指定 allow_contents）
+    本方法提供完整的输入验证解决方案，包含以下核心功能：
+    1. 类型安全转换：自动处理输入类型转换及异常
+    2. 值域校验：验证输入值是否在允许范围内
+    3. 格式匹配：支持正则表达式格式验证
+    4. 输入预处理：空格处理及字符串标准化
 
-    特性：
-    - 自动处理类型转换异常
-    - 支持自定义允许值范围验证
-    - 提供友好的错误提示
-    - 支持任意可转换类型（int/float/str等）
+    参数:
+        text (str):
+            输入提示文本，显示在控制台的引导信息
+            示例："请输入选项："
 
-    参数详解：
-    :param text: str -> 输入提示文本，显示在输入框前（如 "请输入年龄："）
-    :param input_type: type -> 目标数据类型（如 int/float/str），None表示保持字符串类型
-    :param allow_contents: list -> 允许的输入值列表，None表示不限制输入范围
+        input_type (type):
+            目标数据类型，支持Python基础类型如int/float/str等
+            None表示保留原始字符串类型
 
-    返回：
-    any -> 返回经过验证和类型转换后的输入值
+        allow_contents (List[Any]):
+            允许的输入值白名单，None表示不限制输入范围
+            示例：[1, 2, 3] 或 ["yes", "no"]
 
-    异常处理：
-    - 类型转换失败时自动提示重新输入
-    - 输入值不在允许范围内时提示有效值列表
+        re_format (str):
+            正则表达式模式，用于验证输入格式
+            示例：r"^[A-Za-z]+$" 验证纯字母输入
+
+        re_prompts_format (str):
+            格式验证失败时的友好提示文本
+            示例："请输入字母组合"
+
+        is_delete_space (bool):
+            是否删除输入中的所有空格字符
+            True时会将"a b"转换为"ab"
+
+        is_strip (bool):
+            是否移除输入首尾的空白字符
+            True时会自动执行strip()处理
+
+    返回:
+        Any: 经过验证和类型转换后的输入值，类型由input_type参数决定
+
+    异常:
+        ValueError: 当输入内容无法转换为目标类型时抛出
+        TypeError: 当输入值类型不符合白名单要求时抛出
+
+    实现逻辑:
+        1. 构建交互式输入循环，直到获得合法输入
+        2. 执行输入预处理（空格处理）
+        3. 进行类型转换验证
+        4. 执行白名单范围校验
+        5. 执行正则表达式格式验证
+        6. 返回通过所有校验的合法值
     """
-    # 无限循环直到获得合法输入
+    # 构建可持续交互的输入验证循环
     while True:
         try:
-            # 显示提示信息并获取原始输入
-            raw_input: str = input(text)  # 调用内置input函数获取用户输入
+            # ==================================================================
+            # 阶段1：原始输入获取
+            # ==================================================================
 
+            # 显示引导信息并获取原始输入
+            raw_input: str = input(text)
+
+            # ==================================================================
+            # 阶段2：输入预处理
+            # ==================================================================
+
+            # 执行首尾空白字符清理（当启用strip时）
             if is_strip:
                 raw_input = raw_input.strip()
 
+            # 执行全空格字符删除（当启用空格过滤时）
             if is_delete_space:
                 raw_input = raw_input.replace(' ', '')
 
-            # 类型转换处理
+            # ==================================================================
+            # 阶段3：类型转换处理
+            # ==================================================================
+
+            # 当指定目标类型时进行类型转换
             if input_type:
-                # 尝试将输入转换为目标类型（如int('123')）
+                # 尝试将输入转换为目标数据类型
                 converted_value = input_type(raw_input)
             else:
-                # 未指定类型则保持原始字符串
+                # 保持原始字符串类型不做转换
                 converted_value = raw_input
 
-            # 允许值范围验证
+            # ==================================================================
+            # 阶段4：白名单验证
+            # ==================================================================
+
+            # 当存在允许值列表时执行范围校验
             if allow_contents:
+                # 统一转换为小写进行大小写不敏感匹配（仅限字符串类型）
                 for index, allowContent in enumerate(allow_contents):
                     if isinstance(allowContent, str):
                         allow_contents[index] = allowContent.lower()
+
+                # 准备待校验值（字符串类型转小写）
                 check_value = converted_value.lower() if isinstance(converted_value, str) else converted_value
-                # 检查转换后的值是否在允许列表中
+
+                # 执行范围校验
                 if check_value not in allow_contents:
-                    # 构建友好的错误提示信息
+                    # 生成可读性强的错误提示信息
                     allowed_values = ', '.join(map(str, allow_contents))
                     error_msg = f"输入值必须在 [{allowed_values}] 范围内"
-                    # 打印带颜色的错误提示
-                    print(_print_text_font(f"\n错误：{error_msg}\n", color='red'))
-                    continue  # 跳过后续代码，重新循环
 
+                    # 输出红色字体错误提示并重新循环
+                    print(_print_text_font(f"\n错误：{error_msg}\n", color='red'))
+                    continue
+
+            # ==================================================================
+            # 阶段5：正则表达式校验
+            # ==================================================================
+
+            # 当存在正则表达式模式时执行格式验证
             if re_format and not re.fullmatch(re_format, converted_value):
+                # 优先使用自定义提示信息，否则显示原始正则表达式
+                format_prompt = re_prompts_format if re_prompts_format else re_format
+
+                # 输出格式错误提示并重新循环
                 print(_print_text_font(
-                    f"\n格式错误：输入内容格式不匹配, 期望格式: {re_prompts_format if re_prompts_format else re_format}\n"
-                    , color='red'
+                    f"\n格式错误：输入内容格式不匹配, 期望格式: {format_prompt}\n",
+                    color='red'
                 ))
                 continue
 
-            # 通过所有检查，返回合法值
+            # ==================================================================
+            # 阶段6：返回合法值
+            # ==================================================================
+
+            # 返回通过所有校验的合法值
             return converted_value
 
-        except ValueError as ve:  # 捕获类型转换错误（如将字母串转为数字）
-            # 提取目标类型名称（如 'int'/'float'）
+        except ValueError as ve:
+            # ==================================================================
+            # 异常处理：类型转换失败
+            # ==================================================================
+
+            # 获取目标类型名称用于错误提示
             type_name = input_type.__name__ if input_type else '字符串'
-            # 生成具体错误描述
             error_detail = f"输入的内容数据类型不匹配, 期望为 {type_name} 类型"
+
+            # 输出红色字体类型错误提示
             print(_print_text_font(f"\n格式错误：{error_detail}\n", color='red'))
 
-        except Exception as e:  # 防御性编程，捕获其他未预料异常
-            # 打印通用错误提示（理论上不会执行到这里）
+        except Exception as e:
+            # ==================================================================
+            # 异常处理：未预料错误
+            # ==================================================================
+
+            # 全局异常兜底处理
             print(_print_text_font("\n发生未预期的错误，请重新输入\n", color='red'))
+
 
 
 def _print_text_font(text: str or int, is_weight: bool = False, color: str = 'red') -> str:
@@ -3230,6 +3304,7 @@ class SoftwareQualityRating:
         self.bugs: List[Dict[str, Any]] = []
         self.bugPlatforms: List[str] = []
         self.bugSources: List[str] = []
+        self.bugExistPlatforms: List[str] = []
 
         # ==================================================================
         # 阶段2：时间相关初始化
@@ -3418,18 +3493,19 @@ class SoftwareQualityRating:
             error_msg = f"获取需求详情失败: {str(e)}"
             raise RuntimeError(error_msg) from e
 
-    def get_requirement_tasks(self) -> None:  # 需二次优化
+    def get_requirement_tasks(self) -> None:
         """
-        递归获取指定需求的所有子任务信息，支持分页查询
+        递归获取指定需求的所有子任务信息并存储至实例变量，支持分页查询
 
-        通过TAPD官方API接口，获取指定需求下的全量子任务数据，包括但不限于：
+        通过TAPD官方API接口，获取指定需求下的全量子任务数据并存储到self.subDemandTasks，
+        数据包含但不限于：
         - 任务基础属性（ID、标题、状态）
         - 时间信息（预计开始、截止时间）
         - 工作量信息（完成工时）
         - 责任人信息
 
-        返回:
-            List[Dict[str, Any]]: 结构化子任务数据列表，每个元素为包含子任务详细信息的字典
+        数据存储:
+            self.subDemandTasks: 结构化子任务数据列表，每个元素为包含子任务详细信息的字典
             示例结构:
             [
                 {
@@ -3444,7 +3520,6 @@ class SoftwareQualityRating:
                 },
                 ...
             ]
-            若接口无数据或请求失败，返回空列表
 
         异常:
             requests.JSONDecodeError: 响应数据不符合JSON格式时抛出
@@ -3455,7 +3530,7 @@ class SoftwareQualityRating:
             1. 初始化分页参数和存储结构
             2. 构建符合TAPD API规范的请求参数
             3. 分页获取数据并进行完整性校验
-            4. 合并多页数据并返回统一结果集
+            4. 合并多页数据存储至实例变量
         """
 
         # ==================================================================
@@ -3786,6 +3861,9 @@ class SoftwareQualityRating:
                     f"BUG名称：{bug['name']}，关键字段缺少值：{'、'.join(check_bug_key_result)}\n"
                 )
 
+            if bug['platform'] and bug['platform'] not in self.bugExistPlatforms:
+                self.bugExistPlatforms.append(bug['platform'])
+
         if sub_demand_task_error or bug_error:
             error_texts: List[str] = []
             if sub_demand_task_error.get('nonExistentTestTask'):
@@ -3804,62 +3882,117 @@ class SoftwareQualityRating:
 
         print('通过')
 
-    def question_stage(self):  # 需要二次优化
+    def question_stage(self) -> None:
+        """
+        执行需求上线相关的客户端选择与日期输入流程
+
+        该方法引导用户完成以下交互流程：
+        1. 确认是否需要处理多客户端上线场景
+        2. 选择涉及上线的客户端列表
+        3. 验证客户端选择的有效性
+        4. 收集各客户端的实际上线日期
+
+        流程特性：
+        - 支持多客户端批量选择
+        - 提供可视化客户端选项菜单
+        - 输入格式严格校验
+        - 客户端与BUG数据一致性检查
+        """
+        # ==================================================================
+        # 阶段1：初始化与基础校验
+        # ==================================================================
+        # 防御性检查：当不存在BUG数据时提前终止流程
         if not self.bugs:
             return
+
+        # 初始化交互过程数据容器
         online_clients: List[str] = []
         error_numbers: List[str] = []
+
+        # 打印阶段标题（居中显示）
         print(' 提问阶段 '.center(LINE_LENGTH, '='))
+
+        # ==================================================================
+        # 阶段2：用户交互-上线场景确认
+        # ==================================================================
+        # 获取多客户端上线场景确认
         is_multi_client_online: str = _input(
             '问题1: 是否存在不同客户端分开上线的任务或者是否需要手动输入上线日期?(y/n): ',
             input_type=str,
             allow_contents=['y', 'n']
         ).lower()
+
+        # 处理否定应答场景
         if is_multi_client_online == 'n':
             return
+
+        # ==================================================================
+        # 阶段3：客户端选择处理
+        # ==================================================================
+        # 标记需要手动输入上线日期
         self.isInputOnlineDate = True
+
+        # 构建客户端选择菜单文本
         question_client_select_text = '问题2: 涉及上线的客户端有哪些?\n'
-        for client in CLIENTS:
-            question_client_select_text += f"{CLIENTS.index(client) + 1}. {client}\n"
+        for idx, client in enumerate(CLIENTS, 1):
+            question_client_select_text += f"{idx}. {client}\n"
+
+        # 客户端选择输入循环
         while True:
+            # 获取并清洗客户端序号输入
             client_number_str: str = _input(
                 question_client_select_text + '输入序号并使用英文逗号隔开: ',
-                input_type=str
-            ).replace(' ', '')
+                input_type=str,
+                is_delete_space=True
+            )
+
+            # 解析输入序号并验证有效性
             for client_number in client_number_str.split(','):
                 if client_number:
+                    # 非数字输入检测
                     if not client_number.isdigit():
                         online_clients.clear()
                         break
+                    # 范围有效性校验
                     if len(CLIENTS) < int(client_number) or int(client_number) < 1:
                         error_numbers.append(client_number)
                     else:
                         online_clients.append(CLIENTS[int(client_number) - 1])
+
+            # 错误输入处理
             if error_numbers:
                 print(_print_text_font(f'输入错误, 请重新输入, 错误序号: {", ".join(error_numbers)}'))
                 online_clients.clear()
                 error_numbers.clear()
             elif not online_clients:
-                online_clients.clear()
                 print(_print_text_font('输入错误, 请重新输入'))
             else:
+                # ==================================================================
+                # 阶段4：客户端有效性校验
+                # ==================================================================
+                # 检查选择的客户端是否在BUG数据中存在
                 error_clients = self._check_bug_client(online_clients)
                 if error_clients:
                     online_clients.clear()
                     print(_print_text_font(f'BUG中存在未选择的客户端({"、".join(error_clients)})，请检查BUG单后重新选择'))
                 else:
                     break
-        question_number = 2
-        for onlineClient in online_clients:
-            question_number += 1
+
+        # ==================================================================
+        # 阶段5：在线日期收集
+        # ==================================================================
+        for number, onlineClient in enumerate(online_clients, 3):
+            # 获取并格式化上线日期输入
             client_online_date: str = _input(
-                f'问题{question_number}: 客户端{onlineClient}上线时间?(格式：2023-07-01): ',
+                f'问题{number}: 客户端{onlineClient}上线时间?(格式：2023-07-01): ',
                 input_type=str,
                 re_format=r'\d{4}-\d{1,2}-\d{1,2}',
                 re_prompts_format='YYYY-MM-DD',
                 is_delete_space=True,
             )
+            # 存储日期数据（转换为date类型）
             self.onlineDateDict[onlineClient] = date_time_to_date(client_online_date)
+
 
     def requirement_task_statistics(self):  # 需要二次优化
         """
@@ -5476,9 +5609,9 @@ class SoftwareQualityRating:
 
     def _check_bug_client(self, online_clients: List[str]):  # 需要二次优化
         error_clients: List[str] = []
-        for bug in self.bugs:
-            if bug['platform'] not in online_clients and bug['platform'] not in error_clients:
-                error_clients.append(bug['platform'])
+        for bugExistPlatform in self.bugExistPlatforms:
+            if bugExistPlatform not in online_clients and bugExistPlatform not in error_clients:
+                error_clients.append(bugExistPlatform)
         return error_clients
 
     def _add_multi_dimensional_table_html(self, table_data: dict) -> None:
