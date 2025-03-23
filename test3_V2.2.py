@@ -1795,7 +1795,7 @@ def extract_matching(pattern: str, text: str) -> list:
     支持处理多行文本和复杂匹配规则，适用于从结构化文本中批量提取特定格式的信息。
 
     参数:
-        pattern (str): 正则表达式模式字符串，定义需要匹配的文本规则。示例: r"\d(.*?)$"
+        pattern (str): 正则表达式模式字符串，定义需要匹配的文本规则。
         text (str): 需要执行匹配操作的原始文本内容。支持多行文本和Unicode字符
 
     返回:
