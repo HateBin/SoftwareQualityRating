@@ -1,4 +1,4 @@
-# 2025年3月9日00:35:14
+# 2025年03月23日23:25:59
 
 # ==================================================================
 # 导入标准库
@@ -42,13 +42,13 @@ OPEN_AI_IS_STREAM_RESPONSE = True  # 是否支持流式响应
 ACCOUNT = 'wuchong@addcn.com'  # 账号
 PASSWORD = 'WUchong_1008'  # 密码
 PROJECT_ID = "63835346"  # 项目ID
-REQUIREMENT_ID = "1163835346001078047"  # 需求ID 无BUG
+# REQUIREMENT_ID = "1163835346001078047"  # 需求ID 无BUG
 # REQUIREMENT_ID = "1163835346001071668"  # 需求ID
 # REQUIREMENT_ID = "1163835346001033609"  # 需求ID 中规中矩  警告：没有测试任务, 请检查"【中古屋住宅】競價服務新增按天結算測試（限台中）"需求是否有测试任务
 # REQUIREMENT_ID = "1163835346001051222"  # 需求ID 较差的质量
 # REQUIREMENT_ID = "1163835346001049795"  # 需求ID 较差的质量  开发周期也是很多小数点尾数
 # REQUIREMENT_ID = "1163835346001055792"  # 需求ID 较差的质量
-# REQUIREMENT_ID = "1163835346001118124"  # 需求ID
+REQUIREMENT_ID = "1163835346001118124"  # 需求ID
 # REQUIREMENT_ID = "1163835346001124542"  # 需
 REQUIREMENT_LIST_ID = '1000000000000000417'  # 需求列表ID, 用于查询或者编辑列表展示字段的配置
 
@@ -3246,68 +3246,93 @@ class SoftwareQualityRating:
         软件质量评分系统初始化方法
 
         本方法初始化软件质量评分系统所需的所有数据结构，包括：
-        - 项目基本信息
-        - 缺陷统计相关数据
-        - 评分结果存储
+        - 项目基础信息与人员配置
+        - 时间周期相关数据
+        - 缺陷全生命周期统计数据
+        - 评分规则及结果存储
         - 报告生成相关配置
+        - 系统运行状态跟踪
 
         数据结构说明:
-            1. 基础信息:
-                - requirementName: 需求名称
-                - PM: 产品经理
-                - testRecipient: 测试报告接收人列表
-                - testersStr: 测试人员字符串表示
-                - developers: 开发人员列表
+            1. 基础信息模块:
+                - requirementName: 需求名称（字符串）
+                - PM: 产品经理姓名（字符串）
+                - testRecipient: 测试报告接收人列表（邮件地址数组）
+                - testersStr: 测试团队人员字符串表示（逗号分隔）
+                - developers: 开发团队人员列表
+                - subDemandTasks: 子需求任务列表（字典数组）
+                - bugs: 缺陷数据集合（字典数组）
+                - bugPlatforms: 缺陷平台列表（如iOS/Android）
+                - bugSources: 缺陷根源分类列表（如代码/需求）
+                - bugExistPlatforms: 缺陷实际存在平台列表
 
-            2. 时间相关:
-                - earliestTaskDate: 最早任务日期
-                - lastTaskDate: 最晚任务日期
-                - onlineDateDict: 上线日期
+            2. 时间周期模块:
+                - isInputOnlineDate: 上线日期输入方式标识（True=手动输入）
+                - earliestTaskDate: 最早子任务开始日期（YYYY-MM-DD）
+                - lastTaskDate: 最晚子任务结束日期（YYYY-MM-DD）
+                - onlineDateDict: 多端分别上线日期字典（客户端类型为键）
+                - onlineDate: 系统自动识别的上线日期
 
-            3. 缺陷统计:
-                - bugLevelsCount: 缺陷级别统计
-                - bugLevelsMultiClientCount: 多端缺陷级别统计
-                - bugSourceCount: 缺陷根源统计
-                - bugSourceMultiClientCount: 多端缺陷根源统计
-                - bugTotal: 缺陷总数
-                - bugInputTotal: 手动输入缺陷总数
-                - bugIds: 缺陷ID列表
-                - reopenBugsData: 重新打开缺陷数据
-                - unrepairedBugsData: 未修复缺陷数据
-                - fixers: 缺陷修复人统计
+            3. 缺陷统计模块:
+                - workHours: 开发人员工时统计（默认字典）
+                - devTotalHours: 开发总工时（浮点数）
+                - developerCount: 参与开发人数（整数）
+                - dailyWorkingHoursOfEachDeveloper: 开发者每日工时明细（嵌套字典）
+                - developmentCycle: 完整开发周期（自然日）
 
-            4. 评分系统:
-                - score: 各项评分结果
-                - scoreContents: 评分详细内容
-                - bugCountScoreMsg: 缺陷数量评分说明
-                - bugRepairScoreMsg: 缺陷修复评分说明
-                - bugReopenScoreMsg: 缺陷重开评分说明
+                - bugLevelsCount: 缺陷等级分布统计（默认字典）
+                - bugLevelsMultiClientCount: 多客户端缺陷等级交叉统计
+                - bugSourceCount: 缺陷根源分类统计
+                - bugSourceMultiClientCount: 多客户端缺陷根源交叉统计
+                - bugTotal: 缺陷总量统计
+                - bugInputTotal: 手动录入缺陷数
+                - bugIds: 缺陷ID集合
+                - reopenBugsData: 缺陷重开情况统计（默认字典）
+                - unrepairedBugsData: 未修复缺陷统计（默认字典）
+                - fixers: 缺陷修复人员分布统计（默认字典）
 
-            5. 报告生成:
-                - testReportHtml: 测试报告HTML内容
-                - chartHtml: 图表HTML内容
-                - reportSummary: 报告总结内容
+            4. 评分系统模块:
+                - score: 评分结果字典（包含五大维度评分）
+                - scoreContents: 评分细则说明列表
+                - bugCountScoreMsg: 缺陷数量维度评分说明
+                - bugRepairScoreMsg: 缺陷修复质量评分说明
+                - bugReopenScoreMsg: 缺陷重开率评分说明
 
-            6. 配置信息:
-                - oldBugListConfigs: 原始缺陷列表配置
-                - oldSubTaskListConfigs: 原始子任务列表配置
+            5. 报告生成模块:
+                - testReportHtml: 测试报告HTML模板内容
+                - chartHtml: 可视化图表HTML片段
+                - reportSummary: 报告总结摘要内容
+
+            6. 配置管理模块:
+                - isInitialListConfig: 列表配置状态标识
+                - oldBugListConfigStr: 原始缺陷列表配置快照
+                - oldSubTaskListConfigStr: 原始子任务列表配置快照
+
+            7. 缺陷跟踪模块:
+                - unrepairedBugs: 未修复缺陷分级存储结构
+                    - deployProdDayUnrepaired: 上线当天未修复缺陷（按严重等级分类）
+                    - onThatDayUnrepaired: 创建当天未修复缺陷（按严重等级分类）
+
+            8. 趋势分析模块:
+                - dailyTrendOfBugChanges: 缺陷每日变化趋势数据
+                    （记录每日新增/修复/关闭等状态变化）
         """
         # ==================================================================
-        # 阶段1：基础信息初始化
+        # 1.基础信息初始化
         # ==================================================================
         self.requirementName: str = ''  # 需求名称
         self.PM: str = ''  # 产品经理
         self.testRecipient: List[str] = []  # 测试报告接收人列表(测试人员)
         self.testersStr: str = ''  # 测试人员字符串表示
         self.developers: List[str] = []  # 开发人员列表
-        self.subDemandTasks: List[Dict[str, Any]] = []
-        self.bugs: List[Dict[str, Any]] = []
-        self.bugPlatforms: List[str] = []
-        self.bugSources: List[str] = []
-        self.bugExistPlatforms: List[str] = []
+        self.subDemandTasks: List[Dict[str, Any]] = []  # 子需求任务列表
+        self.bugs: List[Dict[str, Any]] = []  # 缺陷数据集合
+        self.bugPlatforms: List[str] = []  # 缺陷平台列表
+        self.bugSources: List[str] = []  # 缺陷根源分类列表
+        self.bugExistPlatforms: List[str] = []  # 缺陷实际存在平台列表
 
         # ==================================================================
-        # 阶段2：时间相关初始化
+        # 2.时间相关初始化
         # ==================================================================
         self.isInputOnlineDate: bool = False  # 是否手动输入上线日期
         self.earliestTaskDate: str = ''  # 最早任务日期
@@ -3316,7 +3341,7 @@ class SoftwareQualityRating:
         self.onlineDate: Any = None  # 上线日期  针对于程序自己去找最后一个测试任务的预计开始日期作为上线日期
 
         # ==================================================================
-        # 阶段3：缺陷统计初始化
+        # 3.缺陷统计初始化
         # ==================================================================
         self.workHours = defaultdict(float)  # 开发人员工时统计
         self.devTotalHours = 0  # 开发总工时
@@ -3336,7 +3361,7 @@ class SoftwareQualityRating:
         self.fixers = defaultdict(int)  # 缺陷修复人统计
 
         # ==================================================================
-        # 阶段4：评分系统初始化
+        # 4.评分系统初始化
         # ==================================================================
         self.score = {
             "positiveIntegrityScore": 0,  # 配合积极性/文档完成性评分
@@ -3351,21 +3376,21 @@ class SoftwareQualityRating:
         self.bugReopenScoreMsg = ''  # 缺陷重开评分说明
 
         # ==================================================================
-        # 阶段5：报告生成初始化
+        # 5.报告生成初始化
         # ==================================================================
         self.testReportHtml = ''  # 测试报告HTML内容
         self.chartHtml = ''  # 图表HTML内容
         self.reportSummary = ''  # 报告总结内容
 
         # ==================================================================
-        # 阶段6：配置信息初始化
+        # 6.配置信息初始化
         # ==================================================================
         self.isInitialListConfig = True  # 是否初始化列表配置标志， True=列表配置为初始化， False=列表配置已被更新
         self.oldBugListConfigStr = ''  # 原始缺陷列表配置
         self.oldSubTaskListConfigStr = ''  # 原始子任务列表配置
 
         # ==================================================================
-        # 阶段7：未修复缺陷数据结构初始化
+        # 7.未修复缺陷数据结构初始化
         # ==================================================================
         self.unrepairedBugs = {
             # 部署正式环境当天未修复的缺陷
@@ -3382,7 +3407,7 @@ class SoftwareQualityRating:
         }
 
         # ==================================================================
-        # 阶段8：缺陷每日变化趋势初始化
+        # 8.缺陷每日变化趋势初始化
         # ==================================================================
         self.dailyTrendOfBugChanges = {}  # 缺陷每日变化趋势
 
@@ -3619,40 +3644,36 @@ class SoftwareQualityRating:
                 # 细化键缺失异常信息
                 raise KeyError(f"数据结构异常，缺失关键字段：{str(key_err)}") from key_err
 
-    def get_bug_list(self) -> None:  # 需二次优化
+    def get_bug_list(self) -> None:
         """
-        获取指定需求关联的缺陷列表及其分类元数据
+        获取指定需求关联的缺陷列表并存储到类属性中，同时提取平台和根源的分类元数据
 
-        本方法通过TAPD搜索接口分页获取指定需求的所有缺陷数据，同时提取平台和根源的分类选项信息。
-        支持动态字段配置验证和分页请求控制，确保获取完整的缺陷数据集。
+        核心功能：
+        1. 通过TAPD搜索接口分页获取指定需求的所有缺陷数据
+        2. 提取平台和根源的分类选项信息并存储到类属性
+        3. 将完整的缺陷数据集存储到self.bugs类属性
 
         执行流程：
         1. 初始化分页参数和存储结构
         2. 构建符合TAPD接口规范的动态搜索条件
         3. 分页发送API请求并验证响应数据结构
-        4. 提取平台和根源分类的元数据选项
-        5. 合并分页数据并进行完整性校验
-        6. 返回标准化结果集
+        4. 提取平台和根源分类的元数据存储到self.bugPlatforms和self.bugSources
+        5. 合并分页数据到self.bugs并进行完整性校验
 
-        参数:
-            requirement_name (str): 需求名称，用于构建缺陷搜索条件，需确保与TAPD系统内名称完全匹配
-                                    示例："用户登录功能优化"
+        类属性更新：
+            - self.bugPlatforms: 平台分类选项列表，按TAPD系统配置顺序排列
+                                 示例：["iOS", "Android", "Web"]
+            - self.bugSources: 缺陷根源分类选项列表，按TAPD系统配置顺序排列
+                               示例：["代码错误", "需求变更", "环境配置"]
+            - self.bugs: 缺陷数据字典列表，每个字典对应一个缺陷的完整字段数据
+                         示例：[{"id": "BUG001", "title": "登录按钮无响应", ...}, ...]
 
-        返回:
-            Tuple[List[str], List[str], List[Dict]]: 包含三个元素的元组：
-                - platforms (List[str]): 平台分类选项列表，按TAPD系统配置顺序排列
-                                         示例：["iOS", "Android", "Web"]
-                - root_causes (List[str]): 缺陷根源分类选项列表，按TAPD系统配置顺序排列
-                                           示例：["代码错误", "需求变更", "环境配置"]
-                - bugs (List[Dict]): 缺陷数据字典列表，每个字典对应一个缺陷的完整字段数据
-                                     示例：[{"id": "BUG001", "title": "登录按钮无响应", ...}, ...]
-
-        异常:
+        异常：
             ValueError: 当响应数据格式异常或关键字段缺失时抛出
             KeyError: 当接口返回数据结构不符合预期时抛出
             requests.JSONDecodeError: 当响应内容无法解析为JSON格式时抛出
 
-        关联方法:
+        关联方法：
             fetch_data(): 执行API请求的核心方法，处理网络通信和基础错误重试
         """
         # ==================================================================
@@ -3789,39 +3810,88 @@ class SoftwareQualityRating:
                     f"响应内容解析失败，原始内容：{raw_content}"
                 ) from decode_err
 
-    def get_all_list_data(self):  # 需二次优化
-        sub_demand_task_error: Dict[str, List[str]] = {}
-        bug_error: Dict[str, List[str]] = {}
-        is_exist_test_task: bool = False
+    def get_all_list_data(self) -> None:
+        """
+        执行需求相关数据的全量获取与完整性校验流程
 
+        本方法实现完整的质量控制流程，包含以下关键环节：
+        1. 配置管理：临时修改列表视图配置以适配数据采集需求
+        2. 数据采集：并发获取需求子任务和缺陷数据
+        3. 完整性校验：多维度验证数据的业务合规性
+        4. 错误处理：结构化收集和呈现数据质量问题
+
+        流程架构：
+            配置准备 -> 数据采集 -> 配置还原 -> 业务校验 -> 异常处理
+
+        异常检测范围：
+            - 子任务状态异常
+            - 关键字段缺失
+            - 测试任务完整性
+            - 缺陷平台信息合规性
+
+        关联方法：
+            edit_list_config()：配置管理方法
+            restore_list_config()：配置恢复方法
+            _print_error()：标准化错误输出方法
+        """
+        # ==================================================================
+        # 阶段1：初始化准备
+        # ==================================================================
+        # 定义结构化错误存储容器
+        sub_demand_task_error: Dict[str, List[str]] = {}  # 子任务错误分类存储
+        bug_error: Dict[str, List[str]] = {}  # 缺陷错误分类存储
+        is_exist_test_task: bool = False  # 测试任务存在性标识
+
+        # 打印流程启动标识
         print(' 前置准备 '.center(LINE_LENGTH, '='))
 
+        # ==================================================================
+        # 阶段2：视图配置管理
+        # ==================================================================
+        # 修改列表视图配置以适配数据采集需求
         self.edit_list_config()
 
+        # ==================================================================
+        # 阶段3：数据采集执行
+        # ==================================================================
+        # 执行数据获取流程（含进度提示）
         print('正在获取数据', end='')
-
-        for i in range(3):
+        for i in range(3):  # 模拟进度指示
             time.sleep(1)
             print('.', end='')
 
-        self.get_requirement_tasks()
-        self.get_bug_list()
+        # 并发获取需求子任务和缺陷数据
+        self.get_requirement_tasks()  # 需求子任务获取
+        self.get_bug_list()  # 缺陷列表获取
+        print('完成')  # 完成提示
 
-        print('完成')
-
+        # ==================================================================
+        # 阶段4：视图配置恢复
+        # ==================================================================
+        # 还原列表视图至原始配置
         self.restore_list_config()
 
+        # ==================================================================
+        # 阶段5：数据完整性校验
+        # ==================================================================
         print('正在进行数据校验', end='')
-
-        for i in range(3):
+        for i in range(3):  # 校验进度指示
             time.sleep(1)
             print('.', end='')
 
+        # 校验子任务基础数据完整性
         if not self.subDemandTasks:
             self._print_error("失败\n警告：未获取任何子任务数据，请检查需求任务")
 
+        # ==================================================================
+        # 阶段6：子任务业务规则校验
+        # ==================================================================
+        # 遍历所有子任务进行多维度检查
         for subDemandTask in self.subDemandTasks:
+            # 解构任务属性
             owner = subDemandTask['owner']
+
+            # 校验点1：子任务状态合规性
             if subDemandTask['status'] != 'done':
                 if 'undone' not in sub_demand_task_error:
                     sub_demand_task_error['undone'] = ['需求存在未完成的子任务：\n']
@@ -3830,12 +3900,16 @@ class SoftwareQualityRating:
                 )
                 continue
 
-            check_sub_demand_task_key_result = list(msg for key, msg in {
-                'begin': '预计开始日期',
-                'due': '预计结束日期',
-                'owner': '处理人',
-            }.items() if not subDemandTask.get(key))
+            # 校验点2：关键字段完整性
+            check_sub_demand_task_key_result = list(
+                msg for key, msg in {
+                    'begin': '预计开始日期',
+                    'due': '预计结束日期',
+                    'owner': '处理人',
+                }.items() if not subDemandTask.get(key)
+            )
 
+            # 收集缺失字段信息
             if check_sub_demand_task_key_result:
                 if 'lackValue' not in sub_demand_task_error:
                     sub_demand_task_error['lackValue'] = ['警告：需求存在关键字段缺失：\n']
@@ -3843,17 +3917,30 @@ class SoftwareQualityRating:
                     f"任务名称：{subDemandTask['name']}，关键字段缺少值：{'、'.join(check_sub_demand_task_key_result)}\n"
                 )
 
+            # 校验点3：测试任务存在性
             if owner and owner.replace(DEPARTMENT, '').replace(';', '') in TESTERS and not is_exist_test_task:
                 is_exist_test_task = True
 
+        # ==================================================================
+        # 阶段7：全局规则校验
+        # ==================================================================
+        # 校验测试任务全局存在性
         if not is_exist_test_task:
             sub_demand_task_error['nonExistentTestTask'] = ['警告：需求不存在测试任务，请完善需求任务！\n']
 
+        # ==================================================================
+        # 阶段8：缺陷数据校验
+        # ==================================================================
+        # 遍历所有缺陷进行合规性检查
         for bug in self.bugs:
-            check_bug_key_result = list(msg for key, msg in {
-                'platform': '软件平台',
-            }.items() if not bug.get(key))
+            # 校验点1：缺陷平台信息完整性
+            check_bug_key_result = list(
+                msg for key, msg in {
+                    'platform': '软件平台',
+                }.items() if not bug.get(key)
+            )
 
+            # 收集平台信息缺失数据
             if check_bug_key_result:
                 if 'lackValue' not in bug_error:
                     bug_error['lackValue'] = ['警告：BUG存在关键字段缺失：\n']
@@ -3861,26 +3948,41 @@ class SoftwareQualityRating:
                     f"BUG名称：{bug['name']}，关键字段缺少值：{'、'.join(check_bug_key_result)}\n"
                 )
 
+            # 记录存在的软件平台类型
             if bug['platform'] and bug['platform'] not in self.bugExistPlatforms:
                 self.bugExistPlatforms.append(bug['platform'])
 
+        # ==================================================================
+        # 阶段9：异常信息整合输出
+        # ==================================================================
+        # 结构化整合错误信息
         if sub_demand_task_error or bug_error:
             error_texts: List[str] = []
+
+            # 整合测试任务缺失错误
             if sub_demand_task_error.get('nonExistentTestTask'):
                 error_texts.append(sub_demand_task_error['nonExistentTestTask'][0])
 
+            # 整合未完成任务信息
             if sub_demand_task_error.get('undone') and len(sub_demand_task_error['undone']) > 1:
                 error_texts.append('    '.join(sub_demand_task_error["undone"]))
 
+            # 整合字段缺失信息
             if sub_demand_task_error.get('lackValue') and len(sub_demand_task_error['lackValue']) > 1:
                 error_texts.append('    '.join(sub_demand_task_error["lackValue"]))
 
+            # 整合缺陷字段缺失信息
             if bug_error.get('lackValue') and len(bug_error['lackValue']) > 1:
                 error_texts.append('    '.join(bug_error["lackValue"]))
 
+            # 统一输出错误信息
             self._print_error('失败\n' + ''.join(error_texts))
 
+        # ==================================================================
+        # 阶段10：流程完成确认
+        # ==================================================================
         print('通过')
+
 
     def question_stage(self) -> None:
         """
@@ -3994,54 +4096,84 @@ class SoftwareQualityRating:
             self.onlineDateDict[onlineClient] = date_time_to_date(client_online_date)
 
 
-    def requirement_task_statistics(self):  # 需要二次优化
+    def requirement_task_statistics(self) -> None:
         """
         统计需求关联的子任务数据，计算开发工时并识别关键时间节点
 
         核心功能：
-        1. 遍历所有子任务，分离开发任务和测试任务
+        1. 解析子任务数据，分离开发任务和测试任务
         2. 计算开发者总工时和每日工时分布
         3. 记录项目关键时间节点（最早/最晚任务日期、上线日期）
         4. 维护测试相关数据（测试负责人、收件人列表）
 
-        优化点：
-        - 分离开发/测试任务处理逻辑
-        - 增加数据校验和异常处理
-        - 优化日期比较逻辑
-        - 减少嵌套层次提升可读性
-        """
+        参数:
+            无，通过实例属性self.subDemandTasks获取子任务数据
 
+        返回:
+            无，结果直接更新实例属性
+
+        异常:
+            ValueError: 当子任务数据格式异常时抛出
+            KeyError: 当子任务缺少必要字段时抛出
+        """
         # ==================================================================
-        # 阶段2：遍历处理每个子任务
+        # 阶段1：子任务数据遍历处理
         # ==================================================================
         for child in self.subDemandTasks:
             try:
-                # 数据清洗：去除部门前缀
-                raw_owner = child['owner'].replace(";", "")  # 获取任务处理人名称(T5张三)
-                processing_personnel = extract_matching(rf"{DEPARTMENT}(.*?)$", raw_owner)[0]  # 去除部门前缀(张三)
+                # ==================================================================
+                # 步骤1.1：基础数据提取
+                # ==================================================================
+                # 获取任务处理人名称并去除部门前缀
+                raw_owner = child['owner'].replace(";", "")  # 原始处理人格式示例：T5张三
+                processing_personnel = extract_matching(rf"{DEPARTMENT}(.*?)$", raw_owner)[0]  # 提取纯用户名：张三
 
-                # 提取实际完成工时、开始日期、结束日期
-                effort_completed = float(child.get('effort_completed', 0))  # 实际完成工时
+                # ==================================================================
+                # 步骤1.2：工时数据转换
+                # ==================================================================
+                # 转换字符串类型工时数为浮点数，缺失值时默认为0
+                effort_completed = float(child.get('effort_completed', 0))
+
+                # ==================================================================
+                # 步骤1.3：日期数据提取
+                # ==================================================================
+                # 获取任务计划时间范围（ISO 8601格式字符串）
                 begin_date = child['begin']  # 预计开始日期
                 due_date = child['due']  # 预计结束日期
 
             except (ValueError, TypeError) as e:
-                raise e
+                # ==================================================================
+                # 异常处理：数据转换失败
+                # ==================================================================
+                error_msg = f"子任务数据格式异常：{str(e)}\n问题数据：{json.dumps(child, indent=2)}"
+                raise ValueError(error_msg) from e
+            except KeyError as e:
+                # ==================================================================
+                # 异常处理：关键字段缺失
+                # ==================================================================
+                error_msg = f"子任务缺少必要字段：{str(e)}\n问题数据：{json.dumps(child, indent=2)}"
+                raise KeyError(error_msg) from e
 
             # ==================================================================
-            # 阶段3：任务分类处理
+            # 阶段2：任务分类处理
             # ==================================================================
-            # 开发者任务处理
             if processing_personnel not in TESTERS:
+                # ==================================================================
+                # 分支2.1：开发任务处理
+                # ==================================================================
+                # 收集开发者工时数据并更新开发周期
                 self._process_developer_task(
-                    developer=processing_personnel,  # 开发者名称
-                    effort=effort_completed,  # 实际完成工时
-                    begin=begin_date,  # 预计开始日期
-                    due=due_date,  # 预计结束日期
-                    child_data=child  # 子任务数据
+                    developer=processing_personnel,
+                    effort=effort_completed,
+                    begin=begin_date,
+                    due=due_date,
+                    child_data=child
                 )
-            # 测试任务处理
             else:
+                # ==================================================================
+                # 分支2.2：测试任务处理
+                # ==================================================================
+                # 更新测试负责人信息并记录关键时间节点
                 self._process_tester_task(
                     due_date=due_date,
                     begin_date=begin_date,
@@ -4049,17 +4181,16 @@ class SoftwareQualityRating:
                 )
 
         # ==================================================================
-        # 阶段4：后期校验
+        # 阶段3：后期数据校验
         # ==================================================================
+        # 检查关键时间节点的数据完整性
         if not self.earliestTaskDate:
-            self._print_error(
-                f"警告：未识别到最早任务日期，请检查{self.requirementName}需求的最早一个开发任务的预期开始时间是否正常")
+            self._print_error(f"警告：未识别到最早任务日期，请检查{self.requirementName}需求的开发任务预期开始时间")
         if not self.lastTaskDate:
-            self._print_error(
-                f"警告：未识别到最晚任务日期，请检查{self.requirementName}需求的最后一个测试任务的预期结束时间是否正常")
+            self._print_error(f"警告：未识别到最晚任务日期，请检查{self.requirementName}需求的测试任务预期结束时间")
         if not self.onlineDate and not self.isInputOnlineDate:
-            self._print_error(
-                f"警告：未识别到上线日期，请检查{self.requirementName}需求的最后一个测试任务的预期开始时间是否正常")
+            self._print_error(f"警告：未识别到上线日期，请检查{self.requirementName}需求的测试任务预期开始时间")
+
 
     def print_development_hours(self) -> None:
         """
@@ -4123,88 +4254,99 @@ class SoftwareQualityRating:
         # 输出工时总计：显示计算得到的总工时
         print(f"工时合计：{self.devTotalHours} 小时")
 
-    def bug_list_detail(self) -> None:  # 需求二次优化
+    def bug_list_detail(self) -> None:
         """
         获取指定需求关联的缺陷列表并执行多维度统计分析
 
-        核心功能：
-        1. 通过API接口分页获取指定需求的全部缺陷数据
-        2. 提取关键字段并进行数据清洗
-        3. 执行多维度统计（严重等级、根源分类、平台分布等）
-        4. 跟踪缺陷生命周期状态变化
-        5. 维护数据完整性校验
+        方法流程：
+            1. 缺陷数据遍历处理：逐条处理缺陷记录并进行多维度统计
+            2. 后处理与结果输出：汇总统计结果并输出关键指标
 
-        处理流程：
-            1. 初始化统计数据结构
-            2. 调用分页接口获取原始数据
-            3. 遍历缺陷记录进行数据清洗
-            4. 执行字段级校验和空值处理
-            5. 更新各维度统计计数器
-            6. 记录缺陷状态流转轨迹
+        核心处理逻辑：
+            - 缺陷数据过滤：跳过状态为'rejected'的无效缺陷
+            - 关键字段提取：ID、严重等级、缺陷根源、平台等核心字段
+            - 数据标准化：统一字段格式，处理空值和异常数据
+            - 多维度统计：按严重等级、根源分类、平台分布进行聚合统计
+            - 生命周期跟踪：记录缺陷状态流转轨迹，检测未修复缺陷
+            - 时序数据分析：跟踪每日缺陷创建/解决/关闭趋势
 
-        关联方法：
-            get_bug_list()：基础数据获取接口
-            multi_client_data_processing()：多维数据聚合处理器
-            date_time_to_date()：日期格式标准化
+        异常处理：
+            - KeyError：捕获字段缺失异常，记录日志并跳过当前缺陷
+            - ValueError：处理数据格式异常，记录日志并跳过当前缺陷
+
+        关联方法调用：
+            get_bug_list()        : TAPD接口分页获取缺陷数据
+            multi_client_data_processing() : 多客户端维度数据聚合
+            date_time_to_date()   : 日期格式标准化处理器
+            _statistics_deploy_prod_day_unrepaired_bug() : 上线未修复缺陷检测
+            _statistics_on_that_day_unrepaired_bug() : 创建日未修复缺陷检测
+            _daily_trend_of_bug_changes_count() : 缺陷状态时序分析
+
+        数据结构说明：
+            self.bugLevelsCount     : 缺陷严重等级计数器（P0/P1/P2）
+            self.bugSourceCount     : 缺陷根源分类计数器
+            self.bugLevelsMultiClientCount : 平台×严重等级矩阵统计
+            self.bugSourceMultiClientCount : 平台×缺陷根源矩阵统计
+            self.bugIds             : 有效缺陷ID集合
+            self.unrepairedBugsData : 顽固缺陷跟踪字典
+            self.fixers             : 缺陷修复人统计字典
         """
-        # ==================================================================
-        # 阶段1：数据获取与初始化
-        # ==================================================================
-
-        # 输出数据分割线（控制台可视化）
+        # 控制台输出分割线（可视化模块边界）
         print(' 不同等级的缺陷的数量 '.center(LINE_LENGTH, '-'))
 
         # ==================================================================
-        # 阶段2：缺陷数据遍历处理
+        # 阶段1：缺陷数据遍历处理
         # ==================================================================
 
-        # 处理空数据场景（防御性编程）
+        # 空数据场景处理（防御性编程）
         if not self.bugs:
             print('未获取到有效缺陷数据')
             return
 
-        # 遍历原始缺陷记录（每个缺陷为字典结构）
+        # 遍历原始缺陷记录（每条记录为字典结构）
         for bug in self.bugs:
             # ==================================================================
-            # 阶段2.1：基础字段提取与清洗
+            # 步骤1.1：基础字段提取与过滤
             # ==================================================================
 
-            # 获取缺陷状态并过滤已拒绝的缺陷
+            # 过滤已拒绝状态的缺陷（无效数据跳过）
             bug_status = bug.get('status', '')
             if bug_status == 'rejected':
                 continue
 
-            # 提取关键字段（防御性get方法避免KeyError）
+            # ==================================================================
+            # 步骤1.2：关键字段提取与清洗
+            # ==================================================================
+
+            # 提取核心字段（防御性get方法避免KeyError）
             bug_id = bug.get('id')  # 缺陷唯一标识符
             severity_name = bug.get('custom_field_严重等级', '')  # 原始严重等级
             bug_source = bug.get('source', '')  # 缺陷根源分类
             bug_platform = bug.get('platform')  # 客户端平台标识
 
             # ==================================================================
-            # 阶段2.2：数据标准化处理
+            # 步骤1.3：数据标准化处理
             # ==================================================================
 
-            # 严重等级格式处理（示例值："P1-严重" → "P1"）
+            # 严重等级格式清洗（示例："P1-严重" → "P1"）
             if severity_name and '-' in severity_name:
                 severity_name = severity_name.split('-')[0].strip()
 
-            # 空值处理与默认值设置
+            # 空值处理与默认值设置（保证统计完整性）
             severity_name = severity_name if severity_name else '空'
             bug_source = bug_source if bug_source else '空'
             bug_platform = bug_platform if bug_platform else '空'
 
             try:
                 # ==================================================================
-                # 阶段2.3：核心统计逻辑
+                # 步骤1.4：核心统计逻辑
                 # ==================================================================
 
-                # 更新严重等级全局计数器
-                self.bugLevelsCount[severity_name] += 1
+                # 更新全局统计计数器
+                self.bugLevelsCount[severity_name] += 1  # 严重等级统计
+                self.bugSourceCount[bug_source] += 1     # 缺陷根源统计
 
-                # 更新根源分类全局计数器
-                self.bugSourceCount[bug_source] += 1
-
-                # 执行多维度统计（平台×严重等级）
+                # 执行多维度矩阵统计（平台×严重等级）
                 multi_client_data_processing(
                     result=self.bugLevelsMultiClientCount,
                     key=bug_platform,
@@ -4212,7 +4354,7 @@ class SoftwareQualityRating:
                     sub_key=severity_name
                 )
 
-                # 执行多维度统计（平台×缺陷根源）
+                # 执行多维度矩阵统计（平台×缺陷根源）
                 multi_client_data_processing(
                     result=self.bugSourceMultiClientCount,
                     key=bug_platform,
@@ -4221,22 +4363,22 @@ class SoftwareQualityRating:
                 )
 
                 # ==================================================================
-                # 阶段2.4：生命周期跟踪
+                # 步骤1.5：缺陷生命周期跟踪
                 # ==================================================================
 
-                if bug_id:  # 有效缺陷ID处理
-                    # 记录缺陷ID（用于后续详细跟踪）
+                if bug_id:  # 仅处理有效缺陷ID
+                    # 记录缺陷ID（用于后续跟踪）
                     self.bugIds.append(bug_id)
 
-                    # 标准化日期字段（处理多种输入格式）
+                    # 标准化日期格式（处理多种输入格式）
                     created_date = date_time_to_date(bug.get('created', ''))
                     resolved_date = date_time_to_date(bug['resolved']) if bug.get('resolved') else None
 
-                    # 顽固缺陷检测逻辑（特定标签处理）
+                    # 顽固缺陷检测（特定标签处理）
                     if bug.get('custom_field_Bug等级') == '顽固（180 天）':
                         self.unrepairedBugsData[bug_id] += 1
 
-                    # 上线未修复缺陷检测
+                    # 上线未修复缺陷检测（生产环境）
                     self._statistics_deploy_prod_day_unrepaired_bug(
                         bug_status=bug_status,
                         bug_platform=bug_platform,
@@ -4245,7 +4387,7 @@ class SoftwareQualityRating:
                         resolved_date=resolved_date
                     )
 
-                    # 创建日未修复缺陷检测
+                    # 创建日未修复缺陷检测（开发阶段）
                     self._statistics_on_that_day_unrepaired_bug(
                         bug_status=bug_status,
                         bug_id=bug_id,
@@ -4259,29 +4401,30 @@ class SoftwareQualityRating:
                     self.fixers[fixer] += 1
 
                 # ==================================================================
-                # 阶段2.5：时序数据分析
+                # 步骤1.6：时序数据分析
                 # ==================================================================
 
-                # 更新每日缺陷趋势（创建/解决/关闭状态跟踪）
+                # 更新每日缺陷趋势（创建/解决/关闭状态）
                 self._daily_trend_of_bug_changes_count(bug)
 
             except KeyError as e:
-                # 处理字段缺失异常（记录日志并跳过当前缺陷）
+                # 字段缺失异常处理（记录日志并跳过）
                 self._print_error(f"警告：缺陷数据缺失关键字段 {str(e)}，缺陷ID: {bug_id}")
             except ValueError as e:
-                # 处理数据格式异常（记录日志并跳过当前缺陷）
+                # 数据格式异常处理（记录日志并跳过）
                 self._print_error(f"警告：数据格式异常 {str(e)}，缺陷ID: {bug_id}")
 
         # ==================================================================
-        # 阶段3：后处理与结果输出
+        # 阶段2：后处理与结果输出
         # ==================================================================
 
-        # 计算缺陷总数（有效缺陷ID数量）
+        # 计算有效缺陷总数（基于ID数量）
         self.bugTotal = len(self.bugIds)
 
-        # 控制台输出统计摘要
+        # 控制台输出统计摘要（严重等级分布）
         for level, count in self.bugLevelsCount.items():
             print(f"{level}级别缺陷数量：{count}")
+
 
     def score_result(self) -> None:
         """
@@ -4370,7 +4513,7 @@ class SoftwareQualityRating:
             # 通用异常处理
             self._print_error(f"警告：评分系统错误：{str(e)}")
 
-    def development_cycle(self):
+    def development_cycle(self) -> None:
         """
         计算项目的开发周期，基于每个开发者的每日有效工时数据
 
@@ -4808,7 +4951,7 @@ class SoftwareQualityRating:
             traceback.print_exc()
             raise RuntimeError(error_msg).with_traceback(e.__traceback__) from e
 
-    def restore_list_config(self):
+    def restore_list_config(self) -> None:
         """
         还原列表视图的字段展示配置到初始状态
 
@@ -4929,7 +5072,7 @@ class SoftwareQualityRating:
             error_msg = f"获取缺陷重新打开详情失败: {str(e)}"
             raise RuntimeError(error_msg) from e
 
-    def _charts_to_html(self, charts: list):
+    def _charts_to_html(self, charts: list) -> None:
         """
         将图表数据转换为标准化的HTML结构，包含图像和表格
 
@@ -5326,8 +5469,14 @@ class SoftwareQualityRating:
                 # 将带部门前缀的负责人标识加入列表末尾
                 self.testRecipient.append(TESTER_LEADER)
 
-    def _process_developer_task(self, developer: str, effort: float, begin: datetime.date,
-                                due: datetime.date, child_data: dict):
+    def _process_developer_task(
+            self,
+            developer: str,
+            effort: float,
+            begin: datetime.date,
+            due: datetime.date,
+            child_data: dict
+    ) -> None:
         """
         处理开发者任务的核心业务逻辑
 
@@ -5387,59 +5536,62 @@ class SoftwareQualityRating:
         else:
             self._print_error(f"存在{developer}任务的预计开始时间和预计结束时间错误，begin={begin}，due={due}")
 
-    def _process_tester_task(self, due_date: datetime.date, begin_date: datetime.date, owner: str):  # 需要二次优化
+    def _process_tester_task(self, due_date: datetime.date, begin_date: datetime.date, owner: str) -> None:
         """
         处理测试任务的核心业务逻辑
 
         该方法实现测试任务数据的处理流程，主要功能包括：
-        1. 标记测试任务存在状态
-        2. 维护项目关键时间节点
-        3. 管理测试报告接收人列表
+        1. 测试任务存在性标记
+        2. 项目关键时间节点管理
+        3. 测试报告接收人列表维护
 
         参数:
-            due_date (datetime.date): 测试任务截止日期，用于时间范围计算
-            begin_date (datetime.date): 测试任务起始日期，用于上线日期确定
-            owner (str): 测试任务负责人标识，用于收件人列表管理
+            due_date (datetime.date):
+                测试任务截止日期，用于更新项目时间跨度记录
+                当值不为None时触发时间范围更新
+            begin_date (datetime.date):
+                测试任务起始日期，用于智能推算实际上线日期
+                满足条件时将更新onlineDate属性
+            owner (str):
+                测试任务负责人标识，用于维护测试报告接收人列表
+                自动进行去重处理
 
         返回:
             None: 通过修改实例属性实现状态更新
 
         异常:
-            AttributeError: 当日期参数格式错误时可能抛出
-            KeyError: 当负责人信息解析异常时可能抛出
+            TypeError: 当日期参数类型不符合datetime.date时可能抛出
+            ValueError: 当日期比较出现逻辑矛盾时可能抛出
 
         实现逻辑:
-            1. 首次测试任务标记
-            2. 任务时间范围更新
-            3. 上线日期智能推算
-            4. 收件人列表维护
+            1. 时间范围更新阶段：
+               - 当due_date有效时，调用_update_date_range更新项目最晚任务日期
+            2. 上线日期推算阶段：
+               - 当begin_date有效且未手动输入上线日期时
+               - 遵循"最后开始原则"：取最大的begin_date作为实际上线日期
+            3. 收件人维护阶段：
+               - 采用存在性检查确保负责人唯一性
+               - 安全追加新负责人到testRecipient列表
         """
         # ==================================================================
-        # 阶段2：时间范围更新
+        # 阶段1：时间范围更新
         # ==================================================================
-        # 调用内部方法更新项目时间跨度记录
-        # 仅当截止日期有效时触发更新
         if due_date is not None:
-            self._update_date_range(due=due_date)  # 更新最晚任务日期
+            self._update_date_range(due=due_date)
 
         # ==================================================================
-        # 阶段3：上线日期计算
+        # 阶段2：上线日期计算
         # ==================================================================
-        # 逻辑规则：
-        # 当测试开始日期存在且满足以下条件之一时更新上线日期：
-        # a. 当前未设置上线日期
-        # b. 新开始日期晚于现有上线日期
         if begin_date is not None and not self.isInputOnlineDate:
             if (self.onlineDate is None) or (begin_date > self.onlineDate):
-                self.onlineDate = begin_date  # 更新上线日期为最晚测试开始日期
+                self.onlineDate = begin_date
 
         # ==================================================================
-        # 阶段4：收件人列表维护
+        # 阶段3：收件人列表维护
         # ==================================================================
-        # 安全添加负责人到收件人列表（去重处理）
-        # 使用列表推导式实现存在性检查，避免KeyError
         if owner not in self.testRecipient:
-            self.testRecipient.append(owner)  # 追加新负责人到列表末尾
+            self.testRecipient.append(owner)
+
 
     def _update_date_range(self, begin: datetime.date = None, due: datetime.date = None):
         """
@@ -5494,57 +5646,71 @@ class SoftwareQualityRating:
             bug_id: str,
             severity_name: str,
             resolved_date: str = None
-    ) -> None:  # 需要二次优化
+    ) -> None:
         """
         统计上线生产环境当天仍未修复的缺陷，并按严重等级分类存储
 
         核心功能：
-        1. 识别上线当天未修复的缺陷
-        2. 根据缺陷严重等级进行分类
-        3. 维护未修复缺陷的存储结构
+        1. 缺陷状态与解决时间双重校验
+        2. 上线当天未修复状态判定
+        3. 严重等级分类存储
 
         参数详解:
-            bug_status (str): 缺陷当前状态，取值范围参考TAPD状态机
-                              示例值：'closed'（已关闭）、'resolved'（已解决）
-            bug_id (str): 缺陷唯一标识符，用于跟踪具体缺陷实例
-            severity_name (str): 缺陷严重等级名称，必须与BUG_LEVELS列表定义一致
-                                 示例值：'致命'、'严重'、'一般'
-            resolved_date (str, optional): 缺陷解决日期，格式应为'YYYY-MM-DD'
-                                           当缺陷未解决时可为空
+            bug_status (str):
+                缺陷当前状态，取值范围参考TAPD状态机
+                示例值：'closed'（已关闭）、'resolved'（已解决）
+            bug_platform (str):
+                缺陷所属平台标识，用于多平台上线日期匹配
+                示例值：'IOS'、'Android'
+            bug_id (str):
+                缺陷唯一标识符，用于跟踪具体缺陷实例
+            severity_name (str):
+                缺陷严重等级名称，必须与BUG_LEVELS列表定义一致
+                示例值：'致命'、'严重'、'一般'
+            resolved_date (str, optional):
+                缺陷解决日期，格式应为'YYYY-MM-DD'，当缺陷未解决时可为空
 
-        实现逻辑:
-            1. 缺陷状态与解决时间双重校验
-            2. 上线当天未修复状态判定
-            3. 严重等级分类存储
+        异常处理:
+            - 当severity_name不在预定义BUG_LEVELS列表时，会跳过分类逻辑
+            - 日期格式异常会在调用栈上层处理
         """
-        # 初始化默认状态为上线当天未修复缺陷
+        # ==================================================================
+        # 阶段1：初始化状态标识
+        # ==================================================================
+        # 默认标记为上线当天未修复缺陷（后续校验可能修改此状态）
         is_deploy_prod_day_unrepaired_bug = True  # type: bool
 
         # ==================================================================
-        # 阶段1：校验缺陷解决状态与时间
+        # 阶段2：缺陷解决状态与时间校验
         # ==================================================================
-        # 当缺陷已关闭且存在解决日期时，检查是否在上线前已解决
+        # 当缺陷已关闭且存在解决日期时，执行时间校验逻辑
         if bug_status == 'closed' and resolved_date:
+            # 处理多平台上线日期场景
             if self.isInputOnlineDate:
+                # 对比解决日期与对应平台上线日期
                 if resolved_date < self.onlineDateDict[bug_platform]:
                     is_deploy_prod_day_unrepaired_bug = False
+            # 处理单平台上线日期场景
             else:
-                # 解决日期早于上线日期则标记为已修复缺陷
+                # 对比解决日期与全局上线日期
                 if resolved_date < self.onlineDate:
                     is_deploy_prod_day_unrepaired_bug = False  # type: bool
 
         # ==================================================================
-        # 阶段2：按严重等级分类存储缺陷ID
+        # 阶段3：严重等级分类存储
         # ==================================================================
         # 处理致命(P0)和严重(P1)级别缺陷
         if is_deploy_prod_day_unrepaired_bug and severity_name in BUG_LEVELS[0:2]:
             # 将缺陷ID添加到P0P1分类列表
-            self.unrepairedBugs['deployProdDayUnrepaired']['P0P1'].append(bug_id)  # list[str] 类型维护
+            # 数据结构维护：list[str] 类型追加操作
+            self.unrepairedBugs['deployProdDayUnrepaired']['P0P1'].append(bug_id)
 
         # 处理一般(P2)及以下级别缺陷
         elif is_deploy_prod_day_unrepaired_bug and severity_name not in BUG_LEVELS[0:2]:
             # 将缺陷ID添加到P2分类列表
-            self.unrepairedBugs['deployProdDayUnrepaired']['P2'].append(bug_id)  # list[str] 类型维护
+            # 数据结构维护：list[str] 类型追加操作
+            self.unrepairedBugs['deployProdDayUnrepaired']['P2'].append(bug_id)
+
 
     def _statistics_on_that_day_unrepaired_bug(
             self,
@@ -5607,12 +5773,60 @@ class SoftwareQualityRating:
             # 将缺陷ID添加到P2分类列表
             self.unrepairedBugs['onThatDayUnrepaired']['P2'].append(bug_id)  # list[str] 类型维护
 
-    def _check_bug_client(self, online_clients: List[str]):  # 需要二次优化
-        error_clients: List[str] = []
-        for bugExistPlatform in self.bugExistPlatforms:
-            if bugExistPlatform not in online_clients and bugExistPlatform not in error_clients:
-                error_clients.append(bugExistPlatform)
+    def _check_bug_client(self, online_clients: List[str]) -> List[str]:
+        """
+        验证缺陷关联的客户端平台是否在已上线客户端列表中
+
+        该方法实现以下核心功能：
+        1. 遍历缺陷关联的所有客户端平台
+        2. 校验各平台是否存在于已上线客户端清单
+        3. 收集未上线或无效的客户端平台
+
+        参数:
+            online_clients (List[str]):
+                已上线客户端标识列表，元素应为标准客户端标识符
+                示例: ['IOS', 'Android', 'H5']
+
+        返回:
+            List[str]:
+                包含所有未上线客户端平台的列表，按首次出现顺序排列
+                示例: ['Flutter', 'Windows'] 表示存在缺陷关联了未上线的客户端
+
+        异常处理:
+            TypeError: 当输入参数不是列表类型时抛出
+            ValueError: 当输入列表包含非字符串元素时抛出
+        """
+        # ==================================================================
+        # 阶段1：输入参数校验
+        # ==================================================================
+        # 校验输入类型为列表（防御性编程）
+        if not isinstance(online_clients, list):
+            raise TypeError("online_clients参数必须为列表类型")
+
+        # 校验列表元素类型（确保数据质量）
+        for client in online_clients:
+            if not isinstance(client, str):
+                raise ValueError("online_clients列表元素必须为字符串类型")
+
+        # ==================================================================
+        # 阶段2：无效客户端平台检测
+        # ==================================================================
+        # 初始化无效客户端收集列表
+        error_clients = []
+
+        # 遍历缺陷关联的所有客户端平台
+        for bug_platform in self.bugExistPlatforms:
+            # 检查平台是否未上线且未被记录
+            if (bug_platform not in online_clients
+                and bug_platform not in error_clients):
+                # 记录无效客户端平台（保留首次出现顺序）
+                error_clients.append(bug_platform)
+
+        # ==================================================================
+        # 阶段3：返回检测结果
+        # ==================================================================
         return error_clients
+
 
     def _add_multi_dimensional_table_html(self, table_data: dict) -> None:
         """
@@ -6473,7 +6687,7 @@ class SoftwareQualityRating:
                 error_msg = f"AI服务调用失败: {str(e)}"
                 raise RuntimeError(error_msg) from e
 
-    def run(self):  # 需要二次优化
+    def run(self):
         """
         执行软件质量评估主流程控制方法
 
@@ -6481,14 +6695,15 @@ class SoftwareQualityRating:
         包含配置管理、数据采集、计算分析、结果输出等阶段，确保各环节数据衔接与异常处理。
 
         实现流程:
-            1. 需求元数据获取
-            2. 系统配置初始化
-            3. 开发资源消耗分析
-            4. 缺陷数据采集与统计
-            5. 质量指标计算与评分
-            6. 可视化结果生成
-            7. 评估报告生成与提交
-            8. 系统配置还原
+            1. 需求元数据获取与校验
+            2. 系统配置管理与数据采集
+            3. 用户交互式参数收集
+            4. 开发资源与周期分析
+            5. 缺陷数据采集与统计
+            6. 系统配置还原与清理
+            7. 质量指标计算与评分
+            8. 数据可视化生成
+            9. 测试报告生成与提交
 
         异常处理:
             - 关键数据缺失时抛出ValueError并中断流程
@@ -6510,17 +6725,31 @@ class SoftwareQualityRating:
             # ==================================================================
             # 通过TAPD API获取需求基础信息，包含：
             # - 需求名称
-            # - 需求状态
             # - 关联开发团队
             # 执行数据有效性检查，缺失关键信息时中断流程
             self.get_requirement_detail()
 
+            # ==================================================================
+            # 阶段2：系统配置管理与数据采集
+            # ==================================================================
+            # 配置系统视图字段用于完整数据采集：
+            # 1. 临时修改需求列表字段配置
+            # 2. 调整缺陷列表展示字段
+            # 3. 获取完整数据后还原配置
+            # 4. 校验数据有效性
             self.get_all_list_data()
 
+            # ==================================================================
+            # 阶段3：用户交互式参数收集
+            # ==================================================================
+            # 执行用户提问阶段收集必要参数：
+            # 1. 确认需求基本信息
+            # 2. 收集测试范围与平台信息
+            # 3. 获取质量评估标准参数
             self.question_stage()
 
             # ==================================================================
-            # 阶段3：开发资源消耗分析
+            # 阶段4：开发资源与周期分析
             # ==================================================================
             # 统计需求关联的所有子任务数据：
             # 1. 递归获取多级子任务结构
@@ -6529,9 +6758,9 @@ class SoftwareQualityRating:
             self.requirement_task_statistics()
 
             # ==================================================================
-            # 阶段4：开发周期计算（条件执行）
+            # 阶段5：开发周期精细化计算（条件执行）
             # ==================================================================
-            # 当存在每日工时数据时，执行精细化开发周期计算：
+            # 当存在每日工时数据时执行：
             # 1. 解析开发者每日投入工时
             # 2. 计算有效工作日及部分工作日折算
             # 3. 生成开发周期日报表
@@ -6539,7 +6768,7 @@ class SoftwareQualityRating:
                 self.development_cycle()
 
             # ==================================================================
-            # 阶段5：开发资源消耗可视化输出
+            # 阶段6：开发资源可视化输出
             # ==================================================================
             # 生成工时汇总报告：
             # 1. 计算开发者总工时及人均工时
@@ -6548,7 +6777,7 @@ class SoftwareQualityRating:
             self.print_development_hours()
 
             # ==================================================================
-            # 阶段6：缺陷数据采集与分析
+            # 阶段7：缺陷数据采集与分析
             # ==================================================================
             # 通过TAPD缺陷接口获取全量缺陷数据：
             # 1. 分页获取缺陷列表
@@ -6558,16 +6787,16 @@ class SoftwareQualityRating:
             self.bug_list_detail()
 
             # ==================================================================
-            # 阶段7：系统视图配置还原
+            # 阶段8：系统视图配置还原
             # ==================================================================
-            # 恢复列表视图的原始配置，确保系统状态一致性：
+            # 恢复列表视图的原始配置：
             # 1. 缺陷列表字段还原
             # 2. 需求列表字段还原
             # 3. 配置变更审计日志记录
             self.restore_list_config()
 
             # ==================================================================
-            # 阶段8：质量指标体系计算
+            # 阶段9：质量指标体系计算
             # ==================================================================
             # 执行多维度质量评分计算：
             # 1. BUG密度评分
@@ -6578,7 +6807,7 @@ class SoftwareQualityRating:
             self.score_result()
 
             # ==================================================================
-            # 阶段9：数据可视化生成
+            # 阶段10：数据可视化生成
             # ==================================================================
             # 创建评估结果可视化图表：
             # 1. 工时分布柱状图
@@ -6588,7 +6817,7 @@ class SoftwareQualityRating:
             self.create_chart()
 
             # ==================================================================
-            # 阶段10：测试报告生成与提交
+            # 阶段11：测试报告生成与提交
             # ==================================================================
             # 构造并提交标准化测试报告：
             # 1. 组装报告基础信息（标题/接收人/抄送）
@@ -6617,6 +6846,7 @@ class SoftwareQualityRating:
             except Exception as final_error:
                 traceback.print_exc()
                 raise RuntimeError(f"配置还原失败: {str(final_error)}") from final_error
+
 
 
 if __name__ == "__main__":
