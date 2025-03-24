@@ -1,8 +1,6 @@
 # 2025年03月23日23:25:59
 
-# ==================================================================
 # 导入标准库
-# ==================================================================
 import base64
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -19,9 +17,7 @@ import time
 import traceback
 from typing import (Any, Dict, List, Optional, Tuple, TypeVar, Union)
 
-# ==================================================================
 # 导入第三方库
-# ==================================================================
 import chinese_calendar as calendar
 import cloudscraper
 from cryptography.hazmat.backends import default_backend
@@ -182,10 +178,6 @@ def create_plot(func):
 
     返回：
     Callable: 包装后的图表生成函数
-
-    异常：
-    当被装饰函数返回数据不符合规范时抛出 ValueError
-    图表生成过程中发生错误时抛出 RuntimeError
     """
 
     @functools.wraps(func)  # 保留被装饰函数的元数据
@@ -195,25 +187,14 @@ def create_plot(func):
 
         执行流程：
         1. 执行被装饰函数获取图表数据
-        2. 验证数据完整性
-        3. 配置图表样式
-        4. 保存图表到内存缓冲区
-        5. 清理图表资源
+        2. 配置图表样式
+        3. 保存图表到内存缓冲区
+        4. 清理图表资源
         """
         buf = None  # 初始化图表缓冲区对象
         try:
-            # ==================================================================
-            # 数据准备阶段
-            # ==================================================================
-
             # 执行被装饰函数获取图表配置数据
             func_data: dict = func(*args, **kwargs)
-
-            # 验证返回数据结构的完整性
-            required_keys: set = {'desiredWidthData', 'labels', 'title', 'maxBarHeight', 'ax'}
-            if not required_keys.issubset(func_data.keys()):
-                missing = required_keys - func_data.keys()
-                raise ValueError(f"缺失必要的图表配置参数: {missing}")
 
             # ==================================================================
             # 数据解包与预处理
@@ -366,12 +347,8 @@ def calculate_bug_count_rating(X: float) -> int or None:
     返回:
         int or None: 返回对应的质量评分(20/15/10/5/1分)，若输入不在任何区间则返回None
 
-    异常处理:
-        - 当输入X为负数时，默认匹配第一个区间(-1,1]
-        - 当输入X为非数值类型时，会触发类型错误
-
     评分映射规则（左开右闭区间）:
-        (-∞, 1]   → 20分（极低密度，质量优秀）
+        (-1, 1]   → 20分（极低密度，质量优秀）
         (1, 1.5]  → 15分（低密度，质量良好）
         (1.5, 2]  → 10分（中等密度，质量合格）
         (2, 3]    → 5分（较高密度，质量堪忧）
@@ -402,7 +379,7 @@ def calculate_bug_count_rating(X: float) -> int or None:
     raise "错误：BUG密度值不在预期范围内，请检查输入数据有效性"
 
 
-def calculate_bug_reopen_rating(X: int) -> int:
+def calculate_bug_reopen_rating(X: int) -> int or None:
     """
     根据缺陷重新打开次数计算软件质量评分
 
@@ -458,7 +435,7 @@ def calculate_bug_repair_rating(unrepaired_bug: Dict[str, Any]) -> int or None:
 
     评分规则（按优先级从高到低判断）：
     - 若上线当天存在未修复的致命(P0)或严重(P1)缺陷 → 1分（质量极差）
-    - 若上线当天存在未修复的一般(P2)缺陷 → 5分（质量堪忧）
+    - 若上线当天存在未修复的一般或其他(P2)缺陷 → 5分（质量堪忧）
     - 若缺陷创建当天未修复致命(P0)但存在未修复严重(P1) → 10分（质量合格）
     - 若缺陷创建当天已修复所有P0/P1，但存在未修复P2 → 15分（质量良好）
     - 若所有缺陷在创建当天均被修复 → 20分（质量优秀）
@@ -1394,7 +1371,7 @@ def fetch_data(
         raise ValueError(f"不支持的HTTP方法: {method}")
 
     # 初始化重试计数器
-    retry_count: int = 0
+        retry_count: int = 0
     max_retries: int = 3
     last_exception: Optional[Exception] = None
 
@@ -1426,7 +1403,6 @@ def fetch_data(
             if (response.status_code == 200
                     and "meta" in response.text
                     and "20002" in response.text):
-                get_session_id()  # 重新获取会话
                 raise requests.HTTPError('会话已过期', response=response)
 
             # 返回原始响应对象供后续处理
@@ -3483,7 +3459,7 @@ class SoftwareQualityRating:
             developer_str = response_detail.get('developer', '')
             if developer_str:
                 # 处理分号分隔的开发人员字符串
-                self.developers = [dev.strip() for dev in developer_str.split(';') if dev.strip()]
+                self.developers = [dev.strip() for dev in developer_str.split(';')]
 
                 # 移除最后一个空字符串（如果存在）
                 if self.developers and not self.developers[-1]:
@@ -3872,7 +3848,7 @@ class SoftwareQualityRating:
         self.restore_list_config()
 
         # ==================================================================
-        # 阶段5：数据完整性校验
+        # 阶段5：数据数据是否有值
         # ==================================================================
         print('正在进行数据校验', end='')
         for i in range(3):  # 校验进度指示
@@ -3891,7 +3867,7 @@ class SoftwareQualityRating:
             # 解构任务属性
             owner = subDemandTask['owner']
 
-            # 校验点1：子任务状态合规性
+            # 校验点1：子任务状态是否已完成
             if subDemandTask['status'] != 'done':
                 if 'undone' not in sub_demand_task_error:
                     sub_demand_task_error['undone'] = ['需求存在未完成的子任务：\n']
@@ -4908,11 +4884,11 @@ class SoftwareQualityRating:
             # 阶段2：配置合并处理
             # ==================================================================
             bug_fields = list(self.oldBugListConfigStr.split(';'))
-            bug_fields.extend(BUG_LIST_MUST_KEYS)
+            bug_fields.extend([k for k in BUG_LIST_MUST_KEYS if k not in bug_fields])
             new_bug_config = ';'.join(bug_fields)
 
             task_fields = list(self.oldSubTaskListConfigStr.split(';'))
-            task_fields.extend(SUB_TASK_LIST_MUST_KEYS)
+            task_fields.extend([k for k in SUB_TASK_LIST_MUST_KEYS if k not in task_fields])
             new_task_config = ';'.join(task_fields)
 
             # ==================================================================
@@ -6672,8 +6648,11 @@ class SoftwareQualityRating:
                     print('\n' * 2)  # 输出视觉分隔
 
                     # 用户确认循环
-                    while (confirm := input('是否重新生成AI总结?(y/n): ').lower()) not in {'y', 'n'}:
-                        print('输入错误, 请使用 y/n 确认: ')
+                    confirm = _input(
+                        '是否重新生成AI总结?(y/n): ',
+                        input_type=str,
+                        allow_contents=['y', 'n'],
+                    )
 
                     if confirm == 'y':
                         continue  # 重新生成
@@ -6700,10 +6679,9 @@ class SoftwareQualityRating:
             3. 用户交互式参数收集
             4. 开发资源与周期分析
             5. 缺陷数据采集与统计
-            6. 系统配置还原与清理
-            7. 质量指标计算与评分
-            8. 数据可视化生成
-            9. 测试报告生成与提交
+            6. 质量指标计算与评分
+            7. 数据可视化生成
+            8. 测试报告生成与提交
 
         异常处理:
             - 关键数据缺失时抛出ValueError并中断流程
@@ -6787,16 +6765,7 @@ class SoftwareQualityRating:
             self.bug_list_detail()
 
             # ==================================================================
-            # 阶段8：系统视图配置还原
-            # ==================================================================
-            # 恢复列表视图的原始配置：
-            # 1. 缺陷列表字段还原
-            # 2. 需求列表字段还原
-            # 3. 配置变更审计日志记录
-            self.restore_list_config()
-
-            # ==================================================================
-            # 阶段9：质量指标体系计算
+            # 阶段8：质量指标体系计算
             # ==================================================================
             # 执行多维度质量评分计算：
             # 1. BUG密度评分
@@ -6807,7 +6776,7 @@ class SoftwareQualityRating:
             self.score_result()
 
             # ==================================================================
-            # 阶段10：数据可视化生成
+            # 阶段9：数据可视化生成
             # ==================================================================
             # 创建评估结果可视化图表：
             # 1. 工时分布柱状图
@@ -6817,7 +6786,7 @@ class SoftwareQualityRating:
             self.create_chart()
 
             # ==================================================================
-            # 阶段11：测试报告生成与提交
+            # 阶段10：测试报告生成与提交
             # ==================================================================
             # 构造并提交标准化测试报告：
             # 1. 组装报告基础信息（标题/接收人/抄送）
