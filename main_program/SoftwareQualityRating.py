@@ -78,8 +78,8 @@ PLT_FONT = {
 AI_CONFIG_MAPPING = {
     'v3': {'model': 'deepseek-chat', 'name': 'deepseek', 'msg': '源生deepseek-V3模型'},
     'r1': {'model': 'deepseek-reasoner', 'name': 'deepseek', 'msg': '源生deepseek-R1模型'},
-    '百炼r1': {'model': 'deepseek-r1', 'name': 'tongyi', 'msg': '通义千问deepseek-V3模型'},
-    '百炼v3': {'model': 'deepseek-v3', 'name': 'tongyi', 'msg': '通义千问deepseek-R1模型'},
+    '百炼r1': {'model': 'deepseek-r1', 'name': 'tongyi', 'msg': '通义千问deepseek-R1模型'},
+    '百炼v3': {'model': 'deepseek-v3', 'name': 'tongyi', 'msg': '通义千问deepseek-V3模型'},
 }
 
 AI_URL_AND_KEY = {
@@ -332,7 +332,7 @@ def create_plot(func):
     return wrapper
 
 
-def calculate_bug_count_rating(X: float) -> int or None:
+def calculate_bug_count_rating(X: int or float = None) -> int or None:
     """
     根据BUG密度计算软件质量评分。
 
@@ -341,7 +341,7 @@ def calculate_bug_count_rating(X: float) -> int or None:
     - 评分基于BUG密度所在的预设区间映射得到，密度越低评分越高
 
     参数:
-        X (float): 计算得到的BUG密度值，表示平均每个开发人日的BUG数量
+        X (int or float): 计算得到的BUG密度值，表示平均每个开发人日的BUG数量
                    X的取值范围应为 X > 0，但方法内做了容错处理
 
     返回:
@@ -354,6 +354,11 @@ def calculate_bug_count_rating(X: float) -> int or None:
         (2, 3]    → 5分（较高密度，质量堪忧）
         (3, +∞)   → 1分（极高密度，质量差）
     """
+    # 参数校验
+    if X is None or X == '':
+        raise ValueError("错误：输入参数X不能为空")
+    if not isinstance(X, (int, float)):
+        raise TypeError("错误：输入参数X必须是数字类型")
     # 定义评分区间与得分的映射关系（按评分从高到低排列）
     # 每个元组格式：(区间下界, 区间上界), 得分
     # 注意：区间为左开右闭，即 lower < X <= upper
@@ -376,10 +381,10 @@ def calculate_bug_count_rating(X: float) -> int or None:
 
     # 若未匹配任何区间（理论上不会执行到这里，因最后一个区间覆盖+∞）
     # 防御性编程：打印警告信息并返回None
-    raise "错误：BUG密度值不在预期范围内，请检查输入数据有效性"
+    raise ValueError("错误：输入值不在任何评分区间内")
 
 
-def calculate_bug_reopen_rating(X: int) -> int or None:
+def calculate_bug_reopen_rating(X: int = None) -> int or None:
     """
     根据缺陷重新打开次数计算软件质量评分
 
@@ -402,11 +407,12 @@ def calculate_bug_reopen_rating(X: int) -> int or None:
         - 输入非数值类型将触发TypeError
         - 所有未定义情况返回None并打印警告
     """
-    # 防御性处理：将输入强制转换为整数（处理浮点数输入情况）
-    try:
-        X: int = int(X)
-    except (ValueError, TypeError):
-        raise TypeError("错误：输入值必须为可转换为整数的类型")
+    if X is None or X == '':
+        raise ValueError("错误：输入参数X不能为空")
+
+    # 防御性处理：判断参数类型
+    if not isinstance(X, int):
+        raise TypeError("错误：X的值必须为整数")
 
     # 处理负值输入（根据业务逻辑视为最差情况）
     try:
@@ -1371,7 +1377,7 @@ def fetch_data(
         raise ValueError(f"不支持的HTTP方法: {method}")
 
     # 初始化重试计数器
-        retry_count: int = 0
+    retry_count: int = 0
     max_retries: int = 3
     last_exception: Optional[Exception] = None
 
@@ -1415,7 +1421,7 @@ def fetch_data(
             last_exception = e
             response = getattr(e, 'response', None)
 
-            # 处理会话过期(403)和业务错误码
+            # 处理会话过期和业务错误码
             if isinstance(e, requests.HTTPError):
                 if (response.status_code == 200
                         and "meta" in response.text

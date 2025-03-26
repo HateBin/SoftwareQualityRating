@@ -1,0 +1,283 @@
+2025-03-26 23:00:17,085 INFO [testlog] [base_case.py (setup_class:12] - ==========BUG密度计算BUG数评分测试开始==========
+2025-03-26 23:00:17,085 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：BUG密度为0，期望20分===============
+2025-03-26 23:00:17,085 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为0，期望20分 成功===============
+2025-03-26 23:00:17,086 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为0.1，期望20分==============
+2025-03-26 23:00:17,086 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为0.1，期望20分 成功==============
+2025-03-26 23:00:17,086 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为0.9，期望20分==============
+2025-03-26 23:00:17,086 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为0.9，期望20分 成功==============
+2025-03-26 23:00:17,087 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：BUG密度为1，期望20分===============
+2025-03-26 23:00:17,087 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为1，期望20分 成功===============
+2025-03-26 23:00:17,087 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.1，期望15分==============
+2025-03-26 23:00:17,087 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.1，期望15分 成功==============
+2025-03-26 23:00:17,088 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.2，期望15分==============
+2025-03-26 23:00:17,088 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.2，期望15分 成功==============
+2025-03-26 23:00:17,088 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.4，期望15分==============
+2025-03-26 23:00:17,088 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.4，期望15分 成功==============
+2025-03-26 23:00:17,089 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.5，期望15分==============
+2025-03-26 23:00:17,089 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.5，期望15分 成功==============
+2025-03-26 23:00:17,089 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.6，期望10分==============
+2025-03-26 23:00:17,089 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.6，期望10分 成功==============
+2025-03-26 23:00:17,090 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.7，期望10分==============
+2025-03-26 23:00:17,090 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.7，期望10分 成功==============
+2025-03-26 23:00:17,090 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.9，期望10分==============
+2025-03-26 23:00:17,090 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.9，期望10分 成功==============
+2025-03-26 23:00:17,090 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：BUG密度为2，期望10分===============
+2025-03-26 23:00:17,091 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为2，期望10分 成功===============
+2025-03-26 23:00:17,091 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为2.1，期望5分===============
+2025-03-26 23:00:17,091 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为2.1，期望5分 成功==============
+2025-03-26 23:00:17,091 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为2.2，期望5分===============
+2025-03-26 23:00:17,091 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为2.2，期望5分 成功==============
+2025-03-26 23:00:17,092 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为2.9，期望5分===============
+2025-03-26 23:00:17,092 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为2.9，期望5分 成功==============
+2025-03-26 23:00:17,092 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：BUG密度为3，期望5分================
+2025-03-26 23:00:17,092 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ===============执行用例：BUG密度为3，期望5分 成功===============
+2025-03-26 23:00:17,093 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为3.1，期望1分===============
+2025-03-26 23:00:17,093 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为3.1，期望1分 成功==============
+2025-03-26 23:00:17,093 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为999，期望1分===============
+2025-03-26 23:00:17,093 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为999，期望1分 成功==============
+2025-03-26 23:00:17,093 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - 开始执行用例：BUG密度为0.999999999999999999999999999999999999999999999999999999999999999999999999999999999，期望20分
+2025-03-26 23:00:17,093 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - 执行用例：BUG密度为0.999999999999999999999999999999999999999999999999999999999999999999999999999999999，期望20分 成功
+2025-03-26 23:00:17,094 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===========开始执行用例：BUG密度为-1，输入值不在任何评分区间内===========
+2025-03-26 23:00:17,094 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==========执行用例：BUG密度为-1，输入值不在任何评分区间内 成功===========
+2025-03-26 23:00:17,094 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==========开始执行用例：BUG密度为小写英文，输入参数X必须是数字类型==========
+2025-03-26 23:00:17,094 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =========执行用例：BUG密度为小写英文，输入参数X必须是数字类型 成功==========
+2025-03-26 23:00:17,095 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==========开始执行用例：BUG密度为大写英文，输入参数X必须是数字类型==========
+2025-03-26 23:00:17,095 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =========执行用例：BUG密度为大写英文，输入参数X必须是数字类型 成功==========
+2025-03-26 23:00:17,095 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===========开始执行用例：BUG密度为汉字，输入参数X必须是数字类型===========
+2025-03-26 23:00:17,095 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==========执行用例：BUG密度为汉字，输入参数X必须是数字类型 成功===========
+2025-03-26 23:00:17,096 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==========开始执行用例：BUG密度为特殊符号，输入参数X必须是数字类型==========
+2025-03-26 23:00:17,096 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =========执行用例：BUG密度为特殊符号，输入参数X必须是数字类型 成功==========
+2025-03-26 23:00:17,096 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===========开始执行用例：BUG密度为空，输入参数X必须是数字类型============
+2025-03-26 23:00:17,096 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ===========执行用例：BUG密度为空，输入参数X必须是数字类型 成功===========
+2025-03-26 23:00:17,097 INFO [testlog] [base_case.py (teardown_class:16] - ==========BUG密度计算BUG数评分测试结束==========
+2025-03-26 23:03:08,984 INFO [testlog] [base_case.py (setup_class:12] - ==========BUG密度计算BUG数评分测试开始==========
+2025-03-26 23:03:08,985 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：BUG密度为0，期望20分===============
+2025-03-26 23:03:08,985 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为0，期望20分 成功===============
+2025-03-26 23:03:08,985 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为0.1，期望20分==============
+2025-03-26 23:03:08,985 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为0.1，期望20分 成功==============
+2025-03-26 23:03:08,986 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为0.9，期望20分==============
+2025-03-26 23:03:08,986 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为0.9，期望20分 成功==============
+2025-03-26 23:03:08,986 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：BUG密度为1，期望20分===============
+2025-03-26 23:03:08,986 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为1，期望20分 成功===============
+2025-03-26 23:03:08,987 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.1，期望15分==============
+2025-03-26 23:03:08,987 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.1，期望15分 成功==============
+2025-03-26 23:03:08,987 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.2，期望15分==============
+2025-03-26 23:03:08,987 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.2，期望15分 成功==============
+2025-03-26 23:03:08,988 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.4，期望15分==============
+2025-03-26 23:03:08,988 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.4，期望15分 成功==============
+2025-03-26 23:03:08,989 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.5，期望15分==============
+2025-03-26 23:03:08,989 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.5，期望15分 成功==============
+2025-03-26 23:03:08,989 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.6，期望10分==============
+2025-03-26 23:03:08,989 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.6，期望10分 成功==============
+2025-03-26 23:03:08,990 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.7，期望10分==============
+2025-03-26 23:03:08,990 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.7，期望10分 成功==============
+2025-03-26 23:03:08,990 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.9，期望10分==============
+2025-03-26 23:03:08,990 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.9，期望10分 成功==============
+2025-03-26 23:03:08,990 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：BUG密度为2，期望10分===============
+2025-03-26 23:03:08,990 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为2，期望10分 成功===============
+2025-03-26 23:03:08,991 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为2.1，期望5分===============
+2025-03-26 23:03:08,991 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为2.1，期望5分 成功==============
+2025-03-26 23:03:08,991 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为2.2，期望5分===============
+2025-03-26 23:03:08,991 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为2.2，期望5分 成功==============
+2025-03-26 23:03:08,992 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为2.9，期望5分===============
+2025-03-26 23:03:08,992 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为2.9，期望5分 成功==============
+2025-03-26 23:03:08,992 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：BUG密度为3，期望5分================
+2025-03-26 23:03:08,992 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ===============执行用例：BUG密度为3，期望5分 成功===============
+2025-03-26 23:03:08,992 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为3.1，期望1分===============
+2025-03-26 23:03:08,992 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为3.1，期望1分 成功==============
+2025-03-26 23:03:08,993 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为999，期望1分===============
+2025-03-26 23:03:08,993 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为999，期望1分 成功==============
+2025-03-26 23:03:08,993 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - 开始执行用例：BUG密度为0.999999999999999999999999999999999999999999999999999999999999999999999999999999999，期望20分
+2025-03-26 23:03:08,993 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - 执行用例：BUG密度为0.999999999999999999999999999999999999999999999999999999999999999999999999999999999，期望20分 成功
+2025-03-26 23:03:08,994 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===========开始执行用例：BUG密度为-1，输入值不在任何评分区间内===========
+2025-03-26 23:03:08,994 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==========执行用例：BUG密度为-1，输入值不在任何评分区间内 成功===========
+2025-03-26 23:03:08,994 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==========开始执行用例：BUG密度为小写英文，输入参数X必须是数字类型==========
+2025-03-26 23:03:08,994 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =========执行用例：BUG密度为小写英文，输入参数X必须是数字类型 成功==========
+2025-03-26 23:03:08,995 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==========开始执行用例：BUG密度为大写英文，输入参数X必须是数字类型==========
+2025-03-26 23:03:08,995 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =========执行用例：BUG密度为大写英文，输入参数X必须是数字类型 成功==========
+2025-03-26 23:03:08,995 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===========开始执行用例：BUG密度为汉字，输入参数X必须是数字类型===========
+2025-03-26 23:03:08,995 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==========执行用例：BUG密度为汉字，输入参数X必须是数字类型 成功===========
+2025-03-26 23:03:08,996 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==========开始执行用例：BUG密度为特殊符号，输入参数X必须是数字类型==========
+2025-03-26 23:03:08,996 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =========执行用例：BUG密度为特殊符号，输入参数X必须是数字类型 成功==========
+2025-03-26 23:03:08,996 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===========开始执行用例：BUG密度为空，输入参数X必须是数字类型============
+2025-03-26 23:03:08,996 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ===========执行用例：BUG密度为空，输入参数X必须是数字类型 成功===========
+2025-03-26 23:03:08,996 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==========开始执行用例：BUG密度为null，输入参数X必须是数字类型==========
+2025-03-26 23:03:08,997 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =========执行用例：BUG密度为null，输入参数X必须是数字类型 成功==========
+2025-03-26 23:03:08,997 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - =============开始执行用例：不传值，输入参数X必须是数字类型==============
+2025-03-26 23:03:08,997 ERROR [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:35] - 执行用例：不传值，输入参数X必须是数字类型 失败，失败原因：assert "calculate_bug_count_rating() missing 1 required positional argument: 'X'" == '错误：输入参数X必须是数字类型'
+  
+  - 错误：输入参数X必须是数字类型
+  + calculate_bug_count_rating() missing 1 required positional argument: 'X'
+2025-03-26 23:03:09,029 INFO [testlog] [base_case.py (teardown_class:16] - ==========BUG密度计算BUG数评分测试结束==========
+2025-03-26 23:03:48,217 INFO [testlog] [base_case.py (setup_class:12] - ==========BUG密度计算BUG数评分测试开始==========
+2025-03-26 23:03:48,217 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：BUG密度为0，期望20分===============
+2025-03-26 23:03:48,217 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为0，期望20分 成功===============
+2025-03-26 23:03:48,217 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为0.1，期望20分==============
+2025-03-26 23:03:48,217 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为0.1，期望20分 成功==============
+2025-03-26 23:03:48,218 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为0.9，期望20分==============
+2025-03-26 23:03:48,218 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为0.9，期望20分 成功==============
+2025-03-26 23:03:48,218 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：BUG密度为1，期望20分===============
+2025-03-26 23:03:48,218 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为1，期望20分 成功===============
+2025-03-26 23:03:48,219 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.1，期望15分==============
+2025-03-26 23:03:48,219 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.1，期望15分 成功==============
+2025-03-26 23:03:48,219 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.2，期望15分==============
+2025-03-26 23:03:48,219 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.2，期望15分 成功==============
+2025-03-26 23:03:48,220 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.4，期望15分==============
+2025-03-26 23:03:48,220 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.4，期望15分 成功==============
+2025-03-26 23:03:48,220 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.5，期望15分==============
+2025-03-26 23:03:48,220 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.5，期望15分 成功==============
+2025-03-26 23:03:48,221 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.6，期望10分==============
+2025-03-26 23:03:48,221 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.6，期望10分 成功==============
+2025-03-26 23:03:48,221 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.7，期望10分==============
+2025-03-26 23:03:48,221 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.7，期望10分 成功==============
+2025-03-26 23:03:48,222 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.9，期望10分==============
+2025-03-26 23:03:48,222 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.9，期望10分 成功==============
+2025-03-26 23:03:48,222 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：BUG密度为2，期望10分===============
+2025-03-26 23:03:48,222 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为2，期望10分 成功===============
+2025-03-26 23:03:48,223 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为2.1，期望5分===============
+2025-03-26 23:03:48,223 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为2.1，期望5分 成功==============
+2025-03-26 23:03:48,223 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为2.2，期望5分===============
+2025-03-26 23:03:48,223 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为2.2，期望5分 成功==============
+2025-03-26 23:03:48,224 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为2.9，期望5分===============
+2025-03-26 23:03:48,224 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为2.9，期望5分 成功==============
+2025-03-26 23:03:48,224 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：BUG密度为3，期望5分================
+2025-03-26 23:03:48,224 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ===============执行用例：BUG密度为3，期望5分 成功===============
+2025-03-26 23:03:48,224 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为3.1，期望1分===============
+2025-03-26 23:03:48,224 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为3.1，期望1分 成功==============
+2025-03-26 23:03:48,225 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为999，期望1分===============
+2025-03-26 23:03:48,225 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为999，期望1分 成功==============
+2025-03-26 23:03:48,225 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - 开始执行用例：BUG密度为0.999999999999999999999999999999999999999999999999999999999999999999999999999999999，期望20分
+2025-03-26 23:03:48,225 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - 执行用例：BUG密度为0.999999999999999999999999999999999999999999999999999999999999999999999999999999999，期望20分 成功
+2025-03-26 23:03:48,226 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===========开始执行用例：BUG密度为-1，输入值不在任何评分区间内===========
+2025-03-26 23:03:48,226 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==========执行用例：BUG密度为-1，输入值不在任何评分区间内 成功===========
+2025-03-26 23:03:48,226 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==========开始执行用例：BUG密度为小写英文，输入参数X必须是数字类型==========
+2025-03-26 23:03:48,226 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =========执行用例：BUG密度为小写英文，输入参数X必须是数字类型 成功==========
+2025-03-26 23:03:48,226 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==========开始执行用例：BUG密度为大写英文，输入参数X必须是数字类型==========
+2025-03-26 23:03:48,226 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =========执行用例：BUG密度为大写英文，输入参数X必须是数字类型 成功==========
+2025-03-26 23:03:48,227 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===========开始执行用例：BUG密度为汉字，输入参数X必须是数字类型===========
+2025-03-26 23:03:48,227 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==========执行用例：BUG密度为汉字，输入参数X必须是数字类型 成功===========
+2025-03-26 23:03:48,227 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==========开始执行用例：BUG密度为特殊符号，输入参数X必须是数字类型==========
+2025-03-26 23:03:48,227 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =========执行用例：BUG密度为特殊符号，输入参数X必须是数字类型 成功==========
+2025-03-26 23:03:48,228 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===========开始执行用例：BUG密度为空，输入参数X必须是数字类型============
+2025-03-26 23:03:48,228 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ===========执行用例：BUG密度为空，输入参数X必须是数字类型 成功===========
+2025-03-26 23:03:48,228 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==========开始执行用例：BUG密度为null，输入参数X必须是数字类型==========
+2025-03-26 23:03:48,228 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =========执行用例：BUG密度为null，输入参数X必须是数字类型 成功==========
+2025-03-26 23:03:48,229 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - =============开始执行用例：不传值，输入参数X必须是数字类型==============
+2025-03-26 23:03:48,229 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：不传值，输入参数X必须是数字类型 成功=============
+2025-03-26 23:03:48,229 INFO [testlog] [base_case.py (teardown_class:16] - ==========BUG密度计算BUG数评分测试结束==========
+2025-03-26 23:08:11,616 INFO [testlog] [base_case.py (setup_class:12] - ==========BUG密度计算BUG数评分测试开始==========
+2025-03-26 23:08:11,617 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：BUG密度为0，期望20分===============
+2025-03-26 23:08:11,617 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为0，期望20分 成功===============
+2025-03-26 23:08:11,617 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为0.1，期望20分==============
+2025-03-26 23:08:11,617 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为0.1，期望20分 成功==============
+2025-03-26 23:08:11,618 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为0.9，期望20分==============
+2025-03-26 23:08:11,618 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为0.9，期望20分 成功==============
+2025-03-26 23:08:11,618 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：BUG密度为1，期望20分===============
+2025-03-26 23:08:11,618 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为1，期望20分 成功===============
+2025-03-26 23:08:11,619 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.1，期望15分==============
+2025-03-26 23:08:11,619 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.1，期望15分 成功==============
+2025-03-26 23:08:11,619 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.2，期望15分==============
+2025-03-26 23:08:11,619 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.2，期望15分 成功==============
+2025-03-26 23:08:11,620 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.4，期望15分==============
+2025-03-26 23:08:11,620 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.4，期望15分 成功==============
+2025-03-26 23:08:11,620 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.5，期望15分==============
+2025-03-26 23:08:11,620 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.5，期望15分 成功==============
+2025-03-26 23:08:11,621 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.6，期望10分==============
+2025-03-26 23:08:11,621 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.6，期望10分 成功==============
+2025-03-26 23:08:11,621 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.7，期望10分==============
+2025-03-26 23:08:11,621 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.7，期望10分 成功==============
+2025-03-26 23:08:11,622 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.9，期望10分==============
+2025-03-26 23:08:11,622 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.9，期望10分 成功==============
+2025-03-26 23:08:11,622 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：BUG密度为2，期望10分===============
+2025-03-26 23:08:11,622 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为2，期望10分 成功===============
+2025-03-26 23:08:11,622 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为2.1，期望5分===============
+2025-03-26 23:08:11,622 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为2.1，期望5分 成功==============
+2025-03-26 23:08:11,623 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为2.2，期望5分===============
+2025-03-26 23:08:11,623 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为2.2，期望5分 成功==============
+2025-03-26 23:08:11,623 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为2.9，期望5分===============
+2025-03-26 23:08:11,624 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为2.9，期望5分 成功==============
+2025-03-26 23:08:11,624 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：BUG密度为3，期望5分================
+2025-03-26 23:08:11,624 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ===============执行用例：BUG密度为3，期望5分 成功===============
+2025-03-26 23:08:11,624 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为3.1，期望1分===============
+2025-03-26 23:08:11,624 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为3.1，期望1分 成功==============
+2025-03-26 23:08:11,625 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为999，期望1分===============
+2025-03-26 23:08:11,625 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为999，期望1分 成功==============
+2025-03-26 23:08:11,625 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - 开始执行用例：BUG密度为0.999999999999999999999999999999999999999999999999999999999999999999999999999999999，期望20分
+2025-03-26 23:08:11,625 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - 执行用例：BUG密度为0.999999999999999999999999999999999999999999999999999999999999999999999999999999999，期望20分 成功
+2025-03-26 23:08:11,626 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===========开始执行用例：BUG密度为-1，输入值不在任何评分区间内===========
+2025-03-26 23:08:11,626 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==========执行用例：BUG密度为-1，输入值不在任何评分区间内 成功===========
+2025-03-26 23:08:11,626 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==========开始执行用例：BUG密度为小写英文，输入参数X必须是数字类型==========
+2025-03-26 23:08:11,626 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =========执行用例：BUG密度为小写英文，输入参数X必须是数字类型 成功==========
+2025-03-26 23:08:11,627 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==========开始执行用例：BUG密度为大写英文，输入参数X必须是数字类型==========
+2025-03-26 23:08:11,627 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =========执行用例：BUG密度为大写英文，输入参数X必须是数字类型 成功==========
+2025-03-26 23:08:11,627 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===========开始执行用例：BUG密度为汉字，输入参数X必须是数字类型===========
+2025-03-26 23:08:11,627 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==========执行用例：BUG密度为汉字，输入参数X必须是数字类型 成功===========
+2025-03-26 23:08:11,627 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==========开始执行用例：BUG密度为特殊符号，输入参数X必须是数字类型==========
+2025-03-26 23:08:11,627 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =========执行用例：BUG密度为特殊符号，输入参数X必须是数字类型 成功==========
+2025-03-26 23:08:11,628 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===========开始执行用例：BUG密度为空字符串，输入参数X不能为空============
+2025-03-26 23:08:11,628 ERROR [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:35] - 执行用例：BUG密度为空字符串，输入参数X不能为空 失败，失败原因：错误：输入参数X不能为空
+2025-03-26 23:08:11,676 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - =========开始执行用例：BUG密度为字符串空格，输入参数X必须是数字类型==========
+2025-03-26 23:08:11,676 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =========执行用例：BUG密度为字符串空格，输入参数X必须是数字类型 成功=========
+2025-03-26 23:08:11,677 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===========开始执行用例：BUG密度为null，输入参数X不能为空============
+2025-03-26 23:08:11,677 ERROR [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:35] - 执行用例：BUG密度为null，输入参数X不能为空 失败，失败原因：错误：输入参数X不能为空
+2025-03-26 23:08:11,694 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：不传值，输入参数X不能为空===============
+2025-03-26 23:08:11,695 ERROR [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:35] - 执行用例：不传值，输入参数X不能为空 失败，失败原因：错误：输入参数X不能为空
+2025-03-26 23:08:11,712 INFO [testlog] [base_case.py (teardown_class:16] - ==========BUG密度计算BUG数评分测试结束==========
+2025-03-26 23:09:04,715 INFO [testlog] [base_case.py (setup_class:12] - ==========BUG密度计算BUG数评分测试开始==========
+2025-03-26 23:09:04,715 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：BUG密度为0，期望20分===============
+2025-03-26 23:09:04,715 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为0，期望20分 成功===============
+2025-03-26 23:09:04,715 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为0.1，期望20分==============
+2025-03-26 23:09:04,715 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为0.1，期望20分 成功==============
+2025-03-26 23:09:04,716 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为0.9，期望20分==============
+2025-03-26 23:09:04,716 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为0.9，期望20分 成功==============
+2025-03-26 23:09:04,716 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：BUG密度为1，期望20分===============
+2025-03-26 23:09:04,716 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为1，期望20分 成功===============
+2025-03-26 23:09:04,717 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.1，期望15分==============
+2025-03-26 23:09:04,717 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.1，期望15分 成功==============
+2025-03-26 23:09:04,717 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.2，期望15分==============
+2025-03-26 23:09:04,718 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.2，期望15分 成功==============
+2025-03-26 23:09:04,718 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.4，期望15分==============
+2025-03-26 23:09:04,718 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.4，期望15分 成功==============
+2025-03-26 23:09:04,719 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.5，期望15分==============
+2025-03-26 23:09:04,719 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.5，期望15分 成功==============
+2025-03-26 23:09:04,719 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.6，期望10分==============
+2025-03-26 23:09:04,719 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.6，期望10分 成功==============
+2025-03-26 23:09:04,720 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.7，期望10分==============
+2025-03-26 23:09:04,720 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.7，期望10分 成功==============
+2025-03-26 23:09:04,720 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为1.9，期望10分==============
+2025-03-26 23:09:04,720 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =============执行用例：BUG密度为1.9，期望10分 成功==============
+2025-03-26 23:09:04,721 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：BUG密度为2，期望10分===============
+2025-03-26 23:09:04,721 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为2，期望10分 成功===============
+2025-03-26 23:09:04,721 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为2.1，期望5分===============
+2025-03-26 23:09:04,721 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为2.1，期望5分 成功==============
+2025-03-26 23:09:04,722 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为2.2，期望5分===============
+2025-03-26 23:09:04,722 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为2.2，期望5分 成功==============
+2025-03-26 23:09:04,722 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为2.9，期望5分===============
+2025-03-26 23:09:04,722 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为2.9，期望5分 成功==============
+2025-03-26 23:09:04,723 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：BUG密度为3，期望5分================
+2025-03-26 23:09:04,723 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ===============执行用例：BUG密度为3，期望5分 成功===============
+2025-03-26 23:09:04,723 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为3.1，期望1分===============
+2025-03-26 23:09:04,723 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为3.1，期望1分 成功==============
+2025-03-26 23:09:04,723 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==============开始执行用例：BUG密度为999，期望1分===============
+2025-03-26 23:09:04,724 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：BUG密度为999，期望1分 成功==============
+2025-03-26 23:09:04,724 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - 开始执行用例：BUG密度为0.999999999999999999999999999999999999999999999999999999999999999999999999999999999，期望20分
+2025-03-26 23:09:04,724 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - 执行用例：BUG密度为0.999999999999999999999999999999999999999999999999999999999999999999999999999999999，期望20分 成功
+2025-03-26 23:09:04,724 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===========开始执行用例：BUG密度为-1，输入值不在任何评分区间内===========
+2025-03-26 23:09:04,725 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==========执行用例：BUG密度为-1，输入值不在任何评分区间内 成功===========
+2025-03-26 23:09:04,725 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==========开始执行用例：BUG密度为小写英文，输入参数X必须是数字类型==========
+2025-03-26 23:09:04,725 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =========执行用例：BUG密度为小写英文，输入参数X必须是数字类型 成功==========
+2025-03-26 23:09:04,725 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==========开始执行用例：BUG密度为大写英文，输入参数X必须是数字类型==========
+2025-03-26 23:09:04,725 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =========执行用例：BUG密度为大写英文，输入参数X必须是数字类型 成功==========
+2025-03-26 23:09:04,726 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===========开始执行用例：BUG密度为汉字，输入参数X必须是数字类型===========
+2025-03-26 23:09:04,726 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==========执行用例：BUG密度为汉字，输入参数X必须是数字类型 成功===========
+2025-03-26 23:09:04,726 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ==========开始执行用例：BUG密度为特殊符号，输入参数X必须是数字类型==========
+2025-03-26 23:09:04,726 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =========执行用例：BUG密度为特殊符号，输入参数X必须是数字类型 成功==========
+2025-03-26 23:09:04,727 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===========开始执行用例：BUG密度为空字符串，输入参数X不能为空============
+2025-03-26 23:09:04,727 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ===========执行用例：BUG密度为空字符串，输入参数X不能为空 成功===========
+2025-03-26 23:09:04,727 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - =========开始执行用例：BUG密度为字符串空格，输入参数X必须是数字类型==========
+2025-03-26 23:09:04,727 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - =========执行用例：BUG密度为字符串空格，输入参数X必须是数字类型 成功=========
+2025-03-26 23:09:04,728 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===========开始执行用例：BUG密度为null，输入参数X不能为空============
+2025-03-26 23:09:04,728 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ===========执行用例：BUG密度为null，输入参数X不能为空 成功===========
+2025-03-26 23:09:04,728 INFO [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:22] - ===============开始执行用例：不传值，输入参数X不能为空===============
+2025-03-26 23:09:04,728 DEBUG [testlog] [test_calculate_bug_count_rating.py (test_calculate_bug_count_rating:37] - ==============执行用例：不传值，输入参数X不能为空 成功===============
+2025-03-26 23:09:04,728 INFO [testlog] [base_case.py (teardown_class:16] - ==========BUG密度计算BUG数评分测试结束==========
