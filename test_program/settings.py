@@ -6,7 +6,13 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 EXCEL_CASE_DIR = os.path.join(BASE_DIR, 'test_data')
 
+TEST_REPORTS_DIR = os.path.join(BASE_DIR, 'reports')
+
 LINE_LENGTH = 50
+
+PYTEST_TIMEOUT = 2
+
+STRING_MAX_LENGTH = 500
 
 # 测试用例路径
 TEST_CASE_DIR = os.path.join(BASE_DIR, 'test_cases')

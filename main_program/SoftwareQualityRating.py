@@ -28,9 +28,9 @@ from openai import (APIError, APIConnectionError, APIStatusError, OpenAI)
 import requests
 
 IS_CREATE_REPORT = False  # 是否创建报告
-IS_CREATE_AI_SUMMARY = False  # 是否创建AI总结
+IS_CREATE_AI_SUMMARY = True  # 是否创建AI总结
 IS_SUPPORT_RETRY_CREATE_AI_SUMMARY = True  # 是否支持重试创建AI总结, 生成完成后可input进行重新生成
-OPEN_AI_MODEL = 'r1'  # deepseek模型名称，目前支持：v3、r1、百炼r1、百炼v3
+OPEN_AI_MODEL = '百炼v3'  # deepseek模型名称，目前支持：v3、r1、百炼r1、百炼v3
 
 OPEN_AI_IS_STREAM_RESPONSE = True  # 是否支持流式响应
 
@@ -41,11 +41,10 @@ PROJECT_ID = "63835346"  # 项目ID
 # REQUIREMENT_ID = "1163835346001078047"  # 需求ID 无BUG
 # REQUIREMENT_ID = "1163835346001071668"  # 需求ID
 # REQUIREMENT_ID = "1163835346001033609"  # 需求ID 中规中矩  警告：没有测试任务, 请检查"【中古屋住宅】競價服務新增按天結算測試（限台中）"需求是否有测试任务
-# REQUIREMENT_ID = "1163835346001051222"  # 需求ID 较差的质量
+REQUIREMENT_ID = "1163835346001051222"  # 需求ID 较差的质量
 # REQUIREMENT_ID = "1163835346001049795"  # 需求ID 较差的质量  开发周期也是很多小数点尾数
 # REQUIREMENT_ID = "1163835346001055792"  # 需求ID 较差的质量
-REQUIREMENT_ID = "1163835346001118124"  # 需求ID
-# REQUIREMENT_ID = "1163835346001124542"  # 需
+# REQUIREMENT_ID = "1163835346001118124"  # 需求ID
 REQUIREMENT_LIST_ID = '1000000000000000417'  # 需求列表ID, 用于查询或者编辑列表展示字段的配置
 
 DEPARTMENT = 'T5'  # 部门名称
@@ -67,6 +66,8 @@ TEST_REPORT_SUMMARY_COMPOSITION = [
 HOST = 'https://www.tapd.cn'  # Tapd的域名
 
 LINE_LENGTH = 100  # 横线的长度
+
+BUG_ID_PREFIX = '116383534600'  # BUG ID前缀
 
 # 图像文字的字体, 根据操作系统选择字体
 PLT_FONT = {
@@ -355,10 +356,7 @@ def calculate_bug_count_rating(X: int or float = None) -> int or None:
         (3, +∞)   → 1分（极高密度，质量差）
     """
     # 参数校验
-    if X is None or X == '':
-        raise ValueError("错误：输入参数X不能为空")
-    if not isinstance(X, (int, float)):
-        raise TypeError("错误：输入参数X必须是数字类型")
+    check_method_param(param_name='X', param=X, param_type=(int, float), is_required=True)
     # 定义评分区间与得分的映射关系（按评分从高到低排列）
     # 每个元组格式：(区间下界, 区间上界), 得分
     # 注意：区间为左开右闭，即 lower < X <= upper
@@ -407,12 +405,7 @@ def calculate_bug_reopen_rating(X: int = None) -> int or None:
         - 输入非数值类型将触发TypeError
         - 所有未定义情况返回None并打印警告
     """
-    if X is None or X == '':
-        raise ValueError("错误：输入参数X不能为空")
-
-    # 防御性处理：判断参数类型
-    if not isinstance(X, int):
-        raise TypeError("错误：X的值必须为整数")
+    check_method_param(param_name='X', param=X, param_type=int, is_required=True)
 
     # 处理负值输入（根据业务逻辑视为最差情况）
     try:
@@ -435,14 +428,14 @@ def calculate_bug_reopen_rating(X: int = None) -> int or None:
             return score_mapping[threshold]
 
 
-def calculate_bug_repair_rating(unrepaired_bug: Dict[str, Any]) -> int or None:
+def calculate_bug_repair_rating(unrepaired_bug: Dict[str, Any] = None) -> int or None:
     """
     根据未修复缺陷的严重程度计算缺陷修复质量评分
 
     评分规则（按优先级从高到低判断）：
     - 若上线当天存在未修复的致命(P0)或严重(P1)缺陷 → 1分（质量极差）
-    - 若上线当天存在未修复的一般或其他(P2)缺陷 → 5分（质量堪忧）
-    - 若缺陷创建当天未修复致命(P0)但存在未修复严重(P1) → 10分（质量合格）
+    - 若上线当天存在未修复的一般或其他(P2)缺陷和创建当天存在未修复致命(P0) → 5分（质量堪忧）
+    - 若缺陷创建当天已修复致命(P0)，但存在未修复严重(P1) → 10分（质量合格）
     - 若缺陷创建当天已修复所有P0/P1，但存在未修复P2 → 15分（质量良好）
     - 若所有缺陷在创建当天均被修复 → 20分（质量优秀）
 
@@ -470,6 +463,13 @@ def calculate_bug_repair_rating(unrepaired_bug: Dict[str, Any]) -> int or None:
         - 当输入数据结构不符合预期时，打印错误日志并返回None
     """
 
+    # 判断入参为空的情况，默认为空字典
+    if unrepaired_bug is None:
+        unrepaired_bug = {}
+
+    # 防御性处理：判断入参类型
+    check_method_param(param_name='unrepaired_bug', param=unrepaired_bug, param_type=dict, is_required=False)
+
     # 解构输入数据，提高可读性
     prod_day_unrepaired: dict[str, list[str]] = unrepaired_bug.get('deployProdDayUnrepaired', {})
     on_that_day_unrepaired: dict[str, list[str]] = unrepaired_bug.get('onThatDayUnrepaired', {})
@@ -482,10 +482,10 @@ def calculate_bug_repair_rating(unrepaired_bug: Dict[str, Any]) -> int or None:
         return 1  # 存在上线未修复的高危缺陷，最低评分
 
     # ----------------------------
-    # 优先级2：上线当天存在P2未修复
+    # 优先级2：上线当天存在P2未修复和创建当天P0未修复
     # ----------------------------
-    # 检查上线当天未修复的一般缺陷列表是否非空
-    if prod_day_unrepaired.get('P2'):
+    # 检查上线当天未修复的一般缺陷列表和创建当天P0列表是否非空
+    if prod_day_unrepaired.get('P2') or on_that_day_unrepaired.get('P0'):
         return 5  # 存在上线未修复的中等缺陷，较低评分
 
     # ----------------------------
@@ -516,15 +516,12 @@ def calculate_bug_repair_rating(unrepaired_bug: Dict[str, Any]) -> int or None:
     # ----------------------------
     # 异常处理：未匹配任何条件
     # ----------------------------
-    # 打印结构化错误日志（实际项目中建议使用logging模块）
-    print("错误：缺陷修复评分计算失败，数据结构异常或存在未覆盖的逻辑分支")
-    print(f"输入数据结构：{json.dumps(unrepaired_bug, indent=2)}")
-    return None  # 防御性返回
+    raise ValueError("错误：缺陷修复评分计算失败，数据结构异常或存在未覆盖的逻辑分支")
 
 
 def _input(
-        text: str,
-        input_type: type = None,
+        text: str = None,
+        input_type: str or type = None,
         allow_contents: List[Any] = None,
         re_format: str = None,
         re_prompts_format: str = None,
@@ -545,7 +542,7 @@ def _input(
             输入提示文本，显示在控制台的引导信息
             示例："请输入选项："
 
-        input_type (type):
+        input_type (type or str):
             目标数据类型，支持Python基础类型如int/float/str等
             None表示保留原始字符串类型
 
@@ -587,6 +584,8 @@ def _input(
     # 构建可持续交互的输入验证循环
     while True:
         try:
+            check_method_param(param_name='text', param=text, param_type=str, is_required=True)
+
             # ==================================================================
             # 阶段1：原始输入获取
             # ==================================================================
@@ -606,12 +605,26 @@ def _input(
             if is_delete_space:
                 raw_input = raw_input.replace(' ', '')
 
+            if not raw_input:
+                print(_print_text_font("\n错误：请输入内容\n"))
+                continue
+
             # ==================================================================
             # 阶段3：类型转换处理
             # ==================================================================
 
             # 当指定目标类型时进行类型转换
             if input_type:
+                if isinstance(input_type, str):
+                    if input_type == 'int':
+                        input_type = int
+                    elif input_type == 'float':
+                        input_type = float
+                    elif input_type == 'str':
+                        input_type = str
+                    else:
+                        raise ValueError("错误：不支持的输入类型")
+
                 # 尝试将输入转换为目标数据类型
                 converted_value = input_type(raw_input)
             else:
@@ -635,7 +648,7 @@ def _input(
                 # 执行范围校验
                 if check_value not in allow_contents:
                     # 生成可读性强的错误提示信息
-                    allowed_values = ', '.join(map(str, allow_contents))
+                    allowed_values = ','.join(map(str, allow_contents))
                     error_msg = f"输入值必须在 [{allowed_values}] 范围内"
 
                     # 输出红色字体错误提示并重新循环
@@ -647,7 +660,7 @@ def _input(
             # ==================================================================
 
             # 当存在正则表达式模式时执行格式验证
-            if re_format and not re.fullmatch(re_format, converted_value):
+            if re_format and not re.fullmatch(re_format, str(converted_value)):
                 # 优先使用自定义提示信息，否则显示原始正则表达式
                 format_prompt = re_prompts_format if re_prompts_format else re_format
 
@@ -686,8 +699,7 @@ def _input(
             print(_print_text_font("\n发生未预期的错误，请重新输入\n", color='red'))
 
 
-
-def _print_text_font(text: str or int, is_weight: bool = False, color: str = 'red') -> str:
+def _print_text_font(text: str or int or float = None, is_weight: bool = False, color: str = 'red') -> str:
     """
     生成带有指定颜色和字重的ANSI转义序列格式化文本
 
@@ -695,7 +707,7 @@ def _print_text_font(text: str or int, is_weight: bool = False, color: str = 're
     返回的字符串可直接用于print()函数，在支持ANSI转义的终端中显示彩色文本。
 
     参数详解:
-        text (str or int):
+        text (str or int or float):
             需要格式化的文本内容。支持任意字符串或者数字，包含多行文本和特殊字符。
             示例："Hello World"
 
@@ -733,6 +745,11 @@ def _print_text_font(text: str or int, is_weight: bool = False, color: str = 're
     示例用法:
         print(_print_text_font("警告信息", is_weight=True, color="yellow"))
     """
+    check_method_param(param_name='text', param=text, param_type=(str, int, float), is_required=True)
+
+    check_method_param(param_name='is_weight', param=is_weight, param_type=bool)
+
+    check_method_param(param_name='color', param=color, param_type=str, is_required=True)
 
     # 处理字重参数：将布尔值转换为ANSI代码
     # 0 = 正常，1 = 加粗/高亮（注意：部分终端中1表现为字体加亮而非真正加粗）
@@ -780,13 +797,15 @@ def get_session_id() -> None:
     用户登录认证并获取有效会话ID
 
     本方法实现完整的登录流程，包含以下关键步骤：
-    1. 构造登录请求的URL和查询参数
-    2. 准备登录表单数据（包含账户信息及加密后的密码）
-    3. 发送加密的POST请求进行登录认证
-    4. 处理响应及异常状态
-    5. 自动更新会话cookie供后续请求使用
+    1. 调用tapd校验用户名接口校验用户名是否存在
+    2. 构造登录请求的URL和查询参数
+    3. 准备登录表单数据（包含账户信息及加密后的密码）
+    4. 发送加密的POST请求进行登录认证
+    5. 处理响应及异常状态
+    6. 自动更新会话cookie供后续请求使用
 
     流程细节：
+    - 校验用户名是否存在
     - 使用AES-CBC算法对密码进行零填充加密
     - 通过cloudscraper绕过基础的反爬机制
     - 自动处理cookie存储，成功登录后cookie会保存在scraper实例中
@@ -802,6 +821,12 @@ def get_session_id() -> None:
     - encrypt_password_zero_padding()：实现密码加密逻辑
     - fetch_data()：后续请求使用本方法维护的会话状态
     """
+    if not ACCOUNT:
+        raise ValueError("错误：ACCOUNT没有设置账号")
+
+    if not PASSWORD:
+        raise ValueError("错误：PASSWORD没有设置密码")
+
     try:
         # 构建登录接口URL（主域名+登录路径）
         login_url = HOST + '/cloud_logins/login'
@@ -853,16 +878,88 @@ def get_session_id() -> None:
         # 1. 识别网络错误（如500服务器错误）
         # 2. 检测登录失败（如401未授权）
         response.raise_for_status()
+        response_text = response.text
+        error_msg = extract_matching(r'var errorMsg = "(.*?)";', response_text)
+        if error_msg:
+            scraper.cookies.clear()
+            sys.exit(f'错误：{error_msg[0]}')
 
     except requests.RequestException as e:
         # 统一处理请求异常：
         # 包含连接超时、SSL错误、超时等所有requests异常
         # 打印错误信息后终止程序，避免后续无效操作
-        print(f"登录失败: {str(e)}")
-        sys.exit(1)
+        sys.exit(f"登录失败: {str(e)}")
 
 
-def get_workitem_status_transfer_history(entity_type: str, entity_id: str) -> list:
+def filter_query(
+        page: int = 1,
+        page_size: int = 100,
+        query_scope: str = 'bug',
+        condition_data: Dict[str, List[Dict[str, str]]] = None
+) -> Dict[str, Any] | None:
+    search_condition = {
+        "data": [],  # 过滤条件数据列表
+        "optionType": "AND",  # 条件组合方式
+        "needInit": "1"  # 需要初始化搜索条件标志
+    }
+
+    if condition_data:
+        if condition_data.get("and") or condition_data.get("or"):
+            if condition_data.get("or"):
+                search_condition['optionType'] = "OR"
+            conditions = condition_data.get("and", []) + condition_data.get("or", [])
+            for condition in conditions:
+                check_keys = ["fieldLabel", "fieldOption", "value"]
+                if not all(key in condition for key in check_keys):
+                    raise ValueError(f"错误：condition_data参数的条件数据缺少关键字段{'、'.join(check_keys)}")
+                condition_item: Dict[str, str] = _switch_search_condition_item(query_scope, condition['fieldLabel'])
+                condition_item.update(condition)
+                search_condition['data'].append(condition_item)
+
+    search_condition = json.dumps(search_condition)
+
+    # ==================================================================
+    # 分页请求控制
+    # ==================================================================
+    # 构造基础请求参数模板，分页参数将在循环中动态更新
+    base_request_data = {
+        "workspace_ids": PROJECT_ID,  # 项目空间唯一标识
+        "search_data": search_condition,  # 序列化的搜索条件
+        "obj_type": query_scope,  # 查询对象类型为缺陷
+        "hide_not_match_condition_node": "0",  # 显示不匹配条件节点
+        "hide_not_match_condition_sub_node": "1",  # 隐藏不匹配子节点
+        "page": page,  # 当前页码参数
+        "perpage": str(page_size),  # 每页数据量参数（字符串类型）
+        "order_field": "created",  # 按缺陷创建时间升序排列
+    }
+    # ==================================================================
+    # 发送API请求
+    # ==================================================================
+    # 使用封装的fetch_data方法发送POST请求
+    # 该方法已内置网络错误重试和会话管理功能
+    response = fetch_data(
+        url=f"{HOST}/api/search_filter/search_filter/search",
+        json=base_request_data,
+        method="POST"
+    )
+
+    try:
+
+        return response.json()
+
+    except requests.JSONDecodeError as decode_err:
+        # 捕获JSON解析异常并附加原始响应内容
+        raw_content = response.text[:200] + "..." if response.text else "空响应内容"
+        raise ValueError(
+            f"响应内容解析失败，原始内容：{raw_content}"
+        ) from decode_err
+
+
+def get_workitem_status_transfer_history(
+        entity_type: str = None,
+        entity_id: str or int = None,
+        workspace_id: str or int = PROJECT_ID
+) -> list:
     """
     获取工作项（需求/任务/BUG）的状态流转历史记录
 
@@ -872,9 +969,8 @@ def get_workitem_status_transfer_history(entity_type: str, entity_id: str) -> li
     参数:
         entity_type (str): 实体类型标识符，取值范围：
             - 'story'   : 需求类实体
-            - 'task'    : 任务类实体
             - 'bug'     : 缺陷类实体
-        entity_id (str): 实体唯一标识符，如需求ID、任务ID、BUGID
+        entity_id (str or int): 实体唯一标识符，如需求ID、任务ID、BUGID
 
     返回:
         dict: 结构化状态历史数据，格式示例：
@@ -923,6 +1019,30 @@ def get_workitem_status_transfer_history(entity_type: str, entity_id: str) -> li
         3. 校验数据完整性
         4. 提取核心业务数据并返回结构化结果
     """
+    if isinstance(entity_type, str):
+        entity_type = entity_type.lower().replace(' ', '')
+
+    if isinstance(entity_id, str):
+        entity_id = entity_id.replace(' ', '')
+
+    if isinstance(workspace_id, str):
+        workspace_id = workspace_id.replace(' ', '')
+
+    # 防御性检查：entity_type参数
+    check_method_param(param_name='entity_type', param=entity_type, param_type=str, is_required=True)
+    if entity_type not in ['story', 'bug']:
+        raise ValueError("错误：entity_type参数取值范围：story/bug")
+
+    # 防御性检查：entity_id参数
+    check_method_param(param_name='entity_id', param=entity_id, param_type=(str, int), is_required=True)
+    if isinstance(entity_id, str) and not entity_id.isdigit():
+        raise ValueError("错误：entity_id必须为整数字符串")
+
+    # 防御性检查：workspace_id参数
+    check_method_param(param_name='workspace_id', param=workspace_id, param_type=(str, int), is_required=True)
+    if isinstance(workspace_id, str) and not workspace_id.isdigit():
+        raise ValueError("错误：workspace_id必须为整数字符串")
+
     # ------------------------------
     # 阶段1：请求参数构造
     # ------------------------------
@@ -936,7 +1056,7 @@ def get_workitem_status_transfer_history(entity_type: str, entity_id: str) -> li
     # - entity_type  : 实体类型透传
     # - entity_id    : 实体ID强制转换为字符串类型
     params = {
-        "workspace_id": PROJECT_ID,
+        "workspace_id": workspace_id,
         "program_id": "",  # 保留字段，保持为空
         "entity_type": entity_type,
         "entity_id": str(entity_id)  # 防御性类型转换
@@ -971,7 +1091,7 @@ def get_workitem_status_transfer_history(entity_type: str, entity_id: str) -> li
 
         # 二次校验数据结构类型（防御非字典类型响应）
         if not isinstance(status_history_data, list):
-            raise ValueError(
+            raise TypeError(
                 f"预期列表类型状态数据，实际获取类型：{type(status_history_data)}"
             )
 
@@ -984,6 +1104,9 @@ def get_workitem_status_transfer_history(entity_type: str, entity_id: str) -> li
     except KeyError as key_err:
         # 细化键缺失异常信息
         raise KeyError(f"响应数据缺失关键字段：{str(key_err)}") from key_err
+    except TypeError as type_err:
+        # 细化值类型异常信息
+        raise type_err
     except Exception as orig_err:
         # 通用异常包装（保留原始堆栈信息）
         raise RuntimeError(
@@ -991,7 +1114,10 @@ def get_workitem_status_transfer_history(entity_type: str, entity_id: str) -> li
         ) from orig_err
 
 
-def get_requirement_list_config() -> List[str]:
+def get_requirement_list_config(
+        requirement_list_id: str or int = REQUIREMENT_LIST_ID,
+        project_id: str or int = PROJECT_ID
+) -> List[str]:
     """
     获取TAPD需求列表视图的列字段配置信息
 
@@ -1014,15 +1140,28 @@ def get_requirement_list_config() -> List[str]:
         3. 校验响应数据结构完整性
         4. 提取字段配置信息并返回
     """
+    # 防御性检查：requirement_list_id参数
+    check_method_param(
+        param_name='requirement_list_id', param=requirement_list_id, param_type=(str, int), is_required=True
+    )
+    if isinstance(requirement_list_id, str) and not requirement_list_id.isdigit():
+        raise ValueError("错误：requirement_list_id必须为整数字符串")
+
+    # 防御性检查：project_id参数
+    check_method_param(param_name='project_id', param=project_id, param_type=(str, int), is_required=True)
+    if isinstance(project_id, str) and not project_id.isdigit():
+        raise ValueError("错误：project_id必须为整数字符串")
+
     # 构建完整API端点URL
     url = HOST + '/api/basic/userviews/get_show_fields'
 
     # 构造查询参数
     params = {
-        "id": REQUIREMENT_LIST_ID,  # 需求列表视图ID
-        "workspace_id": PROJECT_ID,  # 项目空间ID
-        "location": "/prong/stories/stories_list",  # 视图位置路径
+        "id": requirement_list_id,  # 需求列表视图ID
+        "workspace_id": project_id,  # 项目空间ID
+        "location": "/prong/stories/story_tree",  # 视图位置路径
         "form": "show_fields",  # 表单类型标识
+        "use_alias": "0",
     }
 
     # 发送API请求并获取响应
@@ -1031,15 +1170,23 @@ def get_requirement_list_config() -> List[str]:
     try:
         # 数据完整性校验（防御性编程）
         if not isinstance(response, dict):
-            raise ValueError("响应数据格式异常，预期字典类型")
+            raise TypeError("错误：响应数据格式异常，预期字典类型")
+
+        if 'data' not in response:
+            raise KeyError("错误：响应数据缺失'data'字段")
 
         data = response.get('data', {})
+
         if not isinstance(data, dict):
-            raise KeyError("响应数据缺失'data'字段")
+            raise TypeError("错误：响应数据格式异常，预期字典类型")
+
+        if 'fields' not in data:
+            raise KeyError("错误：响应数据缺失'fields'字段")
 
         fields = data.get('fields', [])
+
         if not isinstance(fields, list):
-            raise ValueError("字段配置数据格式异常，预期列表类型")
+            raise TypeError("错误：字段配置数据格式异常，预期列表类型")
 
         return fields
 
@@ -1047,10 +1194,10 @@ def get_requirement_list_config() -> List[str]:
         error_msg = f"JSON解析失败，原始响应: {response.text[:200]}..." if 'response' in locals() else "响应内容为空"
         raise ValueError(error_msg) from json_err
     except KeyError as key_err:
-        raise KeyError(f"响应数据缺失关键字段: {str(key_err)}") from key_err
+        raise key_err from key_err
 
 
-def edit_requirement_list_config(custom_fields: str) -> bool:
+def edit_requirement_list_config(custom_fields: str = None) -> bool:
     """
     编辑需求列表视图的列展示字段配置
 
@@ -1077,8 +1224,9 @@ def edit_requirement_list_config(custom_fields: str) -> bool:
         4. 校验响应状态及业务状态码
     """
     # 参数校验
-    if not isinstance(custom_fields, str) or ';' not in custom_fields:
-        raise ValueError("参数格式异常，应为分号分隔的字符串")
+    if isinstance(custom_fields, str):
+        custom_fields = custom_fields.replace(' ', '')
+    check_method_param(param_name='custom_fields', param=custom_fields, param_type=str, is_required=True)
 
     # 构建完整API端点URL
     url = HOST + '/api/basic/userviews/edit_show_fields'
@@ -1088,7 +1236,7 @@ def edit_requirement_list_config(custom_fields: str) -> bool:
         "id": REQUIREMENT_LIST_ID,  # 需求列表视图ID
         "custom_fields": custom_fields,  # 字段配置字符串
         "workspace_id": PROJECT_ID,  # 项目空间ID
-        "location": "/search/get_all/bug",  # 视图位置路径（保留字段）
+        "location": "/prong/stories/story_tree",  # 视图位置路径（保留字段）
     }
 
     # 发送API请求并获取响应
@@ -1106,7 +1254,7 @@ def edit_requirement_list_config(custom_fields: str) -> bool:
         raise ValueError(error_msg) from json_err
 
 
-def get_query_filtering_list_config() -> List[str]:
+def get_query_filtering_list_config(project_id: str or int = PROJECT_ID) -> List[str]:
     """
     获取TAPD查询过滤列表的字段展示配置
 
@@ -1129,12 +1277,17 @@ def get_query_filtering_list_config() -> List[str]:
         3. 校验响应数据结构完整性
         4. 提取字段配置信息并返回
     """
+    # 防御性检查：project_id参数
+    check_method_param(param_name='project_id', param=project_id, param_type=(str, int), is_required=True)
+    if isinstance(project_id, str) and not project_id.isdigit():
+        raise ValueError("错误：project_id必须为整数字符串")
+
     # 构建完整API端点URL（HOST取自全局常量）
     url = HOST + '/api/search_filter/search_filter/get_show_fields'
 
     # 构造请求体数据
     request_body = {
-        "workspace_ids": [PROJECT_ID],  # 项目空间ID列表（当前仅支持单个项目）
+        "workspace_ids": [project_id],  # 项目空间ID列表（当前仅支持单个项目）
         "location": "/search/get_all/bug",  # 视图位置路径（缺陷列表页面）
         "form": "show_fields",  # 表单类型标识
     }
@@ -1177,7 +1330,7 @@ def get_query_filtering_list_config() -> List[str]:
         raise RuntimeError("获取查询过滤列表配置失败") from orig_err
 
 
-def edit_query_filtering_list_config(custom_fields: str) -> bool:
+def edit_query_filtering_list_config(custom_fields: str = None) -> bool:
     """
     编辑查询过滤列表的字段展示配置
 
@@ -1207,8 +1360,9 @@ def edit_query_filtering_list_config(custom_fields: str) -> bool:
     # ==================================================================
     # 参数校验阶段
     # ==================================================================
-    if not isinstance(custom_fields, str) or ';' not in custom_fields:
-        raise ValueError("参数格式异常，应为分号分隔的字符串")
+    if isinstance(custom_fields, str):
+        custom_fields = custom_fields.replace(' ', '')
+    check_method_param(param_name='custom_fields', param=custom_fields, param_type=str, is_required=True)
 
     # ==================================================================
     # 请求构造阶段
@@ -1462,7 +1616,7 @@ def fetch_data(
     raise RuntimeError(error_msg)
 
 
-def ai_result_switch_html(result: str) -> str:
+def ai_result_switch_html(result: str = None) -> str:
     """
     将AI生成结果中的特定文本标记转换为标准HTML格式
 
@@ -1496,13 +1650,12 @@ def ai_result_switch_html(result: str) -> str:
         - ***文本*** → <h3>文本</h3> 三级标题
         - **文本** → <b>文本</b> 加粗文本
     """
-    try:
-        # ==================================================================
-        # 参数校验
-        # ==================================================================
-        if not isinstance(result, str):
-            raise ValueError("输入必须为字符串类型")
+    # ==================================================================
+    # 参数校验
+    # ==================================================================
+    check_method_param(param_name='result', param=result, param_type=str, is_required=True)
 
+    try:
         # ==================================================================
         # 基础排版转换
         # ==================================================================
@@ -1571,45 +1724,11 @@ def ai_output_template(
         section_details: Optional[Dict[str, List[str]]] = None
 ) -> str:
     """
-    生成AI总结报告的标准化模板结构
-
-    本方法提供可定制的报告模板生成能力，支持动态配置章节内容和细节描述，
-    同时保持格式规范性和视觉一致性。模板采用分级标题体系，支持多级结构化内容展示。
-
-    参数详解:
-        total_score (int): 项目总分值，用于总体评价部分展示。默认值100表示满分基准
-        sections (List[str]): 需要包含的章节标题列表，控制模板结构。可选值：
-            - "总体评价"    : 项目综合评分及总体结论
-            - "核心亮点"    : 关键成功要素展示
-            - "主要不足"    : 存在问题分析
-            - "改进建议"    : 具体优化建议
-            - "后续重点"    : 未来工作方向
-            - "风险预警"    : 潜在风险说明
-            默认包含全部章节
-        section_details (Dict[str, List[str]]): 各章节预填充的细节内容字典
-            格式示例：{
-                "总体评价": ["项目最终评分为85分", "整体质量处于良好水平"],
-                "核心亮点": ["架构设计合理性", "代码审查机制完善"]
-            }
-
-    返回:
-        str: 结构化的模板字符串，包含Markdown格式标记，可直接用于AI内容生成引导
-
-    异常:
-        ValueError: 当传入的section_details包含未在sections中声明的章节时抛出
-
-    实现策略:
-        1. 模块化结构配置：通过sections参数控制模板包含的章节及顺序
-        2. 分层内容填充：支持预定义内容占位符，提升模板实用性
-        3. 智能默认值：当参数未指定时自动生成完整模板结构
-        4. 防御性校验：确保用户自定义内容与模板结构的一致性
-
-    模板特性:
-        - 采用***作为一级标题标识符
-        - 使用▶作为二级条目标识
-        - 使用▷作为三级子项标识
-        - 支持<red>标签突出关键内容
-        - 自动生成水平分隔线
+    构建测试报告总结模版给到AI，期望AI根据提供的模板格式进行生成内容
+    :param total_score: (int)测试报告总评分的总分，默认为100
+    :param sections:
+    :param section_details:
+    :return:
     """
 
     # ==================================================================
@@ -1678,7 +1797,7 @@ def ai_output_template(
 
 
 def deepseek_chat(
-        user_input: str,
+        messages: List[Dict[str, str]],
         temperature: float = 0.1,
         top_p: float = 0.5,
         max_tokens: int = 1024,
@@ -1742,7 +1861,7 @@ def deepseek_chat(
             # 创建聊天补全请求
             completion = client.chat.completions.create(
                 model=model,  # 模型选择
-                messages=[{"role": "user", "content": user_input}],  # 用户输入
+                messages=messages,  # 用户输入
                 stream=OPEN_AI_IS_STREAM_RESPONSE,  # 流式/非流式选择, True: 流式响应，False: 普通响应
                 temperature=temperature,  # 采样温度选择
                 top_p=top_p,  # 核采样概率选择
@@ -2052,7 +2171,7 @@ def switch_numpy_data(data: dict) -> tuple:
         data (dict): 输入数据字典，结构示例：
             {
                 '分类1': {'子键A': 10, '子键B': 20},
-                '分类2': {'子键A': 30, '子键B': 40},
+                '分类2': {'子键A': ["1", "2"...], '子键B': ...},
                 '分类3': 50  # 直接数值将归入特殊键'_'
             }
 
@@ -2081,6 +2200,8 @@ def switch_numpy_data(data: dict) -> tuple:
             if isinstance(value, dict):
                 # 处理嵌套字典结构，提取子键和对应值
                 for sub_key, sub_value in value.items():
+                    if isinstance(sub_value, list):
+                        sub_value = len(sub_value)
                     # 维护唯一且有序的子键列表（按首次出现顺序）
                     if sub_key not in labels:
                         labels.append(sub_key)
@@ -2521,7 +2642,7 @@ def create_broken_line_plot(title: str, data: dict) -> dict:
 
         # 将数据转换为NumPy二维数组，行对应指标，列对应日期
         np_data = np.array([
-            [date_data.get(label, 0) for date_data in sorted_data.values()]
+            [len(date_data.get(label, [])) for date_data in sorted_data.values()]
             for label in labels
         ])
 
@@ -2701,6 +2822,39 @@ def upload_file(file_content: bytes) -> str:
         raise type(e)(error_msg) from e
 
 
+def table_jump_url(bug_ids: List[str] = None):
+    check_method_param(param_name='bug_ids', param=bug_ids, param_type=list, is_required=True)
+    bug_ids = [str(bug_id).replace(BUG_ID_PREFIX, '') for bug_id in bug_ids]
+    condition_data = {'and': [
+        {
+            "fieldLabel": "ID",
+            "fieldOption": "equal",
+            "value": bug_ids,
+        }
+    ]}
+    response_json = filter_query(condition_data=condition_data)
+
+    if 'data' not in response_json:
+        raise ValueError("错误：返回参数中缺少data字段")
+
+    if not isinstance(response_json['data'], dict):
+        raise TypeError("错误：data字段不是字典类型")
+
+    if 'query_token' not in response_json['data']:
+        raise ValueError("错误：data字段中缺少query_token字段")
+
+    if not isinstance(response_json['data']['query_token'], str):
+        raise TypeError("错误：data.query_token字段不是字符串类型")
+
+    if not response_json['data'].get('query_token'):
+        raise ValueError("错误：data.query_token字段为空")
+
+    query_token = response_json['data']['query_token']
+    url = f'https://www.tapd.cn/tapd_fe/worktable/search?queryToken={query_token}'
+
+    return url
+
+
 def date_time_to_date(date_time_str: str) -> str:
     """
     将多种日期时间格式统一转换为标准日期字符串
@@ -2867,7 +3021,8 @@ def style_convert(style_data: dict) -> str:
 
 
 def multi_client_data_processing(
-        result: Dict[str, Dict[str, int]],
+        result: Dict[str, Dict[str, List[str]]],
+        data_id: str,
         key: Optional[str],
         all_sub_keys: List[str],
         sub_key: Optional[str],
@@ -2891,9 +3046,10 @@ def multi_client_data_processing(
     参数说明强化:
         :param result: 多维统计字典，结构示例:
             {
-                "Android": {"崩溃": 5, "卡顿": 3, "空": 2},
-                "iOS": {"闪退": 4, "空": 1}
+                "Android": {"崩溃": ["1234", "1233"...], "卡顿": ...},
+                "iOS": {"闪退": ...}
             }
+        :param data_id: 数据的id
         :param key: 主维度标识，如平台类型。空值自动转换为"空"
         :param all_sub_keys: 子维度全集，动态维护空维度存在性
         :param sub_key: 当前子维度值，空值触发特殊处理逻辑
@@ -2939,7 +3095,7 @@ def multi_client_data_processing(
             # 同步修复已存在主键结构的维度完整性
             for k in result:
                 if "空" not in result[k]:
-                    result[k]["空"] = 0
+                    result[k]["空"] = []
 
     # ==================================================================
     # 阶段3：数据结构初始化（增强维度完整性）
@@ -2948,7 +3104,7 @@ def multi_client_data_processing(
     if all_keys and not result:
         # 构建完整主键×子键矩阵
         result.update({
-            k: {sk: 0 for sk in all_sub_keys}
+            k: {sk: [] for sk in all_sub_keys}
             for k in all_keys
         })
 
@@ -2957,13 +3113,13 @@ def multi_client_data_processing(
     # ==================================================================
     if processed_key not in result:
         # 初始化包含所有子键维度
-        result[processed_key] = {sk: 0 for sk in all_sub_keys}
+        result[processed_key] = {sk: [] for sk in all_sub_keys}
 
     # ==================================================================
     # 阶段5：数据聚合
     # ==================================================================
     # 原子操作更新计数器
-    result[processed_key][processed_sub_key] += 1
+    result[processed_key][processed_sub_key].append(data_id)
 
 
 def get_system_name() -> str:
@@ -3022,6 +3178,210 @@ def get_system_name() -> str:
         raise ValueError(error_msg)
 
     return normalized_system
+
+def add_multi_dimensional_table_html(table_data: dict) -> str:
+    # ==================================================================
+    # 数据列头提取
+    # ==================================================================
+    # 从首行数据值中提取列头信息（动态适应数据结构）
+    data_headers = []
+    for value_data in table_data['data'].values():
+        data_headers = list(value_data.keys())  # 提取内部字典的键作为列头
+        break  # 仅需获取第一个元素的键集合
+
+    # ==================================================================
+    # 阶段2：表格样式体系定义
+    # ==================================================================
+    # 通用单元格样式配置（基础边框和间距设置）
+    common_style = {
+        'padding': '0 10px',
+        'vertical-align': 'middle',
+        'border-right': 'none',
+        'border-left': 'none',
+        'border-top': 'none',
+        'border-bottom': '1px solid rgb(230, 230, 230)',
+        'background-color': 'rgb(255, 255, 255)',
+    }
+
+    # 表头行特定样式（增加顶部边框和文字颜色）
+    header_row_style = style_convert({
+        **common_style,
+        'height': '50px',
+        'font-size': '12px',
+        'color': '#8c95a8',
+        'border-top': '1px solid rgb(230, 230, 230)',
+    })
+
+    # 数据行通用样式（标准行高和字体）
+    row_style = style_convert({
+        **common_style,
+        'height': '38px',
+        'font-size': '12px',
+    })
+
+    # 总计行强调样式（加粗字体和深色文字）
+    total_row_style = style_convert({
+        **common_style,
+        'height': '38px',
+        'font-size': '12px',
+        'color': 'black',
+        'font-weight': 'bold',
+    })
+
+    clickable_value_style = style_convert({
+        'text-decoration': 'underline',
+    })
+
+    # ==================================================================
+    # 阶段3：数据行HTML生成
+    # ==================================================================
+    data_row_html = ''  # 初始化数据行HTML容器
+    total_row_values: List[List[str]] = [[] for _ in range(len(data_headers) + 1)]  # 初始化总计行数值容器[行小计, 列1, 列2...]
+
+    # 遍历每个主分类的数据条目（如不同平台的数据）
+    for table_key, table_data_dict in table_data['data'].items():
+        # 构建单行数据单元格
+        row_cells = []
+        current_row_total_datas: List[str] = []
+
+        # 遍历每个子分类的数据值（如不同缺陷类型）
+        for header in data_headers:
+            href_label = ''
+            cell_values: List[str] = table_data_dict.get(header, [])
+            if cell_values:
+                href_url = table_jump_url(cell_values)
+                href_label = f'<a href="{href_url}" target="_blank" style="{clickable_value_style}">{len(cell_values)}</a>'
+                current_row_total_datas.extend(cell_values)
+            row_cells.append(
+                f'<td align="left" style="{row_style}">{href_label if href_label else len(cell_values)}</td>'
+            )
+
+        # 添加行小计单元格（根据配置决定是否显示）
+        if table_data.get('isRowTotal'):
+            current_row_total_href_label: str = ''
+            if current_row_total_datas:
+                current_row_total_href_url = table_jump_url(current_row_total_datas)
+                current_row_total_href_label = f'<a href="{current_row_total_href_url}" target="_blank" style="{clickable_value_style}">{len(current_row_total_datas)}</a>'
+            row_cells.insert(
+                0, f'<td align="left" style="{row_style}">{current_row_total_href_label if current_row_total_href_label else len(current_row_total_datas)}</td>'
+            )
+        # 累积到总计行数值
+        total_row_values[0].extend(current_row_total_datas)   # 行小计累计
+        for idx, val in enumerate(table_data_dict.values()):
+            total_row_values[idx + 1].extend(val)  # 各列数值累计
+
+        # 组装完整数据行HTML
+        data_row_html += f'''
+        <tr>
+            <td align="left" style="{row_style}">{table_key}</td>
+            {''.join(row_cells)}
+        </tr>'''
+
+    # ==================================================================
+    # 阶段4：表头与总计行构建
+    # ==================================================================
+    # 生成动态列头HTML
+    header_cells = []
+    if table_data.get('isRowTotal'):
+        header_cells.append(f'<th align="left" style="{header_row_style}">小计</th>')
+    header_cells.extend(
+        f'<th align="left" style="{header_row_style}">{header}</th>'
+        for header in data_headers
+    )
+
+    # 生成总计行HTML
+    total_cells = []
+    if table_data.get('isRowTotal'):
+        total_href_label = ''
+        if total_row_values[0]:
+            total_href_url = table_jump_url(total_row_values[0])
+            total_href_label = f'<a href="{total_href_url}" target="_blank" style="{clickable_value_style}">{len(total_row_values[0])}</a>'
+        total_cells.append(f'<td align="left" style="{total_row_style}">{total_href_label if total_href_label else len(total_row_values[0])}</td>')
+    for val in total_row_values[1:]:
+        total_row_href_label = ''
+        if val:
+            total_row_href_url = table_jump_url(val)
+            total_row_href_label = f'<a href="{total_row_href_url}" target="_blank" style="{clickable_value_style}">{len(val)}</a>'
+        total_cells.append(
+            f'<td align="left" style="{total_row_style}">{total_row_href_label if total_row_href_label else len(val)}</td>'
+        )
+
+    # ==================================================================
+    # 阶段5：完整表格组装
+    # ==================================================================
+    html_text = f'''
+    {'<div><br /></div>' * 2}
+    <div>
+        <table cellpadding="0" cellspacing="0" class="report-chart__table" 
+               style="width:{table_data['tableWidth']}px;border:none;margin:0;">
+            <tbody>
+                <tr>
+                    <th align="left" style="{header_row_style}">
+                        {table_data['firstColumnHeader']}
+                    </th>
+                    {''.join(header_cells)}
+                </tr>
+                {data_row_html}
+                <tr>
+                    <td align="left" style="{total_row_style}">总计</td>
+                    {''.join(total_cells)}
+                </tr>
+            </tbody>
+        </table>
+    </div>'''
+    return html_text
+
+def add_simple_table_html(table_data: dict) -> str:  # 暂不进行优化
+    # 根据表格数据生成表格的样式和结构
+    table_style = style_convert({
+        # "width": f"{300 * len(table_data['headers'])}px",
+        "width": f"{table_data['tableWidth']}px",
+    })
+    cell_style = style_convert({
+        "text-align": "center",
+        "border-color": "rgb(153, 153, 153)",
+        "border-image": "initial",
+        "padding": "2px",
+    })
+    column_header_font_style = style_convert({
+        "font-size": "large",
+        "font-family": "黑体",
+    })
+    row_header_font_style = style_convert({
+        "font-size": "medium",
+    })
+    # 生成表格HTML代码
+    html_text = f'''
+        {'<div><br /></div>' * 2}
+        <div>
+            <table class="editor-table" style="{table_style}">
+                <tbody>
+                    <tr>{''.join(f"""
+                        <td style="{cell_style}">
+                            <b>
+                                <span style="{column_header_font_style}">
+                                    {header}
+                                </span>
+                            </b>
+                        </td>""" for header in table_data['headers'])}
+                    </tr>
+                {''.join(f"""
+                    <tr>
+                        <td style="{cell_style}">
+                            <span style="{row_header_font_style}">
+                                {name}
+                            </span>
+                        </td>
+                        <td style="{cell_style}">
+                            <div>
+                                {value}
+                            </div>
+                        </td>
+                    </tr>""" for name, value in table_data['data'].items())}
+                </tbody>
+            </table>
+        </div>'''
+    return html_text
 
 
 def _handle_stream_response(completion, result: list) -> str:
@@ -3222,6 +3582,74 @@ def _handle_normal_response(completion: Any, result: List[str]) -> str:
         ) from unexpect_error
 
 
+def check_method_param(
+        param_name: str,
+        param: any = None,
+        param_type: type or list[type] or tuple[type] = str,
+        is_required: bool = False
+) -> None:
+    """
+    封装的入参校验方法
+    :param param_name: (str)参数名称
+    :param param: (any)参数值
+    :param param_type: (type or list or tuple)参数期望类型
+    :param is_required: (bool)参数是否必填
+    :return: 成功--None，失败--raise
+    """
+    if is_required:
+        if param is None or param == '' or param == [] or param == {}:
+            raise ValueError(f"错误：{param_name}参数不能为空")
+    if (not isinstance(param, param_type)
+            or (((isinstance(param_type, (tuple, list)) and int in param_type and bool not in param_type)
+                 or (isinstance(param_type, type) and int == param_type))
+                and isinstance(param, bool))):
+        if isinstance(param_type, (tuple, list)):
+            param_type = '、'.join([str(i.__name__) for i in param_type])
+        else:
+            param_type = str(param_type.__name__)
+        raise TypeError(f"错误：{param_name}参数必须是{param_type}类型")
+
+
+def _switch_search_condition_item(obj_type: str, field_label: str) -> Dict[str, str]:
+    """
+    获取对应过滤查询的条件详情数据
+    :param obj_type: (str)查询范围，比如：bug
+    :param field_label: (str)条件字段名称，比如关联需求
+    :return: 如果获取有数据返回对呀的dict，field_label获取失败范围空dict
+    :raise: ValueError异常，obj_type的值为search_condition_item不存在的key则抛出异常
+    """
+    obj_type = obj_type.lower()
+    search_condition_item = {
+        'bug': {
+            'ID': {
+                "id": "1",  # 条件ID，TAPD系统保留字段
+                "fieldLabel": "ID",  # 界面显示的字段标签
+                "fieldOption": "",  # 使用模糊匹配操作符
+                "fieldType": "input",  # 字段类型为文本输入
+                "fieldSystemName": "id",  # 系统内部字段标识
+                "value": "",  # 搜索的目标需求名称
+                "fieldIsSystem": "1",  # 标记为系统内置字x段
+                "entity": "bug"  # 查询实体类型为缺陷
+            },
+            '关联需求': {
+                "id": "5",  # 条件ID，TAPD系统保留字段
+                "fieldLabel": "关联需求",  # 界面显示的字段标签
+                "fieldOption": "",  # 使用模糊匹配操作符
+                "fieldType": "input",  # 字段类型为文本输入
+                "fieldSystemName": "BugStoryRelation_relative_id",  # 系统内部字段标识
+                "value": "",  # 搜索的目标需求名称
+                "fieldIsSystem": "1",  # 标记为系统内置字x段
+                "entity": "bug"  # 查询实体类型为缺陷
+            }
+        }
+    }
+    if obj_type not in search_condition_item:
+        error_str = '或'.join(search_condition_item)
+        raise ValueError(f"错误：obj_type参数必须是{error_str}")
+
+    return search_condition_item[obj_type].get(field_label, {})
+
+
 class SoftwareQualityRating:
     def __init__(self):
         """
@@ -3337,6 +3765,7 @@ class SoftwareQualityRating:
         self.bugSourceMultiClientCount = {}  # 多端缺陷根源统计
         self.bugTotal = 0  # 缺陷总数
         self.bugInputTotal = 0  # 手动输入缺陷总数
+        self.isRejectBugCount: int = 0  # 已拒绝的BUG数
         self.bugIds = []  # 缺陷ID列表
         self.reopenBugsData = defaultdict(int)  # 重新打开缺陷数据
         self.unrepairedBugsData = defaultdict(int)  # 未修复缺陷数据
@@ -3561,6 +3990,7 @@ class SoftwareQualityRating:
             "story_id": REQUIREMENT_ID,
             "page": current_page,
             "per_page": records_per_page,
+            "location": "/prong/stories/story_tree",
             "sort_name": "due",  # 按截止时间字段排序
             "order": "asc"  # 升序排列(从最早到期到最晚到期)
         }
@@ -3659,138 +4089,91 @@ class SoftwareQualityRating:
             fetch_data(): 执行API请求的核心方法，处理网络通信和基础错误重试
         """
         # ==================================================================
-        # 阶段1：初始化分页参数
+        # 初始化分页参数
         # ==================================================================
         current_page: int = 1  # 当前请求页码，从第一页开始
         page_size: int = 100  # 每页请求数据量，使用TAPD API允许的最大值
 
-        # ==================================================================
-        # 阶段2：构建动态搜索条件
-        # ==================================================================
-        # 构造符合TAPD搜索接口规范的JSON查询条件
-        # 关键字段说明：
-        # - fieldSystemName: 指定搜索的字段为"关联需求"
-        # - value: 使用输入的需求名称作为搜索值
-        # - optionType: 使用逻辑与(AND)组合多个查询条件
-        search_condition = json.dumps({
-            "data": [{
-                "id": "5",  # 条件ID，TAPD系统保留字段
-                "fieldLabel": "关联需求",  # 界面显示的字段标签
-                "fieldOption": "like",  # 使用模糊匹配操作符
-                "fieldType": "input",  # 字段类型为文本输入
-                "fieldSystemName": "BugStoryRelation_relative_id",  # 系统内部字段标识
-                "value": self.requirementName,  # 搜索的目标需求名称
-                "fieldIsSystem": "1",  # 标记为系统内置字段
-                "entity": "bug"  # 查询实体类型为缺陷
-            }],
-            "optionType": "AND",  # 条件组合方式
-            "needInit": "1"  # 需要初始化搜索条件标志
-        })
-
-        # ==================================================================
-        # 阶段3：分页请求控制
-        # ==================================================================
-        # 构造基础请求参数模板，分页参数将在循环中动态更新
-        base_request_data = {
-            "workspace_ids": PROJECT_ID,  # 项目空间唯一标识
-            "search_data": search_condition,  # 序列化的搜索条件
-            "obj_type": "bug",  # 查询对象类型为缺陷
-            "hide_not_match_condition_node": "0",  # 显示不匹配条件节点
-            "hide_not_match_condition_sub_node": "1",  # 隐藏不匹配子节点
-            "page": current_page,  # 当前页码参数
-            "perpage": str(page_size),  # 每页数据量参数（字符串类型）
-            "order_field": "created",  # 按缺陷创建时间升序排列
+        condition_data = {
+            'and': [
+                {
+                    "fieldLabel": "关联需求",
+                    "fieldOption": "like",
+                    "value": self.requirementName,
+                }
+            ]
         }
 
         # 分页请求循环，直到获取全部数据
         while True:
+
+            response_data = filter_query(current_page, page_size, condition_data=condition_data)
+
             # ==================================================================
-            # 阶段4：发送API请求
+            # 响应数据处理
             # ==================================================================
-            # 使用封装的fetch_data方法发送POST请求
-            # 该方法已内置网络错误重试和会话管理功能
-            response = fetch_data(
-                url=f"{HOST}/api/search_filter/search_filter/search",
-                json=base_request_data,
-                method="POST"
-            )
 
-            try:
-                # ==================================================================
-                # 阶段5：响应数据处理
-                # ==================================================================
-                # 将响应内容解析为JSON格式（可能抛出JSONDecodeError）
-                response_data: Dict[str, Any] = response.json()
+            # 数据完整性校验：检查顶层data字段
+            if "data" not in response_data:
+                raise KeyError("API响应缺少核心数据域'data'字段")
 
-                # 数据完整性校验：检查顶层data字段
-                if "data" not in response_data:
-                    raise KeyError("API响应缺少核心数据域'data'字段")
+            # ==================================================================
+            # 阶段6：元数据提取（仅在首次请求时执行）
+            # ==================================================================
+            if not self.bugPlatforms or not self.bugSources:
+                # 验证项目特殊字段结构
+                project_fields = response_data["data"].get("project_special_fields")
 
-                # ==================================================================
-                # 阶段6：元数据提取（仅在首次请求时执行）
-                # ==================================================================
-                if not self.bugPlatforms or not self.bugSources:
-                    # 验证项目特殊字段结构
-                    project_fields = response_data["data"].get("project_special_fields")
+                if project_fields:
+                    if not isinstance(project_fields, dict):
+                        raise ValueError("'project_special_fields'字段类型异常，预期字典类型")
 
-                    if project_fields:
-                        if not isinstance(project_fields, dict):
-                            raise ValueError("'project_special_fields'字段类型异常，预期字典类型")
+                    # 获取当前项目的分类配置数据
+                    project_config = project_fields.get(PROJECT_ID, {})
 
-                        # 获取当前项目的分类配置数据
-                        project_config = project_fields.get(PROJECT_ID, {})
+                    # 提取平台分类选项（防御性字段检查）
+                    if "platform" in project_config and not self.bugPlatforms:
+                        self.bugPlatforms = [
+                            str(item["value"])  # 强制类型转换为字符串
+                            for item in project_config["platform"]
+                            if "value" in item
+                        ]
 
-                        # 提取平台分类选项（防御性字段检查）
-                        if "platform" in project_config and not self.bugPlatforms:
-                            self.bugPlatforms = [
-                                str(item["value"])  # 强制类型转换为字符串
-                                for item in project_config["platform"]
-                                if "value" in item
-                            ]
+                    # 提取根源分类选项（防御性字段检查）
+                    if "source" in project_config and not self.bugSources:
+                        self.bugSources = [
+                            str(item["value"])  # 强制类型转换为字符串
+                            for item in project_config["source"]
+                            if "value" in item
+                        ]
 
-                        # 提取根源分类选项（防御性字段检查）
-                        if "source" in project_config and not self.bugSources:
-                            self.bugSources = [
-                                str(item["value"])  # 强制类型转换为字符串
-                                for item in project_config["source"]
-                                if "value" in item
-                            ]
+            # ==================================================================
+            # 缺陷数据处理
+            # ==================================================================
+            # 校验列表数据字段存在性
+            if "list" not in response_data["data"]:
+                raise KeyError("响应数据缺失缺陷列表字段'list'")
 
-                # ==================================================================
-                # 阶段7：缺陷数据处理
-                # ==================================================================
-                # 校验列表数据字段存在性
-                if "list" not in response_data["data"]:
-                    raise KeyError("响应数据缺失缺陷列表字段'list'")
+            current_page_bugs = response_data["data"]["list"]
 
-                current_page_bugs = response_data["data"]["list"]
+            # 数据类型二次校验（防御性编程）
+            if not isinstance(current_page_bugs, list):
+                raise TypeError(
+                    f"缺陷数据格式异常，预期列表类型，实际类型：{type(current_page_bugs)}"
+                )
 
-                # 数据类型二次校验（防御性编程）
-                if not isinstance(current_page_bugs, list):
-                    raise TypeError(
-                        f"缺陷数据格式异常，预期列表类型，实际类型：{type(current_page_bugs)}"
-                    )
+            # 合并分页数据到总集合
+            self.bugs.extend(current_page_bugs)
 
-                # 合并分页数据到总集合
-                self.bugs.extend(current_page_bugs)
+            # ==================================================================
+            # 分页终止判断
+            # ==================================================================
+            # 当前页数据量小于请求量时终止循环（最后一页）
+            if len(current_page_bugs) < page_size:
+                break
 
-                # ==================================================================
-                # 阶段8：分页终止判断
-                # ==================================================================
-                # 当前页数据量小于请求量时终止循环（最后一页）
-                if len(current_page_bugs) < page_size:
-                    break
-
-                # 更新分页参数准备下次请求
-                base_request_data["page"] += 1
-                current_page = base_request_data["page"]
-
-            except requests.JSONDecodeError as decode_err:
-                # 捕获JSON解析异常并附加原始响应内容
-                raw_content = response.text[:200] + "..." if response.text else "空响应内容"
-                raise ValueError(
-                    f"响应内容解析失败，原始内容：{raw_content}"
-                ) from decode_err
+            # 更新分页参数准备下次请求
+            current_page += 1
 
     def get_all_list_data(self) -> None:
         """
@@ -3965,7 +4348,6 @@ class SoftwareQualityRating:
         # ==================================================================
         print('通过')
 
-
     def question_stage(self) -> None:
         """
         执行需求上线相关的客户端选择与日期输入流程
@@ -4077,7 +4459,6 @@ class SoftwareQualityRating:
             # 存储日期数据（转换为date类型）
             self.onlineDateDict[onlineClient] = date_time_to_date(client_online_date)
 
-
     def requirement_task_statistics(self) -> None:
         """
         统计需求关联的子任务数据，计算开发工时并识别关键时间节点
@@ -4172,7 +4553,6 @@ class SoftwareQualityRating:
             self._print_error(f"警告：未识别到最晚任务日期，请检查{self.requirementName}需求的测试任务预期结束时间")
         if not self.onlineDate and not self.isInputOnlineDate:
             self._print_error(f"警告：未识别到上线日期，请检查{self.requirementName}需求的测试任务预期开始时间")
-
 
     def print_development_hours(self) -> None:
         """
@@ -4294,6 +4674,7 @@ class SoftwareQualityRating:
             # 过滤已拒绝状态的缺陷（无效数据跳过）
             bug_status = bug.get('status', '')
             if bug_status == 'rejected':
+                self.isRejectBugCount += 1
                 continue
 
             # ==================================================================
@@ -4326,11 +4707,12 @@ class SoftwareQualityRating:
 
                 # 更新全局统计计数器
                 self.bugLevelsCount[severity_name] += 1  # 严重等级统计
-                self.bugSourceCount[bug_source] += 1     # 缺陷根源统计
+                self.bugSourceCount[bug_source] += 1  # 缺陷根源统计
 
                 # 执行多维度矩阵统计（平台×严重等级）
                 multi_client_data_processing(
                     result=self.bugLevelsMultiClientCount,
+                    data_id=bug_id,
                     key=bug_platform,
                     all_sub_keys=BUG_LEVELS,
                     sub_key=severity_name
@@ -4339,6 +4721,7 @@ class SoftwareQualityRating:
                 # 执行多维度矩阵统计（平台×缺陷根源）
                 multi_client_data_processing(
                     result=self.bugSourceMultiClientCount,
+                    data_id=bug_id,
                     key=bug_platform,
                     all_sub_keys=self.bugSources,
                     sub_key=bug_source
@@ -4406,7 +4789,6 @@ class SoftwareQualityRating:
         # 控制台输出统计摘要（严重等级分布）
         for level, count in self.bugLevelsCount.items():
             print(f"{level}级别缺陷数量：{count}")
-
 
     def score_result(self) -> None:
         """
@@ -4607,6 +4989,8 @@ class SoftwareQualityRating:
         # 阶段1：测试结论数据初始化
         # ==================================================================
 
+        print("测试报告生成".center(LINE_LENGTH, '='))
+
         # 存储项目测试人员和测试接收人
         self._processing_tester_list()
 
@@ -4614,7 +4998,7 @@ class SoftwareQualityRating:
         test_conclusion: dict[str, str] = {
             '测试执行进度': '',  # 预留字段，需后续补充
             '用例个数': '',  # 预留字段，需后续补充
-            '发现BUG数': f'{self.bugTotal if self.bugTotal else self.bugInputTotal}个',  # 动态选择自动统计或手动输入的BUG数
+            '发现BUG数': f'{self.bugTotal if self.bugTotal else self.bugInputTotal}个{"（已剔除拒绝的BUG）" if self.isRejectBugCount > 0 else ""}',  # 动态选择自动统计或手动输入的BUG数
             # 组合各维度评分
             '软件提测质量评分': f'{sum(self.score.values())}分（配合积极性/文档完整性{self.score["positiveIntegrityScore"]}分 + 冒烟测试{self.score["smokeTestingScore"]}分 + BUG数{self.score["bugCountScore"]}分 + BUG修复速度{self.score["bugRepairScore"]}分 + BUG重启率{self.score["bugReopenScore"]}分）',
             '测试时间': '',  # 预留字段，需后续补充
@@ -4641,11 +5025,11 @@ class SoftwareQualityRating:
             <br  />
             <div style="color: rgb(34, 34, 34);">
                 <div>
-                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">項目测试结论</span>
+                    <span style="font-size: medium; background-color: rgb(255, 255, 255);"><h3>項目测试结论</h3></span>
                 </div>{''.join(test_conclusion_html)}
                 <br  />
                 <div>
-                    <span style="font-size: medium; background-color: rgb(255, 255, 255);">总结：
+                    <span style="font-size: medium; background-color: rgb(255, 255, 255);"><h3>总结与建议</h3>
                         <br  /><br  /> %(reportSummary)s
                     </span>
                 </div>
@@ -4656,6 +5040,7 @@ class SoftwareQualityRating:
         # 阶段3：AI总结生成（根据全局配置开关）
         # ==================================================================
         if IS_CREATE_AI_SUMMARY:
+            print("ai生成测试报告总结和建议".center(LINE_LENGTH, '-'))
             self._ai_generate_summary()  # 调用深度生成方法
 
         # ==================================================================
@@ -4765,6 +5150,7 @@ class SoftwareQualityRating:
             ValueError: 当图表数据生成失败时抛出
             TypeError: 当输入数据类型错误时抛出
         """
+        print('生成测试报告图表阶段'.center(LINE_LENGTH, '='))
         # ==================================================================
         # 阶段1：初始化图表列表
         # ==================================================================
@@ -4845,13 +5231,15 @@ class SoftwareQualityRating:
         # ==================================================================
         # 阶段5：将图表路径信息转换为HTML格式
         # ==================================================================
+        print('正在构造图表html...', end='')
         self._charts_to_html(charts)  # 调用私有方法将图表路径信息转换并生成HTML
+        print('完成')
 
         # ==================================================================
         # 阶段6：打印图表链接（如果不需要创建报告）
         # ==================================================================
         if not IS_CREATE_REPORT:
-            print('\n\n\n图表链接：')
+            print('\n图表链接：')
             for chart in charts:
                 print('https://www.tapd.cn' + chart['plotPath'])  # 打印图表链接
 
@@ -5131,10 +5519,10 @@ class SoftwareQualityRating:
                 # 如果多维表格标记为True，则生成多维表格的HTML， 否则生成简单表格
                 if table_data.get('isMultiDimensionalTable'):
                     # 执行多维表格的HTML生成
-                    self._add_multi_dimensional_table_html(table_data)
+                    self.chartHtml += add_multi_dimensional_table_html(table_data)
                 else:
                     # 执行简单表格的HTML生成
-                    self._add_simple_table_html(table_data)
+                    self.chartHtml += add_simple_table_html(table_data)
 
             # ==================================================================
             # 阶段9：间隔处理（保持原始视觉效果）
@@ -5228,12 +5616,14 @@ class SoftwareQualityRating:
         # 阶段2：初始化数据
         # ==================================================================
         # 初始化每个日期的计数器, 保证所有日期下面都存在完整的键值对
-        base_count_data: dict = {
-            '创建缺陷总数': 0,
-            '修复缺陷总数': 0,
-            '关闭缺陷总数': 0,
-            '未关闭缺陷总数': 0,
+        base_count_data: Dict[str, List[str]] = {
+            '创建缺陷总数': [],
+            '修复缺陷总数': [],
+            '关闭缺陷总数': [],
+            '未关闭缺陷总数': [],
         }
+
+        bug_id = data['id']
 
         # ==================================================================
         # 阶段3：日期标准化处理
@@ -5257,7 +5647,7 @@ class SoftwareQualityRating:
         # 初始化或更新当日创建计数
         if create_date not in self.dailyTrendOfBugChanges:
             self.dailyTrendOfBugChanges[create_date] = base_count_data.copy()
-        self.dailyTrendOfBugChanges[create_date]['创建缺陷总数'] += 1
+        self.dailyTrendOfBugChanges[create_date]['创建缺陷总数'].append(bug_id)
 
         # ==================================================================
         # 阶段5：解决事件处理
@@ -5266,7 +5656,7 @@ class SoftwareQualityRating:
         if resolve_date and resolve_date <= self.lastTaskDate:
             if resolve_date not in self.dailyTrendOfBugChanges:
                 self.dailyTrendOfBugChanges[resolve_date] = base_count_data.copy()
-            self.dailyTrendOfBugChanges[resolve_date]['修复缺陷总数'] += 1
+            self.dailyTrendOfBugChanges[resolve_date]['修复缺陷总数'].append(bug_id)
 
         # ==================================================================
         # 阶段6：关闭事件处理
@@ -5276,14 +5666,14 @@ class SoftwareQualityRating:
             # 更新关闭计数
             if close_date not in self.dailyTrendOfBugChanges:
                 self.dailyTrendOfBugChanges[close_date] = base_count_data.copy()
-            self.dailyTrendOfBugChanges[close_date]['关闭缺陷总数'] += 1
+            self.dailyTrendOfBugChanges[close_date]['关闭缺陷总数'].append(bug_id)
 
             # 计算未关闭持续时间段（创建日到关闭日前一天）
             unclosed_dates: list = get_days(create_date, close_date)[:-1]
             for date in unclosed_dates:
                 if date not in self.dailyTrendOfBugChanges:
                     self.dailyTrendOfBugChanges[date] = base_count_data.copy()
-                self.dailyTrendOfBugChanges[date]['未关闭缺陷总数'] += 1
+                self.dailyTrendOfBugChanges[date]['未关闭缺陷总数'].append(bug_id)
         else:
             # ==================================================================
             # 阶段7：未关闭状态处理
@@ -5293,7 +5683,7 @@ class SoftwareQualityRating:
             for date in unclosed_dates:
                 if date not in self.dailyTrendOfBugChanges:
                     self.dailyTrendOfBugChanges[date] = base_count_data.copy()
-                self.dailyTrendOfBugChanges[date]['未关闭缺陷总数'] += 1
+                self.dailyTrendOfBugChanges[date]['未关闭缺陷总数'].append(bug_id)
 
     def _print_error(self, error_text: str) -> None:
         """
@@ -5574,7 +5964,6 @@ class SoftwareQualityRating:
         if owner not in self.testRecipient:
             self.testRecipient.append(owner)
 
-
     def _update_date_range(self, begin: datetime.date = None, due: datetime.date = None):
         """
         维护项目时间范围边界值
@@ -5693,7 +6082,6 @@ class SoftwareQualityRating:
             # 数据结构维护：list[str] 类型追加操作
             self.unrepairedBugs['deployProdDayUnrepaired']['P2'].append(bug_id)
 
-
     def _statistics_on_that_day_unrepaired_bug(
             self,
             bug_status: str,
@@ -5800,7 +6188,7 @@ class SoftwareQualityRating:
         for bug_platform in self.bugExistPlatforms:
             # 检查平台是否未上线且未被记录
             if (bug_platform not in online_clients
-                and bug_platform not in error_clients):
+                    and bug_platform not in error_clients):
                 # 记录无效客户端平台（保留首次出现顺序）
                 error_clients.append(bug_platform)
 
@@ -5808,214 +6196,6 @@ class SoftwareQualityRating:
         # 阶段3：返回检测结果
         # ==================================================================
         return error_clients
-
-
-    def _add_multi_dimensional_table_html(self, table_data: dict) -> None:
-        """
-        生成多维数据表格的HTML结构，支持动态列头和行统计功能
-
-        该方法通过解析多维字典数据，自动构建包含列头、数据行和总计行的复杂HTML表格。
-        特别适用于展示多维度交叉统计结果，支持自动计算行总计和列总计。
-
-        参数:
-            table_data (dict): 包含表格配置和数据的字典，结构示例：
-                {
-                    'tableWidth': 1000,       # 表格总宽度(像素)
-                    'data': {                 # 核心数据字典
-                        '平台A': {'类型1': 5, '类型2': 3},
-                        '平台B': {'类型1': 2, '类型2': 7}
-                    },
-                    'firstColumnHeader': '软件平台',  # 首列标题文本
-                    'isRowTotal': True        # 是否显示行总计列
-                }
-
-        返回:
-            None: 直接更新实例的chartHtml属性
-
-        实现流程:
-            1. 提取数据列头信息
-            2. 定义表格样式体系
-            3. 构建表格数据行HTML
-            4. 计算并生成总计行数据
-            5. 组合完整表格HTML结构
-        """
-        # ==================================================================
-        # 阶段1：数据列头提取
-        # ==================================================================
-        # 从首行数据值中提取列头信息（动态适应数据结构）
-        data_headers = []
-        for value_data in table_data['data'].values():
-            data_headers = list(value_data.keys())  # 提取内部字典的键作为列头
-            break  # 仅需获取第一个元素的键集合
-
-        # ==================================================================
-        # 阶段2：表格样式体系定义
-        # ==================================================================
-        # 通用单元格样式配置（基础边框和间距设置）
-        common_style = {
-            'padding': '0 10px',
-            'vertical-align': 'middle',
-            'border-right': 'none',
-            'border-left': 'none',
-            'border-top': 'none',
-            'border-bottom': '1px solid rgb(230, 230, 230)',
-            'background-color': 'rgb(255, 255, 255)',
-        }
-
-        # 表头行特定样式（增加顶部边框和文字颜色）
-        header_row_style = style_convert({
-            **common_style,
-            'height': '50px',
-            'font-size': '12px',
-            'color': '#8c95a8',
-            'border-top': '1px solid rgb(230, 230, 230)',
-        })
-
-        # 数据行通用样式（标准行高和字体）
-        row_style = style_convert({
-            **common_style,
-            'height': '38px',
-            'font-size': '12px',
-        })
-
-        # 总计行强调样式（加粗字体和深色文字）
-        total_row_style = style_convert({
-            **common_style,
-            'height': '38px',
-            'font-size': '12px',
-            'color': 'black',
-            'font-weight': 'bold',
-        })
-
-        # ==================================================================
-        # 阶段3：数据行HTML生成
-        # ==================================================================
-        data_row_html = ''  # 初始化数据行HTML容器
-        total_row_values = [0] * (len(data_headers) + 1)  # 初始化总计行数值容器[行小计, 列1, 列2...]
-
-        # 遍历每个主分类的数据条目（如不同平台的数据）
-        for table_key, table_data_dict in table_data['data'].items():
-            # 构建单行数据单元格
-            row_cells = []
-            current_row_total = 0  # 当前行小计
-
-            # 遍历每个子分类的数据值（如不同缺陷类型）
-            for header in data_headers:
-                cell_value = table_data_dict.get(header, 0)
-                row_cells.append(f'<td align="left" style="{row_style}">{cell_value}</td>')
-                current_row_total += cell_value
-
-            # 添加行小计单元格（根据配置决定是否显示）
-            if table_data.get('isRowTotal'):
-                row_cells.insert(0, f'<td align="left" style="{row_style}">{current_row_total}</td>')
-
-            # 累积到总计行数值
-            total_row_values[0] += current_row_total  # 行小计累计
-            for idx, val in enumerate(table_data_dict.values()):
-                total_row_values[idx + 1] += val  # 各列数值累计
-
-            # 组装完整数据行HTML
-            data_row_html += f'''
-            <tr>
-                <td align="left" style="{row_style}">{table_key}</td>
-                {''.join(row_cells)}
-            </tr>'''
-
-        # ==================================================================
-        # 阶段4：表头与总计行构建
-        # ==================================================================
-        # 生成动态列头HTML
-        header_cells = []
-        if table_data.get('isRowTotal'):
-            header_cells.append(f'<th align="left" style="{header_row_style}">小计</th>')
-        header_cells.extend(
-            f'<th align="left" style="{header_row_style}">{header}</th>'
-            for header in data_headers
-        )
-
-        # 生成总计行HTML
-        total_cells = []
-        if table_data.get('isRowTotal'):
-            total_cells.append(f'<td align="left" style="{total_row_style}">{total_row_values[0]}</td>')
-        total_cells.extend(
-            f'<td align="left" style="{total_row_style}">{val}</td>'
-            for val in total_row_values[1:]
-        )
-
-        # ==================================================================
-        # 阶段5：完整表格组装
-        # ==================================================================
-        self.chartHtml += f'''
-        {'<div><br /></div>' * 2}
-        <div>
-            <table cellpadding="0" cellspacing="0" class="report-chart__table" 
-                   style="width:{table_data['tableWidth']}px;border:none;margin:0;">
-                <tbody>
-                    <tr>
-                        <th align="left" style="{header_row_style}">
-                            {table_data['firstColumnHeader']}
-                        </th>
-                        {''.join(header_cells)}
-                    </tr>
-                    {data_row_html}
-                    <tr>
-                        <td align="left" style="{total_row_style}">总计</td>
-                        {''.join(total_cells)}
-                    </tr>
-                </tbody>
-            </table>
-        </div>'''
-
-    def _add_simple_table_html(self, table_data: dict):  # 暂不进行优化
-        # 根据表格数据生成表格的样式和结构
-        table_style = style_convert({
-            # "width": f"{300 * len(table_data['headers'])}px",
-            "width": f"{table_data['tableWidth']}px",
-        })
-        cell_style = style_convert({
-            "text-align": "center",
-            "border-color": "rgb(153, 153, 153)",
-            "border-image": "initial",
-            "padding": "2px",
-        })
-        column_header_font_style = style_convert({
-            "font-size": "large",
-            "font-family": "黑体",
-        })
-        row_header_font_style = style_convert({
-            "font-size": "medium",
-        })
-        # 生成表格HTML代码
-        self.chartHtml += f'''
-            {'<div><br /></div>' * 2}
-            <div>
-                <table class="editor-table" style="{table_style}">
-                    <tbody>
-                        <tr>{''.join(f"""
-                            <td style="{cell_style}">
-                                <b>
-                                    <span style="{column_header_font_style}">
-                                        {header}
-                                    </span>
-                                </b>
-                            </td>""" for header in table_data['headers'])}
-                        </tr>
-                    {''.join(f"""
-                        <tr>
-                            <td style="{cell_style}">
-                                <span style="{row_header_font_style}">
-                                    {name}
-                                </span>
-                            </td>
-                            <td style="{cell_style}">
-                                <div>
-                                    {value}
-                                </div>
-                            </td>
-                        </tr>""" for name, value in table_data['data'].items())}
-                    </tbody>
-                </table>
-            </div>'''
 
     def _calculate_positive_integrity_score(self) -> None:
         """
@@ -6577,7 +6757,7 @@ class SoftwareQualityRating:
                 '\n项目研发评分情况:',
                 *[f"\n{item['title']}评分:\n{item['scoreRule']}\n得分为:{item['score']}"
                   for item in self.scoreContents],
-                '\n注意:\n'
+                '\n重点强调！重点强调！重点强调！别老是给我把当天未修复的BUG数算到上线当天BUG数去！！！:(\n'
                 'BUG修复评分(10-20分)表示不存在上线当天未修复BUG，但存在创建当天未修复BUG;\n'
                 'BUG修复评分(1-5分)表示存在上线当天未修复BUG;\n'
                 '(P0当天未修复BUG数、P1当天未修复BUG数、P2当天未修复BUG数)归属"创建当天未修复BUG数"\n'
@@ -6585,10 +6765,10 @@ class SoftwareQualityRating:
                 '示例说明:\n'
                 '上线当天P0/P1未修复数：0\n'
                 '上线当天P2未修复数：1\n'
-                '创建当天P0未修复数：0\n'
-                '创建当天P1未修复数：6\n'
-                '创建当天P2未修复数：20\n'
-                '表示：上线当天无P0/P1BUG未修复，存在1个P2BUG上线当天未修复BUG；创建创建当天未修复BUG有6个P1BUG和20个P2BUG\n'
+                '当天P0未修复数：0\n'
+                '当天P1未修复数：6\n'
+                '当天P2未修复数：20\n'
+                '表示：上线当天无P0/P1BUG未修复，存在1个P2BUG上线当天未修复BUG；创建当天未修复BUG有6个P1BUG和20个P2BUG\n)'
             ]
             text_parts.extend(score_section)
 
@@ -6640,14 +6820,14 @@ class SoftwareQualityRating:
         # 阶段6：AI服务交互控制
         # ==================================================================
 
-        # 构建完整提示文本
-        full_prompt = ''.join(text_parts)
+        # 初始化对话历史
+        conversation_history = [{"role": "user", "content": ''.join(text_parts)}]
 
         # 内容生成主循环
         while True:
             try:
                 # 调用AI服务生成报告内容
-                self.reportSummary = deepseek_chat(full_prompt)
+                self.reportSummary = deepseek_chat(conversation_history)
 
                 # 当启用重试机制时进行交互确认
                 if IS_SUPPORT_RETRY_CREATE_AI_SUMMARY:
@@ -6659,9 +6839,19 @@ class SoftwareQualityRating:
                         input_type=str,
                         allow_contents=['y', 'n'],
                     )
-
                     if confirm == 'y':
-                        continue  # 重新生成
+                        confirm_input = _input(
+                            '是否需要继续输入内容进行提问?(y/n): ',
+                            input_type=str,
+                            allow_contents=['y', 'n'],
+                        )
+                        if confirm_input == 'y':
+                            conversation_history.append({"role": "assistant", "content": self.reportSummary})
+                            session_content = _input(
+                                '请输入内容进行提问: ',
+                                input_type=str,
+                            )
+                            conversation_history.append({"role": "user", "content": session_content})
                     else:
                         break  # 退出循环
                 else:
@@ -6821,7 +7011,6 @@ class SoftwareQualityRating:
             except Exception as final_error:
                 traceback.print_exc()
                 raise RuntimeError(f"配置还原失败: {str(final_error)}") from final_error
-
 
 
 if __name__ == "__main__":
