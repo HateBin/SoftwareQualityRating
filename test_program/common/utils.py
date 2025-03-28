@@ -36,4 +36,4 @@ def read_test_case_excel(excel_name):
     return test_cases
 
 if __name__ == '__main__':
-    print(read_test_case_excel('calculate_bug_reopen_rating_case.xlsx'))
+    print(read_test_case_excel('calculate_bug_repair_rating_case.xlsx'))

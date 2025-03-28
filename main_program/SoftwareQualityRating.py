@@ -435,14 +435,14 @@ def calculate_bug_reopen_rating(X: int = None) -> int or None:
             return score_mapping[threshold]
 
 
-def calculate_bug_repair_rating(unrepaired_bug: Dict[str, Any]) -> int or None:
+def calculate_bug_repair_rating(unrepaired_bug: Dict[str, Any] = None) -> int or None:
     """
     根据未修复缺陷的严重程度计算缺陷修复质量评分
 
     评分规则（按优先级从高到低判断）：
     - 若上线当天存在未修复的致命(P0)或严重(P1)缺陷 → 1分（质量极差）
-    - 若上线当天存在未修复的一般或其他(P2)缺陷 → 5分（质量堪忧）
-    - 若缺陷创建当天未修复致命(P0)但存在未修复严重(P1) → 10分（质量合格）
+    - 若上线当天存在未修复的一般或其他(P2)缺陷和创建当天存在未修复致命(P0) → 5分（质量堪忧）
+    - 若缺陷创建当天已修复致命(P0)，但存在未修复严重(P1) → 10分（质量合格）
     - 若缺陷创建当天已修复所有P0/P1，但存在未修复P2 → 15分（质量良好）
     - 若所有缺陷在创建当天均被修复 → 20分（质量优秀）
 
@@ -470,6 +470,14 @@ def calculate_bug_repair_rating(unrepaired_bug: Dict[str, Any]) -> int or None:
         - 当输入数据结构不符合预期时，打印错误日志并返回None
     """
 
+    # 判断入参为空的情况，默认为空字典
+    if unrepaired_bug is None:
+        unrepaired_bug = {}
+
+    # 防御性处理：判断入参类型
+    if not isinstance(unrepaired_bug, dict):
+        raise TypeError("错误：unrepaired_bug的值必须为字典")
+
     # 解构输入数据，提高可读性
     prod_day_unrepaired: dict[str, list[str]] = unrepaired_bug.get('deployProdDayUnrepaired', {})
     on_that_day_unrepaired: dict[str, list[str]] = unrepaired_bug.get('onThatDayUnrepaired', {})
@@ -482,10 +490,10 @@ def calculate_bug_repair_rating(unrepaired_bug: Dict[str, Any]) -> int or None:
         return 1  # 存在上线未修复的高危缺陷，最低评分
 
     # ----------------------------
-    # 优先级2：上线当天存在P2未修复
+    # 优先级2：上线当天存在P2未修复和创建当天P0未修复
     # ----------------------------
-    # 检查上线当天未修复的一般缺陷列表是否非空
-    if prod_day_unrepaired.get('P2'):
+    # 检查上线当天未修复的一般缺陷列表和创建当天P0列表是否非空
+    if prod_day_unrepaired.get('P2') or on_that_day_unrepaired.get('P0'):
         return 5  # 存在上线未修复的中等缺陷，较低评分
 
     # ----------------------------
@@ -516,10 +524,7 @@ def calculate_bug_repair_rating(unrepaired_bug: Dict[str, Any]) -> int or None:
     # ----------------------------
     # 异常处理：未匹配任何条件
     # ----------------------------
-    # 打印结构化错误日志（实际项目中建议使用logging模块）
-    print("错误：缺陷修复评分计算失败，数据结构异常或存在未覆盖的逻辑分支")
-    print(f"输入数据结构：{json.dumps(unrepaired_bug, indent=2)}")
-    return None  # 防御性返回
+    raise ValueError("错误：缺陷修复评分计算失败，数据结构异常或存在未覆盖的逻辑分支")
 
 
 def _input(
