@@ -1,0 +1,78 @@
+2025-03-28 12:42:08,427 INFO [testlog] [base_case.py (setup_class:13] - ==========BUG修复情况评分计算测试开始==========
+2025-03-28 12:42:09,120 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - ====开始执行用例：入参为完整的数据结构，不存在上线当天未修复BUG和创建当天未修复BUG====
+2025-03-28 12:42:09,120 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - ===执行用例：入参为完整的数据结构，不存在上线当天未修复BUG和创建当天未修复BUG 成功====
+2025-03-28 12:42:09,121 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - ==开始执行用例：入参中未传BUG等级字段，代表不存在上线当天未修复BUG和创建当天未修复BUG==
+2025-03-28 12:42:09,121 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - =执行用例：入参中未传BUG等级字段，代表不存在上线当天未修复BUG和创建当天未修复BUG 成功==
+2025-03-28 12:42:09,122 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - =====开始执行用例：入参为空字典，代表不存在上线当天未修复BUG和创建当天未修复BUG=====
+2025-03-28 12:42:09,122 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - ====执行用例：入参为空字典，代表不存在上线当天未修复BUG和创建当天未修复BUG 成功=====
+2025-03-28 12:42:09,123 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - ====开始执行用例：入参为null，代表不存在上线当天未修复BUG和创建当天未修复BUG=====
+2025-03-28 12:42:09,123 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - ====执行用例：入参为null，代表不存在上线当天未修复BUG和创建当天未修复BUG 成功====
+2025-03-28 12:42:09,124 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - ======开始执行用例：不传参数，代表不存在上线当天未修复BUG和创建当天未修复BUG======
+2025-03-28 12:42:09,124 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - =====执行用例：不传参数，代表不存在上线当天未修复BUG和创建当天未修复BUG 成功======
+2025-03-28 12:42:09,125 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - ===开始执行用例：入参的数据格式不正确，代表不存在上线当天未修复BUG和创建当天未修复BUG===
+2025-03-28 12:42:09,125 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - ==执行用例：入参的数据格式不正确，代表不存在上线当天未修复BUG和创建当天未修复BUG 成功===
+2025-03-28 12:42:09,125 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参为完整的数据结构，不存在上线当天未修复BUG，创建当天未修复BUG只存在多个P2级BUG
+2025-03-28 12:42:09,125 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参为完整的数据结构，不存在上线当天未修复BUG，创建当天未修复BUG只存在多个P2级BUG 成功
+2025-03-28 12:42:09,126 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参只存在创建当天未修复BUG的P2列表数据，不存在上线当天未修复BUG，创建当天未修复BUG只存在一个P2级BUG
+2025-03-28 12:42:09,126 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参只存在创建当天未修复BUG的P2列表数据，不存在上线当天未修复BUG，创建当天未修复BUG只存在一个P2级BUG 成功
+2025-03-28 12:42:09,126 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参为完整的数据结构，不存在上线当天未修复BUG，创建当天未修复BUG只存在多个P1级BUG
+2025-03-28 12:42:09,127 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参为完整的数据结构，不存在上线当天未修复BUG，创建当天未修复BUG只存在多个P1级BUG 成功
+2025-03-28 12:42:09,127 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参只存在创建当天未修复BUG的P1列表数据，不存在上线当天未修复BUG，创建当天未修复BUG只存在一个P1级BUG
+2025-03-28 12:42:09,127 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参只存在创建当天未修复BUG的P1列表数据，不存在上线当天未修复BUG，创建当天未修复BUG只存在一个P1级BUG 成功
+2025-03-28 12:42:09,128 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参为完整的数据结构，不存在上线当天未修复BUG，创建当天未修复BUG存在多个P1级和P2级BUG
+2025-03-28 12:42:09,128 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参为完整的数据结构，不存在上线当天未修复BUG，创建当天未修复BUG存在多个P1级和P2级BUG 成功
+2025-03-28 12:42:09,128 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参只存在创建当天未修复BUG的P1列表数据，不存在上线当天未修复BUG，创建当天未修复BUG各存在一个P1级和P2级BUG
+2025-03-28 12:42:09,128 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参只存在创建当天未修复BUG的P1列表数据，不存在上线当天未修复BUG，创建当天未修复BUG各存在一个P1级和P2级BUG 成功
+2025-03-28 12:42:09,129 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参为完整的数据结构，不存在上线当天未修复BUG，创建当天未修复BUG只存在多个P0级BUG
+2025-03-28 12:42:09,129 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参为完整的数据结构，不存在上线当天未修复BUG，创建当天未修复BUG只存在多个P0级BUG 成功
+2025-03-28 12:42:09,130 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参只存在创建当天未修复BUG的P0列表数据，不存在上线当天未修复BUG，创建当天未修复BUG只存在一个P0级BUG
+2025-03-28 12:42:09,130 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参只存在创建当天未修复BUG的P0列表数据，不存在上线当天未修复BUG，创建当天未修复BUG只存在一个P0级BUG 成功
+2025-03-28 12:42:09,130 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参为完整的数据结构，不存在上线当天未修复BUG，创建当天未修复BUG存在多个P0级和P1级BUG
+2025-03-28 12:42:09,130 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参为完整的数据结构，不存在上线当天未修复BUG，创建当天未修复BUG存在多个P0级和P1级BUG 成功
+2025-03-28 12:42:09,131 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参只存在创建当天未修复BUG的P0和P1列表数据，不存在上线当天未修复BUG，创建当天未修复BUG存在一个P0级和一个P1级BUG
+2025-03-28 12:42:09,131 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参只存在创建当天未修复BUG的P0和P1列表数据，不存在上线当天未修复BUG，创建当天未修复BUG存在一个P0级和一个P1级BUG 成功
+2025-03-28 12:42:09,132 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参为完整的数据结构，不存在上线当天未修复BUG，创建当天未修复BUG存在多个P0级和P2级BUG
+2025-03-28 12:42:09,132 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参为完整的数据结构，不存在上线当天未修复BUG，创建当天未修复BUG存在多个P0级和P2级BUG 成功
+2025-03-28 12:42:09,132 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参只存在创建当天未修复BUG的P0和P1列表数据，不存在上线当天未修复BUG，创建当天未修复BUG存在一个P0级和一个P2级BUG
+2025-03-28 12:42:09,132 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参只存在创建当天未修复BUG的P0和P1列表数据，不存在上线当天未修复BUG，创建当天未修复BUG存在一个P0级和一个P2级BUG 成功
+2025-03-28 12:42:09,133 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参为完整的数据结构，不存在上线当天未修复BUG，创建当天未修复BUG存在多个P0级、P1级和P2级BUG
+2025-03-28 12:42:09,133 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参为完整的数据结构，不存在上线当天未修复BUG，创建当天未修复BUG存在多个P0级、P1级和P2级BUG 成功
+2025-03-28 12:42:09,134 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参只存在创建当天未修复BUG的完整数据，不存在上线当天未修复BUG，创建当天未修复BUG存在一个P0级、一个P1级和一个P2级BUG
+2025-03-28 12:42:09,134 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参只存在创建当天未修复BUG的完整数据，不存在上线当天未修复BUG，创建当天未修复BUG存在一个P0级、一个P1级和一个P2级BUG 成功
+2025-03-28 12:42:09,134 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参为完整的数据结构，上线当天未修复BUG只存在多个P2级BUG，不存在创建当天未修复BUG
+2025-03-28 12:42:09,134 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参为完整的数据结构，上线当天未修复BUG只存在多个P2级BUG，不存在创建当天未修复BUG 成功
+2025-03-28 12:42:09,135 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参只存在上线当天未修复BUG的P2列表数据，上线当天未修复BUG只存在一个P2级BUG，不存在创建当天未修复BUG
+2025-03-28 12:42:09,135 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参只存在上线当天未修复BUG的P2列表数据，上线当天未修复BUG只存在一个P2级BUG，不存在创建当天未修复BUG 成功
+2025-03-28 12:42:09,136 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参为完整的数据结构，上线当天未修复BUG只存在多个P2级BUG，创建当天未修复BUG所有等级都存在多个BUG
+2025-03-28 12:42:09,136 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参为完整的数据结构，上线当天未修复BUG只存在多个P2级BUG，创建当天未修复BUG所有等级都存在多个BUG 成功
+2025-03-28 12:42:09,136 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参存在上线当天未修复BUG的P2列表数据和创建当天未修复BUG的完整数据，上线当天未修复BUG只存在一个P2级BUG，创建当天未修复BUG所有等级都各存在一个BUG
+2025-03-28 12:42:09,136 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参存在上线当天未修复BUG的P2列表数据和创建当天未修复BUG的完整数据，上线当天未修复BUG只存在一个P2级BUG，创建当天未修复BUG所有等级都各存在一个BUG 成功
+2025-03-28 12:42:09,137 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参为完整的数据结构，上线当天未修复BUG只存在多个P0P1级BUG，不存在创建当天未修复BUG
+2025-03-28 12:42:09,137 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参为完整的数据结构，上线当天未修复BUG只存在多个P0P1级BUG，不存在创建当天未修复BUG 成功
+2025-03-28 12:42:09,137 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参只存在上线当天未修复BUG的P0P1列表数据，上线当天未修复BUG只存在一个P0P1级BUG，不存在创建当天未修复BUG
+2025-03-28 12:42:09,137 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参只存在上线当天未修复BUG的P0P1列表数据，上线当天未修复BUG只存在一个P0P1级BUG，不存在创建当天未修复BUG 成功
+2025-03-28 12:42:09,138 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参为完整的数据结构，上线当天未修复BUG只存在多个P0P1级BUG，创建当天未修复BUG所有等级都存在多个BUG
+2025-03-28 12:42:09,138 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参为完整的数据结构，上线当天未修复BUG只存在多个P0P1级BUG，创建当天未修复BUG所有等级都存在多个BUG 成功
+2025-03-28 12:42:09,139 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参存在上线当天未修复BUG的P0P1列表数据和创建当天未修复BUG的完整数据，上线当天未修复BUG只存在一个P0P1级BUG，创建当天未修复BUG所有等级都各存在一个BUG
+2025-03-28 12:42:09,139 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参存在上线当天未修复BUG的P0P1列表数据和创建当天未修复BUG的完整数据，上线当天未修复BUG只存在一个P0P1级BUG，创建当天未修复BUG所有等级都各存在一个BUG 成功
+2025-03-28 12:42:09,139 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - 开始执行用例：入参为完整的数据结构，上线当天未修复BUG和创建当天未修复BUG的所有等级都各存在一个BUG
+2025-03-28 12:42:09,139 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - 执行用例：入参为完整的数据结构，上线当天未修复BUG和创建当天未修复BUG的所有等级都各存在一个BUG 成功
+2025-03-28 12:42:09,140 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - =================开始执行用例：入参值为小写英文==================
+2025-03-28 12:42:09,140 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - =================执行用例：入参值为小写英文 成功=================
+2025-03-28 12:42:09,141 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - =================开始执行用例：入参值为大写英文==================
+2025-03-28 12:42:09,141 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - =================执行用例：入参值为大写英文 成功=================
+2025-03-28 12:42:09,142 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - ==================开始执行用例：入参值为整数===================
+2025-03-28 12:42:09,142 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - ==================执行用例：入参值为整数 成功==================
+2025-03-28 12:42:09,142 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - ==================开始执行用例：入参值为浮点数==================
+2025-03-28 12:42:09,142 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - =================执行用例：入参值为浮点数 成功==================
+2025-03-28 12:42:09,143 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - ==================开始执行用例：入参值为汉字===================
+2025-03-28 12:42:09,143 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - ==================执行用例：入参值为汉字 成功==================
+2025-03-28 12:42:09,144 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - =================开始执行用例：入参值为特殊符号==================
+2025-03-28 12:42:09,144 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - =================执行用例：入参值为特殊符号 成功=================
+2025-03-28 12:42:09,144 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - =================开始执行用例：入参值为空字符串==================
+2025-03-28 12:42:09,144 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - =================执行用例：入参值为空字符串 成功=================
+2025-03-28 12:42:09,145 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - ==================开始执行用例：入参值为空格===================
+2025-03-28 12:42:09,145 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - ==================执行用例：入参值为空格 成功==================
+2025-03-28 12:42:09,145 INFO [testlog] [base_case.py (base_exist_return_common_test:23] - ==================开始执行用例：入参值为空列表==================
+2025-03-28 12:42:09,146 DEBUG [testlog] [base_case.py (base_exist_return_common_test:38] - =================执行用例：入参值为空列表 成功==================
+2025-03-28 12:42:09,146 INFO [testlog] [base_case.py (teardown_class:17] - ==========BUG修复情况评分计算测试结束==========
