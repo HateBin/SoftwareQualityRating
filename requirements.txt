@@ -1,7 +1,8 @@
-matplotlib~=3.7.5
+matplotlib~=3.10.1
 cloudscraper~=1.2.71
 requests~=2.32.3
-numpy~=1.24.4
-pandas~=2.0.3
-cryptography~=36.0.2
+numpy~=2.2.2
+pandas~=2.2.3
+cryptography~=43.0.3
 openai~=1.63.0
+python-dateutil~=2.9.0post0

@@ -86,5 +86,22 @@ class TestCalculateBugRepairRating(BaseCase):
         self.logger.debug(f'测试用例{case_name}执行通过'.center(self.settings.LINE_LENGTH, '='))
 
 
+@pytest.mark.calculate_rating
+@pytest.mark.calculate_bug_repair_rating
+class TestCalculateBugReopenRating(BaseCase):
+    name = 'BUG修复情况评分计算'
+    cases = read_test_case_excel('calculate_bug_repair_rating_case.xlsx')
+
+    @pytest.mark.parametrize('case', cases, ids=[case['case_id'] for case in cases])
+    def test_calculate_bug_repair_rating(self, case):
+        """
+        BUG修复情况评分计算，计算数据为dict类型，存储上线当天未修复的bugId和创建当天未修复的bugId
+        :param case: 测试用例数据
+        :return: 无
+        """
+        from main_program.SoftwareQualityRating import calculate_bug_repair_rating as t
+        self.base_exist_return_common_test(case, t)
+
+
 if __name__ == '__main__':
     pytest.main(['-s', '-v', '-m', 'calculate_bug_repair_rating'])

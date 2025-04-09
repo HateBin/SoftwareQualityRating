@@ -4,7 +4,6 @@
 import base64
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from dateutil.relativedelta import relativedelta
 import datetime
 import functools
 from io import BytesIO
@@ -28,10 +27,10 @@ import numpy as np
 from openai import (APIError, APIConnectionError, APIStatusError, OpenAI)
 import requests
 
-IS_CREATE_REPORT = False  # 是否创建报告
+IS_CREATE_REPORT = True  # 是否创建报告
 IS_CREATE_AI_SUMMARY = True  # 是否创建AI总结
 IS_SUPPORT_RETRY_CREATE_AI_SUMMARY = True  # 是否支持重试创建AI总结, 生成完成后可input进行重新生成
-OPEN_AI_MODEL = '百炼v3'  # deepseek模型名称，目前支持：v3、r1、百炼r1、百炼v3
+OPEN_AI_MODEL = '百炼r1'  # deepseek模型名称，目前支持：v3、r1、百炼r1、百炼v3
 
 OPEN_AI_IS_STREAM_RESPONSE = True  # 是否支持流式响应
 
@@ -3482,7 +3481,7 @@ def _handle_stream_response(completion, result: list) -> str:
         print(f'\n\n{datetime.datetime.now().strftime("%H:%M:%S")} 生成完成')
 
         # 将缓冲区内容转换为HTML格式
-        return ''.join(result)
+        return ai_result_switch_html(''.join(result))
 
     except KeyboardInterrupt:
         # ==================================================================
@@ -3490,7 +3489,10 @@ def _handle_stream_response(completion, result: list) -> str:
         # ==================================================================
 
         # 捕获用户中断信号（Ctrl+C）
-        _print_text_font('\n\n生成过程已中断')
+        print('\n\n生成过程已中断')
+
+        # 返回已累积的内容（转换为HTML格式）
+        return ai_result_switch_html(''.join(result))
 
 
 def _handle_normal_response(completion: Any, result: List[str]) -> str:
@@ -3566,7 +3568,7 @@ def _handle_normal_response(completion: Any, result: List[str]) -> str:
         print(f'\n{datetime.datetime.now().strftime("%H:%M:%S")} 生成完成')
 
         # 将原始文本转换为HTML格式并返回
-        return ''.join(result)
+        return ai_result_switch_html(''.join(result))
 
     except Exception as unexpect_error:
         # ==================================================================
@@ -3646,29 +3648,6 @@ def _switch_search_condition_item(obj_type: str, field_label: str) -> Dict[str, 
         raise ValueError(f"错误：obj_type参数必须是{error_str}")
 
     return search_condition_item[obj_type].get(field_label, {})
-
-
-def _get_date(date: str, month: int = None, day: int = None) -> str:
-    if month is not None and not isinstance(month, int):
-        raise ValueError("月参数必须是整数")
-    if day is not None and not isinstance(day, int):
-        raise ValueError("日参数必须是整数")
-
-    try:
-        date_time = datetime.datetime.strptime(date, '%Y-%m-%d')
-    except ValueError as e:
-        if e.args[0] == "day is out of range for month":
-            dates = date.split('-')
-            raise ValueError(f"{dates[0]}年{dates[1]}月中不存在日期：{dates[2]}")
-        else:
-            raise ValueError("日期格式错误，请输入正确的日期格式，例如：2023-07-01")
-
-    if month:
-        date_time += relativedelta(months=month)
-    if day:
-        date_time += relativedelta(days=day)
-
-    return date_time.strftime('%Y-%m-%d')
 
 
 class SoftwareQualityRating:
@@ -4466,42 +4445,18 @@ class SoftwareQualityRating:
                 else:
                     break
 
-        print('最早测试时间：', self.earliestTestTaskDate)
-        print('最晚测试时间：', self.lastTaskDate)
-
         # ==================================================================
         # 阶段5：在线日期收集
         # ==================================================================
         for number, onlineClient in enumerate(online_clients, 3):
-            while True:
-                # 获取并格式化上线日期输入
-                client_online_date: str = _input(
-                    f'问题{number}: 客户端{onlineClient}上线时间?(格式：2023-07-01): ',
-                    input_type=str,
-                    re_format=r'\d{4}-\d{1,2}-\d{1,2}',
-                    re_prompts_format='YYYY-MM-DD',
-                    is_delete_space=True,
-                )
-                try:
-                    client_online_date = _get_date(client_online_date)
-                except ValueError as e:
-                    print(_print_text_font(f'\n{str(e)}, 请重新输入\n'))
-                    continue
-                if client_online_date < self.earliestTestTaskDate:
-                    print(_print_text_font(f'\n上线时间不能早于测试任务最早时间({self.earliestTestTaskDate}), 请重新输入\n'))
-                    continue
-                elif client_online_date >= _get_date(self.lastTaskDate, month=+1):
-                    print(_print_text_font(f'\n上线时间不能晚于测试任务最晚时间({self.lastTaskDate})一个月以上，请重新输入\n'))
-                    continue
-                elif client_online_date >= _get_date(self.lastTaskDate, day=+14):
-                    is_confirm: str = _input(
-                        f'上线时间({client_online_date})距离测试任务最晚时间({self.lastTaskDate})二周以上，请检查时间是否正确?(y/n): ',
-                        input_type=str,
-                        allow_contents=['y', 'n']
-                    ).lower()
-                    if is_confirm == 'n':
-                        continue
-                break
+            # 获取并格式化上线日期输入
+            client_online_date: str = _input(
+                f'问题{number}: 客户端{onlineClient}上线时间?(格式：2023-07-01): ',
+                input_type=str,
+                re_format=r'\d{4}-\d{1,2}-\d{1,2}',
+                re_prompts_format='YYYY-MM-DD',
+                is_delete_space=True,
+            )
             # 存储日期数据（转换为date类型）
             self.onlineDateDict[onlineClient] = date_time_to_date(client_online_date)
 
@@ -6005,11 +5960,11 @@ class SoftwareQualityRating:
         # 阶段2：上线日期计算和测试最早时间
         # ==================================================================
         if begin_date is not None:
-            if not self.earliestTestTaskDate or begin_date < self.earliestTestTaskDate:
-                self.earliestTestTaskDate = begin_date
-            # if not self.isInputOnlineDate:
-            if (self.onlineDate is None) or (begin_date > self.onlineDate):
-                self.onlineDate = begin_date
+            # if not self.earliestTestTaskDate or begin_date < self.earliestTestTaskDate:
+            #     self.earliestTestTaskDate = begin_date
+            if not self.isInputOnlineDate:
+                if (self.onlineDate is None) or (begin_date > self.onlineDate):
+                    self.onlineDate = begin_date
 
         # ==================================================================
         # 阶段3：收件人列表维护
@@ -6240,7 +6195,8 @@ class SoftwareQualityRating:
         # 遍历缺陷关联的所有客户端平台
         for bug_platform in self.bugExistPlatforms:
             # 检查平台是否未上线且未被记录
-            if bug_platform not in online_clients and bug_platform not in error_clients:
+            if (bug_platform not in online_clients
+                    and bug_platform not in error_clients):
                 # 记录无效客户端平台（保留首次出现顺序）
                 error_clients.append(bug_platform)
 
@@ -6880,6 +6836,7 @@ class SoftwareQualityRating:
             try:
                 # 调用AI服务生成报告内容
                 report_summary_text = deepseek_chat(conversation_history)
+                self.reportSummary = ai_result_switch_html(report_summary_text)
 
                 # 当启用重试机制时进行交互确认
                 if IS_SUPPORT_RETRY_CREATE_AI_SUMMARY:
@@ -6898,28 +6855,16 @@ class SoftwareQualityRating:
                             allow_contents=['y', 'n'],
                         )
                         if confirm_input == 'y':
-                            # 添加ai回答的历史记录
-                            conversation_history.append({
-                                "role": "assistant",
-                                "content": report_summary_text
-                            })
-                            # 输出追问ai的内容
+                            conversation_history.append({"role": "assistant", "content": report_summary_text})
                             session_content = _input(
                                 '请输入内容进行提问: ',
                                 input_type=str,
                             )
-                            # 添加用户输入的历史记录
-                            conversation_history.append({
-                                "role": "user",
-                                "content": '不要说多余的内容，直接给我要的整体内容\n' + session_content
-                            })
+                            conversation_history.append({"role": "user", "content": session_content})
                     else:
                         break  # 退出循环
                 else:
                     break  # 无重试需求直接退出
-
-                # 处理ai返回结果
-                self.reportSummary = ai_result_switch_html(report_summary_text)
 
             except (APIError, ConnectionError) as e:
                 # 处理服务不可用类异常
@@ -6936,8 +6881,8 @@ class SoftwareQualityRating:
         实现流程:
             1. 需求元数据获取与校验
             2. 系统配置管理与数据采集
-            3. 开发资源与周期分析
-            4. 用户交互式参数收集
+            3. 用户交互式参数收集
+            4. 开发资源与周期分析
             5. 缺陷数据采集与统计
             6. 质量指标计算与评分
             7. 数据可视化生成
@@ -6978,22 +6923,22 @@ class SoftwareQualityRating:
             self.get_all_list_data()
 
             # ==================================================================
-            # 阶段3：开发资源与周期分析
-            # ==================================================================
-            # 统计需求关联的所有子任务数据：
-            # 1. 递归获取多级子任务结构
-            # 2. 按开发者聚合总工时数据
-            # 3. 计算开发周期与人力投入
-            self.requirement_task_statistics()
-
-            # ==================================================================
-            # 阶段4：用户交互式参数收集
+            # 阶段3：用户交互式参数收集
             # ==================================================================
             # 执行用户提问阶段收集必要参数：
             # 1. 确认需求基本信息
             # 2. 收集测试范围与平台信息
             # 3. 获取质量评估标准参数
             self.question_stage()
+
+            # ==================================================================
+            # 阶段4：开发资源与周期分析
+            # ==================================================================
+            # 统计需求关联的所有子任务数据：
+            # 1. 递归获取多级子任务结构
+            # 2. 按开发者聚合总工时数据
+            # 3. 计算开发周期与人力投入
+            self.requirement_task_statistics()
 
             # ==================================================================
             # 阶段5：开发周期精细化计算（条件执行）
